@@ -18,6 +18,21 @@ TICKS_PER_HIT = 100.0      # at MiningSpeed 1.0
 TICKS_PER_HOUR = 2500.0
 LABOR_COEFF = 0.0036       # silver per tick, from CalculatedBaseMarketValue
 
+# Byproduct policy for mining spoil.
+#
+# Natural rock declares mineableThing (a chunk) with mineableDropChance 0.25
+# and no explicit yield. Mining such a cell is done for the space, not the
+# chunk - the chunk is spoil. Charging the full 1200-4800 ticks of mining
+# against 0.25 chunks treats the chunk as the purpose of the dig.
+#
+# This is a joint-production call, and the data decides it. Charging chunks
+# the full cost drops the two-rate fit from R2 0.948 to 0.854 and halves the
+# extraction rate to 60.7/hr, breaking its agreement with the independent
+# primitives estimate (~101/hr). Treating chunks as free restores both. So
+# RimWorld prices stone as though the chunk were costless, and "free" is the
+# empirically supported default.
+BYPRODUCT = "free"         # "free" | "full"
+
 
 def mining_rows(db, things):
     by_name = {dn: el for _, dn, el in things}
@@ -27,24 +42,38 @@ def mining_rows(db, things):
         if b is None:
             continue
         mt = b.findtext("mineableThing")
-        my = b.findtext("mineableYield")
-        if not mt or not my:
+        if not mt:
             continue
         hp = stat(el, "MaxHitPoints")
         if hp is None:
             continue
         natural = (b.findtext("isNaturalRock") or "").strip().lower() == "true"
         dmg = 80.0 if natural else 40.0
-        yield_n = float(my)
+        # Mineable.TrySpawnYield (IL): drops with probability mineableDropChance,
+        # then max(1, EffectiveMineableYield) units. BuildingProperties' ctor
+        # defaults mineableYield=1 and mineableDropChance=1.0, so natural rock
+        # yields one chunk a quarter of the time. Expected yield is the product.
+        my = b.findtext("mineableYield")
+        drop = b.findtext("mineableDropChance")
+        try:
+            base_yield = max(1.0, float(my)) if my else 1.0
+            chance = float(drop) if drop else 1.0
+        except ValueError:
+            continue
+        yield_n = base_yield * chance
         if yield_n <= 0:
             continue
         ticks_cell = math.ceil(hp / dmg) * TICKS_PER_HIT
-        ticks_unit = ticks_cell / yield_n
+        if chance < 1.0 and BYPRODUCT == "free":
+            ticks_unit = 0.0        # spoil from a dig done for other reasons
+        else:
+            ticks_unit = ticks_cell / yield_n
         prod = by_name.get(mt)
         mv = stat(prod, "MarketValue") if prod is not None else None
         rows.append({
             "source": dn, "method": "mine", "product": mt,
             "yield": yield_n, "hp": hp, "natural_rock": natural,
+            "drop_chance": chance, "byproduct": chance < 1.0,
             "ticks_per_unit": ticks_unit,
             "market_value": mv,
         })
