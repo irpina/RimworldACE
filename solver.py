@@ -12,10 +12,10 @@ inputs, relaxing from +inf converges without special cycle handling - a cycle
 (steel -> components -> machines -> steel) can never lower a cost, so it
 simply never wins.
 
-Joint production: there are zero multi-output recipes in the XML. Every joint
-case in RimWorld is a `specialProducts` recipe (butchery, stonecutting,
-smelting), which is code-driven and excluded. The apportionment rule is
-therefore unreachable here; APPORTION is left as the documented hook.
+Joint production: there are zero multi-output *recipes* in the XML, but joint
+production still arrives twice through the back door - mining spoil (space +
+chunks, see BYPRODUCT in primitives.py) and butchery (meat + leather, see
+APPORTION in animals.py).
 """
 import csv
 import math
@@ -26,9 +26,8 @@ INF = float("inf")
 MAX_ITERS = 200
 EPS = 1e-6
 
-# Joint-production apportionment. Unused: no multi-output recipes exist in
-# XML. Kept as the documented swap point if generated defs are ever included.
-APPORTION = "mass"          # "mass" | "value" | "equal"
+# Joint-production apportionment now lives with the case that needs it:
+# see APPORTION in animals.py and BYPRODUCT in primitives.py.
 
 # Scavenging policy. Some manufactured goods can be mined out of ancient
 # ruins rather than made - ComponentIndustrial is minable at 1250 ticks but
@@ -58,8 +57,12 @@ class Option:
 
 
 class Graph:
-    def __init__(self, db=None):
+    def __init__(self, db=None, animals=True, apportion=None):
         self.db = db or DefDb()
+        self.apportion = apportion
+        if animals:
+            from animals import inject_generated_meat
+            inject_generated_meat(self.db)
         self.things = {dn: el for _, dn, el in self.db.defs("ThingDef")}
         self.options = {d: [] for d in self.things}
         self._build_categories()
@@ -67,6 +70,47 @@ class Graph:
         self._add_extraction()
         self._add_recipes()
         self._add_costs()
+        if animals:
+            self._add_animals()
+
+    def _add_animals(self):
+        """Meat and leather, via competing husbandry paths.
+
+        Grazing and hay-feeding are separate options; min-cost picks and
+        spread() reports the gap. Hay is referenced as a substitutable set of
+        one so its own embodied labor is picked up from the solve.
+        """
+        from animals import animal_rows, apportion
+        mv = {}
+        for dn, el in self.things.items():
+            mv[("mv", dn)] = stat(el, "MarketValue")
+            mv[("mass", dn)] = stat(el, "Mass")
+        self.animal_rows = animal_rows(self.db)
+        for r in self.animal_rows:
+            paths = []
+            if r["can_graze"]:
+                paths.append(("graze", 0.0, []))
+            n = r["nutrition_to_adult"]
+            if n:
+                # hay carries its own embodied labor; 0.05 nutrition per unit
+                units = n / 0.05
+                paths.append(("hayfed", 0.0, [(frozenset(["Hay"]), units)]))
+            for label, extra, inputs in paths:
+                total = r["butcher_work"] + extra
+                meat_share, leather_share = apportion(r, total, mv,
+                                                      self.apportion)
+                if r["meat_qty"] > 0 and r["meat_def"] in self.options:
+                    self.options[r["meat_def"]].append(Option(
+                        work=meat_share, inputs=inputs,
+                        yield_n=r["meat_qty"], kind="extract",
+                        method="husbandry", label=f'{r["race"]}/{label}'))
+                if r["leather_def"] and r["leather_def"] in self.options \
+                        and r["leather_qty"] > 0:
+                    self.options[r["leather_def"]].append(Option(
+                        work=leather_share,
+                        inputs=inputs if leather_share > 0 else [],
+                        yield_n=r["leather_qty"], kind="extract",
+                        method="husbandry", label=f'{r["race"]}/{label}'))
 
     # ---------------------------------------------------------- categories
     def _build_categories(self):
@@ -298,22 +342,27 @@ class Graph:
         if o is None:
             return 0.0, 0.0
         _stack = _stack | {d}
+        ext = fab = 0.0
+        for alts, qty in o.inputs:
+            cheapest, pick = INF, None
+            for a in alts:
+                v = self.val.get(a, INF)
+                if v < cheapest:
+                    cheapest, pick = v, a
+            if pick is None:
+                continue
+            e, f = self.decompose(pick, _stack)
+            ext += qty * e
+            fab += qty * f
+        # Primary production (mining, harvesting, husbandry) is extraction;
+        # everything else adds fabrication labor. Inputs are accumulated
+        # either way - hay-fed husbandry is an extraction option that still
+        # carries hay's own embodied labor.
         if o.kind == "extract":
-            res = (o.work / o.yield_n, 0.0)
+            ext += o.work
         else:
-            ext = fab = 0.0
-            for alts, qty in o.inputs:
-                cheapest, pick = INF, None
-                for a in alts:
-                    v = self.val.get(a, INF)
-                    if v < cheapest:
-                        cheapest, pick = v, a
-                if pick is None:
-                    continue
-                e, f = self.decompose(pick, _stack)
-                ext += qty * e
-                fab += qty * f
-            res = (ext / o.yield_n, (fab + o.work) / o.yield_n)
+            fab += o.work
+        res = (ext / o.yield_n, fab / o.yield_n)
         self._decomp[d] = res
         return res
 

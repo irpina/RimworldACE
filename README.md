@@ -29,6 +29,7 @@ primitives (the only genuinely empirical question), then list the overrides.
 | [02-primitives.md](docs/02-primitives.md) | Do authored prices track extraction labor? |
 | [03-overrides.md](docs/03-overrides.md) | Where did a human override the formula? |
 | [04-endogenous-rate.md](docs/04-endogenous-rate.md) | What labor rate does the price structure actually imply? |
+| [05-animals.md](docs/05-animals.md) | What is meat and leather worth in labor? |
 
 **The formula.** Value = transmitted input value + `0.0036` silver per tick of
 work, divided by yield, with an authored `MarketValue` short-circuiting the
@@ -52,23 +53,23 @@ flattening a category to one round number — all seven shell types cost 55
 against computed costs from 18.75 to 92.50.
 
 **The endogenous rate.** With embodied labor solved independently of price
-(516 defs, seeded at extraction, no market value anywhere in the derivation),
+(653 defs, seeded at extraction, no market value anywhere in the derivation),
 a single-rate model fits at R² 0.816. Splitting labor by origin fits at
-**R² 0.948**: extraction labor is priced at **96.5 silver/work-hour**,
-fabrication labor at **6.6** — a **14.7× gap**. Implied rates fall
+**R² 0.948**: extraction labor is priced at **95.4 silver/work-hour**,
+fabrication labor at **6.9** — a **13.8× gap**. Implied rates fall
 monotonically across five buckets as a good's fabrication share rises
-(114.6 → 23.6 silver/hr). There is no single rate.
+(387.6 → 24.3 silver/hr). There is no single rate.
 
 Two independent checks landed. The regression was never given RimWorld's
 hardcoded `0.0036` fabrication constant and recovered **0.00263** — within
 30%, a sanity check on the chain rather than an exact recovery. And the
-extraction rate of 96.5/hr matches the **101/hr** estimated separately in
+extraction rate of 95.4/hr matches the **101/hr** estimated separately in
 `02-primitives.md` from 30 hand-authored prices — agreement within 5% from
 different data by a different method.
 
 **The one line to carry forward:** the two unreconciled value systems are not
 `workAmount` versus `BaseMarketValue`. They are **extraction labor versus
-fabrication labor, priced 14.7× apart inside `BaseMarketValue` itself.** In
+fabrication labor, priced 13.8× apart inside `BaseMarketValue` itself.** In
 RimWorld, crafting barely pays: an hour at a workbench adds ~7 silver, an hour
 at a mining face ~97.
 
@@ -99,7 +100,8 @@ constant capital is circulating.
 | `primitives.py` | Extraction labor per unit → `out/primitives.csv`. `BYPRODUCT` controls mining-spoil treatment. |
 | `analyze_primitives.py` | Correlations, implemented inline — no new dependencies. |
 | `overrides.py` | Authored vs computed → `out/overrides.csv`. |
-| `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` and `APPORTION` are the documented swap points. |
+| `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` is the documented swap point. |
+| `animals.py` | Generated meat defs, butchery yields, husbandry labor. `APPORTION` splits a carcass between meat and leather. |
 | `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
 
 Only dependency is `pefile`, which was already installed. Nothing was
@@ -111,16 +113,13 @@ python primitives.py && python analyze_primitives.py && python overrides.py && p
 
 ## Known gaps
 
-Of the 1295 defs with no embodied-labor value, most are not economic goods at
-all — ~435 motes/projectiles, 137 races, 107 standing plants, 319 uncraftable
-natural or ancient buildings, 17 unfinished-thing stubs. The real remainder:
+Of the 1285 defs with no embodied-labor value, most are not economic goods at
+all — ~435 motes/projectiles, races, standing plants, uncraftable natural or
+ancient buildings, unfinished-thing stubs. The real remainder:
 
-- **Animal products (~97)** — meat, leather, eggs, milk, wool. Meat defs are
-  generated at load by `ThingDefGenerator_Meat` and absent from XML. Yields
-  are known (`MeatAmount` 140 × bodySize, `LeatherAmount` declared × bodySize,
-  via `StatPart_BodySize`), but the labor boundary is an open decision:
-  husbandry/feed conversion versus hunting. This also makes joint production
-  load-bearing for the first time — one carcass yields meat *and* leather.
+- **Meat and leather are now incorporated** (see `05-animals.md`); eggs, milk
+  and wool are not. Hunting is deliberately not modelled — its labor is combat
+  time, which is not a def field.
 - **Trade- and quest-only goods (~91 blocked)** — Shard, subcores, signal and
   nanostructuring chips, Gravcore, Neutroamine, ShuttleEngine. These are not a
   gap so much as a category: RimWorld's high-tech tier is *acquired*, not
