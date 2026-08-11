@@ -32,14 +32,15 @@ Both paths are hyperpath options; min-cost picks, exactly as with scavenging.
 - **hay-fed** — nutrition to adulthood ÷ 0.05 per hay unit, carrying hay's own
   embodied labor. 100 animals have the life-stage data for this.
 
-66 animals have both. **Median spread 5×**, and the tail is enormous:
+66 animals have both. **Median spread 9×**, and the tail is enormous:
 
 | | graze | hay-fed | spread |
 |---|---|---|---|
-| Meat_Thrumbo | 0.63 | 91.46 | **146×** |
-| Meat_AlphaThrumbo | 0.50 | 73.17 | 146× |
-| Meat_Mastodon | 0.56 | 45.04 | 81× |
-| Meat_Elephant | 0.63 | 45.25 | 72× |
+| Meat_Thrumbo | 0.63 | 182.89 | **293×** |
+| Meat_AlphaThrumbo | 0.50 | 146.31 | 293× |
+| Meat_Mastodon | 0.56 | 93.51 | 168× |
+| Meat_Elephant | 0.63 | 92.59 | 148× |
+| Meat_Megasloth | 0.63 | 57.38 | 92× |
 
 Grazing always wins where available, so the headline numbers are grazing
 numbers. The spread is the cost of *not* having pasture.
@@ -47,6 +48,48 @@ numbers. The spread is the cost of *not* having pasture.
 **Hunting is not modelled.** Its labor is combat time — a function of weapon,
 skill and animal health, none of which is a def field. Modelling it would mean
 inventing numbers, so wild animals have no production path unless rearable.
+
+## Validated against the game's own numbers
+
+RimWorld's dev mode exports an **Animal Economy** table that computes several
+of these quantities at runtime, with every generated def present. That is a
+real oracle, not a self-consistency check. The export is committed at
+`data/rimworld_animal_economy.csv`; `validate_animals.py` diffs against it.
+
+It found three genuine bugs in the first implementation:
+
+1. **Gestation was omitted entirely.** `AnimalProductionUtility.NutritionToAdulthood`
+   adds `NutritionToGestate` — the mother's food while pregnant — which I had
+   ignored. And `GestationDaysEach` amortises it over the litter
+   (`gestationPeriodDays / Rand.ByCurveAverage(litterSizeCurve)`), or for egg
+   layers over the clutch (`eggLayIntervalDays / eggCountRange.Average`).
+2. **An off-by-one in the life-stage walk.** RimWorld charges each interval at
+   the hunger factor of the stage being *entered*, not the one being lived
+   through.
+3. **The post-process curve was missing.** Both `MeatAmount` and
+   `LeatherAmount` carry `postProcessCurve` `(0,0) (5,14) (40,40)
+   (100000,100000)` — identity above 40, a large boost below. Every small
+   animal's yield was understated: a sparrow's raw `140 × 0.12 = 16.8` is
+   really 22.8, a dryad's 1.33 is really 3.7.
+
+Plus one field default: `gestationPeriodDays` defaults to **-1**, not 0, and
+RimWorld propagates the negative — insects, which spawn from hives rather than
+gestate, carry a small negative gestation cost.
+
+Current state: **125/125 meat amounts, 125/125 body sizes, 100/100 nutrition
+to adulthood** all within 2% of the game's own figures.
+
+One genuine discrepancy remains, and it is RimWorld's, not ours.
+`AnimalProductionUtility` omits the per-day scaling that `Need_Food` actually
+applies — `hungerRateFactor × baseHungerRate × 2.6667e-05` per tick, i.e.
+×1.6 per day. So the debug table's "nutrition" is 1.6× smaller than what a
+pawn really eats, and `NutritionEatenPerDay` (which *does* include the 1.6)
+disagrees with it. We keep the 1.6, because we convert nutrition into hay and
+hay carries real nutrition; the validator divides it back out to compare.
+
+Net effect of all corrections: the headline two-rate result did not move at
+all (95.4 / 6.9 / 13.8× / R² 0.948, identical). The husbandry spread did —
+median 5× → **9×**, maximum 146× → **293×**.
 
 ## Joint production: the test has limits
 

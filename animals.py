@@ -59,6 +59,56 @@ NON_FLESH = {"Mechanoid", "EntityMechanical", "Drone"}
 APPORTION = "mass"           # "meat_only" | "mass" | "count" | "value"
 
 
+def _eval_curve(points, x):
+    """Piecewise-linear SimpleCurve evaluation."""
+    if not points:
+        return x
+    if x <= points[0][0]:
+        return points[0][1]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x <= x1:
+            if x1 == x0:
+                return y1
+            t = (x - x0) / (x1 - x0)
+            return y0 + t * (y1 - y0)
+    return points[-1][1]
+
+
+def post_process_curve(db, stat_name):
+    """Read a StatDef's postProcessCurve.
+
+    MeatAmount and LeatherAmount both carry (0,0) (5,14) (40,40)
+    (100000,100000) - identity above 40, a large boost below it. Without
+    this, every small animal's yield is understated: a sparrow's raw
+    140*0.12 = 16.8 becomes 22.8, and a dryad's 1.33 becomes 3.7.
+    """
+    for _, dn, el in db.defs("StatDef"):
+        if dn != stat_name:
+            continue
+        c = el.find("postProcessCurve")
+        if c is None:
+            return []
+        pts = []
+        for li in c.iter("li"):
+            t = (li.text or "").strip().strip("()")
+            parts = [p for p in t.replace(",", " ").split() if p]
+            if len(parts) >= 2:
+                try:
+                    pts.append((float(parts[0]), float(parts[1])))
+                except ValueError:
+                    pass
+            else:
+                loc = li.find("loc")
+                if loc is not None:
+                    try:
+                        pts.append((float(loc.findtext("x")),
+                                    float(loc.findtext("y"))))
+                    except (TypeError, ValueError):
+                        pass
+        return sorted(pts)
+    return []
+
+
 def _lifestage_factors(db):
     out = {}
     for _, dn, el in db.defs("LifeStageDef"):
@@ -69,30 +119,87 @@ def _lifestage_factors(db):
     return out
 
 
-def _nutrition_to_adult(race, stages):
-    """Sum nutrition eaten from birth to the adult life stage."""
+def _curve_average(el):
+    """Verse.Rand.ByCurveAverage: sum(x*y)/sum(y) over the curve's points."""
+    if el is None:
+        return None
+    pts = []
+    for li in el.iter("li"):
+        t = (li.text or "").strip().strip("()")
+        parts = [p for p in t.replace(",", " ").split() if p]
+        if len(parts) >= 2:
+            try:
+                pts.append((float(parts[0]), float(parts[1])))
+            except ValueError:
+                pass
+    wsum = sum(y for _, y in pts)
+    return (sum(x * y for x, y in pts) / wsum) if wsum else None
+
+
+def gestation_days_each(el, race):
+    """AnimalProductionUtility.GestationDaysEach (IL).
+
+    Egg layers amortise over the clutch; live-bearers over the litter.
+    """
+    for comp in el.iter("li"):
+        if comp.get("Class") == "CompProperties_EggLayer":
+            interval = fnum(comp, "eggLayIntervalDays")
+            rng = (comp.findtext("eggCountRange") or "").strip()
+            nums = [float(x) for x in rng.replace("~", " ").split() if x.replace(".", "", 1).replace("-", "", 1).isdigit()]
+            avg = (sum(nums) / len(nums)) if nums else 1.0
+            if interval and avg:
+                return interval / avg
+    # RaceProperties' ctor defaults gestationPeriodDays to -1, not 0, and
+    # RimWorld propagates that negative straight through - insects, which
+    # spawn from hives rather than gestate, get a small negative gestation
+    # cost. Defaulting to 0 here overstated insect nutrition by ~5-10%.
+    gest = fnum(race, "gestationPeriodDays")
+    if gest is None:
+        gest = -1.0
+    litter = _curve_average(race.find("litterSizeCurve")) or 1.0
+    return gest / litter if litter else gest
+
+
+def _nutrition_to_adult(race, stages, el=None):
+    """AnimalProductionUtility.NutritionToAdulthood (IL):
+
+        NutritionToGestate + sum over stages i>=1 of
+            (minAge[i] - minAge[i-1]) * 60 * lifeStageAges[i].hungerRateFactor
+            * baseHungerRate
+
+    Two things to note. The interval is charged at the hunger factor of the
+    stage being *entered*, not the one being lived through. And RimWorld's
+    own utility omits the per-day scaling that Need_Food actually applies
+    (hungerRateFactor * baseHungerRate * 2.6667e-05 per tick = *1.6 per day),
+    so its "nutrition" is 1.6x smaller than what a pawn really eats. We keep
+    the 1.6 because we convert to hay, which carries real nutrition - see
+    validate_animals.py, which checks the unscaled value against the game.
+    """
     ages = race.find("lifeStageAges")
-    if ages is None or len(ages) == 0:
+    if ages is None or len(ages) < 2:
         return None
     base_hunger = fnum(race, "baseHungerRate")
     if not base_hunger:
         return None
     entries = []
     for li in ages:
-        d = li.findtext("def")
         try:
             m = float(li.findtext("minAge") or 0)
         except ValueError:
             m = 0.0
-        entries.append((d, m))
+        entries.append((li.findtext("def"), m))
+
+    # gestation, charged at the final (adult) stage's hunger factor
     total = 0.0
-    for i, (sdef, min_age) in enumerate(entries):
-        if i + 1 >= len(entries):
-            break                      # final stage is adulthood; stop
-        days = (entries[i + 1][1] - min_age) * DAYS_PER_YEAR
-        f = stages.get(sdef, {}).get("hunger", 1.0)
-        total += days * f * base_hunger * NUTRITION_PER_DAY
-    return total
+    if el is not None:
+        adult_f = stages.get(entries[-1][0], {}).get("hunger", 1.0)
+        total += gestation_days_each(el, race) * adult_f * base_hunger
+
+    for i in range(1, len(entries)):
+        days = (entries[i][1] - entries[i - 1][1]) * DAYS_PER_YEAR
+        f = stages.get(entries[i][0], {}).get("hunger", 1.0)
+        total += days * f * base_hunger
+    return total * NUTRITION_PER_DAY
 
 
 def inject_generated_meat(db):
@@ -138,6 +245,8 @@ def animal_rows(db):
     """One row per rearable animal, with yields and per-path rearing labor."""
     stages = _lifestage_factors(db)
     work_butcher = butchery_work(db)
+    meat_curve = post_process_curve(db, "MeatAmount")
+    leather_curve = post_process_curve(db, "LeatherAmount")
     things = {dn: el for _, dn, el in db.defs("ThingDef")}
     rows = []
     for dn, el in things.items():
@@ -156,15 +265,15 @@ def animal_rows(db):
         meat_amount = stat(el, "MeatAmount")
         if meat_amount is None:
             meat_amount = MEAT_AMOUNT_DEFAULT
-        meat_qty = meat_amount * body
+        meat_qty = _eval_curve(meat_curve, meat_amount * body)
 
         leather_def = race.findtext("leatherDef")
         leather_amount = stat(el, "LeatherAmount") or 0.0
-        leather_qty = leather_amount * body
+        leather_qty = _eval_curve(leather_curve, leather_amount * body)
         if not leather_def or leather_qty <= 0:
             leather_def, leather_qty = None, 0.0
 
-        nutrition = _nutrition_to_adult(race, stages)
+        nutrition = _nutrition_to_adult(race, stages, el)
         food = (race.findtext("foodType") or "")
         can_graze = "Rough" in food
 

@@ -44,9 +44,9 @@ pricing pushes back. Grazed megafauna are the most value-dense labor in the
 game: `Leather_AlphaThrumbo` implies **100,000 silver/work-hour**, and the
 `Leathers` category median is 3,167.
 
-**3. A 146× husbandry spread.** Grazing and hay-feeding are genuinely
+**3. A 293× husbandry spread.** Grazing and hay-feeding are genuinely
 different economies. Median spread across the 66 animals with both paths is
-5×, but `Meat_Thrumbo` costs 0.63 ticks/unit grazed and **91.46 hay-fed**.
+9×, but `Meat_Thrumbo` costs 0.63 ticks/unit grazed and **182.89 hay-fed**.
 Pasture access, not animal choice, is what decides whether livestock is nearly
 free or expensive.
 
@@ -141,6 +141,7 @@ constant capital is circulating.
 | `overrides.py` | Authored vs computed → `out/overrides.csv`. |
 | `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` is the documented swap point. |
 | `animals.py` | Generated meat defs, butchery yields, husbandry labor. `APPORTION` splits a carcass between meat and leather. |
+| `validate_animals.py` | Diffs our animal model against RimWorld's own dev-mode export in `data/`. Currently 100% on meat, body size and nutrition. |
 | `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
 
 Only dependency is `pefile`, which was already installed. Nothing was
