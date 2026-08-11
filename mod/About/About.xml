@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <packageId>pina.snlt</packageId>
+  <name>SNLT — Labor Ledger</name>
+  <author>pina</author>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <forceLoadAfter>
+    <li>Ludeon.RimWorld</li>
+    <li>Ludeon.RimWorld.Royalty</li>
+    <li>Ludeon.RimWorld.Ideology</li>
+    <li>Ludeon.RimWorld.Biotech</li>
+    <li>Ludeon.RimWorld.Anomaly</li>
+    <li>Ludeon.RimWorld.Odyssey</li>
+  </forceLoadAfter>
+  <description>Adds two read-only stats to the info card of every producible thing: the labor embodied in it, split into the labor spent extracting raw materials and the labor spent fabricating.
+
+Changes no gameplay. No Harmony, no assemblies, no save impact — two StatDefs and a set of XML patches.
+
+The numbers are precomputed by solving the production graph to a fixed point from extraction outward, so a thing's labor content is the cheapest chain of real work that could produce it. Market value never enters the calculation, which is what makes the split meaningful: RimWorld prices extraction labor about fourteen times higher than fabrication labor, and this stat lets you see which side of that seam any given item sits on.</description>
+</ModMetaData>

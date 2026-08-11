@@ -21,6 +21,44 @@ any solver was written:
 Revised scope, at your direction: extract the formula, then test the authored
 primitives (the only genuinely empirical question), then list the overrides.
 
+## Headline findings
+
+**1. A 13.8× seam inside `BaseMarketValue`.** The two unreconciled value
+systems are not `workAmount` versus `BaseMarketValue`, as the brief assumed.
+They are *extraction labor versus fabrication labor*, priced 13.8× apart
+inside `BaseMarketValue` itself. With embodied labor solved independently of
+price, a single-rate model fits at R² 0.816; splitting labor by origin fits at
+**R² 0.948** — extraction at **95.4 silver/work-hour**, fabrication at
+**6.9**. RimWorld computes a good's price as authored input prices plus one
+hardcoded constant times the final step's work, and those authored prices
+embed an implicit labor rate an order of magnitude above that constant. In
+play: an hour at a workbench adds ~7 silver, an hour at a mining face ~95.
+
+**2. Butchery has an unbounded body-size gradient.**
+`RecipeDef.WorkAmountTotal` returns a flat `workAmount`, and
+`ButcherCorpseFlesh` declares **450 ticks for any carcass** — a chicken and a
+thrumbo cost the same labor — while yields scale linearly with body size.
+Labor efficiency therefore rises without bound in body size and nothing in the
+pricing pushes back. Grazed megafauna are the most value-dense labor in the
+game: `Leather_AlphaThrumbo` implies **100,000 silver/work-hour**, and the
+`Leathers` category median is 3,167.
+
+**3. A 146× husbandry spread.** Grazing and hay-feeding are genuinely
+different economies. Median spread across the 66 animals with both paths is
+5×, but `Meat_Thrumbo` costs 0.63 ticks/unit grazed and **91.46 hay-fed**.
+Pasture access, not animal choice, is what decides whether livestock is nearly
+free or expensive.
+
+**4. Gold: the cleanest statement that RimWorld prices scarcity, not work.**
+`MineableSteel`, `MineableSilver`, `MineableJade` and `MineableGold` are
+defined with *identical* extraction parameters — 1500 hit points, natural
+rock, yield 40, so 47.5 ticks per unit — and priced **1.9 / 1.0 / 5.0 /
+10.0**. Identical labor, 10× price spread. Gold's price per unit of extraction
+labor is **58.5×** what the game pays for fabrication labor, while steel,
+plasteel and uranium cluster tightly at 10–13×. Where labor is meant to
+matter, it is encoded in mineable hit points; where scarcity is meant to
+matter, that dial is simply ignored.
+
 ## Results
 
 | doc | question |
@@ -129,3 +167,36 @@ ancient buildings, unfinished-thing stubs. The real remainder:
   `primitives.py` for the joint-production treatment and its justification.
 - `value_model.py` is validated against one worked example and internal
   consistency, not against a running game.
+
+## The mod
+
+`mod/` — a labor ledger. Two read-only stats on the info card of every
+producible thing: labor embodied in it, split extraction vs fabrication.
+No gameplay change.
+
+**Pure XML. No assembly, no Harmony, no .NET toolchain.** Two `StatDef`s with
+the default `StatWorker` (which reads `statBases`), plus generated
+`PatchOperationConditional` patches writing a precomputed value onto each def.
+
+| | |
+|---|---|
+| defs patched | 543 |
+| take `<match>` (def has `statBases`) | 446 |
+| take `<nomatch>` (no `statBases`) | 97 |
+| unresolved xpaths | 0 |
+| skipped | 104 generated meat defs — no XML node exists to patch |
+
+Values are in work-seconds (ticks ÷ 60, RimWorld's own work unit per
+`GenText.ToStringWorkAmount`), ranging 0.008 to 6736. `toStringStyle` is
+`FloatMaxTwo` rather than `WorkAmount` because the latter ceils, which would
+flatten every animal product to "1".
+
+```bash
+python solver.py && python make_mod.py
+```
+
+Then copy `mod/` into `RimWorld/Mods/` and enable it.
+
+Known limits: meat defs are generated at load and cannot be patched from XML —
+showing those needs a real `StatWorker`, which needs C#. Values are static, so
+they do not respond to mods that change recipes.
