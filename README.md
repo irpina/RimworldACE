@@ -3,7 +3,8 @@
 Labor-time accounting against RimWorld 1.6.4871 rev590 (Core + Royalty,
 Ideology, Biotech, Anomaly, Odyssey — all installed).
 
-Research spike only. No gameplay, no Harmony, no runtime code.
+A research spike, plus the smallest mod that puts its result in front of a
+player. No gameplay change, no Harmony, no compiled code anywhere.
 
 ## What happened to the original plan
 
@@ -111,9 +112,9 @@ fabrication labor, priced 13.8× apart inside `BaseMarketValue` itself.** In
 RimWorld, crafting barely pays: an hour at a workbench adds ~7 silver, an hour
 at a mining face ~97.
 
-## Structural note for the mod (not this session)
+## Structural note
 
-Any future labor ledger must walk all three production paths:
+Any labor ledger must walk all three production paths:
 
 1. **Explicit `RecipeDef`** — 118 in Core.
 2. **`ThingDef.recipeMaker`** — 93 in Core, synthesized at load by
