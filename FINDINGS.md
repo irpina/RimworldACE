@@ -8,7 +8,8 @@ Anomaly, Odyssey.
 **Method:** game assemblies disassembled directly; production graph solved
 from extraction outward without reference to price.
 **Validation:** every derived quantity checked against RimWorld's own runtime
-figures. Seven genuine bugs found and fixed that way.
+figures, which caught seven errors in *this analysis* before they reached
+these conclusions.
 
 ---
 
@@ -19,17 +20,21 @@ hardcoded constant times the work to make it.* That constant is **9 silver per
 work-hour**.
 
 But the input prices it starts from — steel, wood, cloth, and ~400 other
-hand-authored numbers — embed an implicit labor rate of about **95 silver per
-work-hour**.
+hand-authored numbers — embed a substantially higher implicit labor rate.
 
-Nobody ever reconciled those two numbers. The result is a **14× seam running
-through the middle of every price in the game**, on a boundary nobody drew
-deliberately: labor spent extracting materials is worth fourteen times labor
-spent transforming them.
+Nobody ever reconciled those two numbers. The result is a seam running through
+every price in the game, on a boundary nobody drew deliberately: **labor spent
+extracting materials is priced several times higher than labor spent
+transforming it.**
+
+How many times higher depends on how you weight the estimate — from about **3×
+across typical goods to about 14× across the game's total value**. The
+direction is robust to every estimator tested; the magnitude is not. Both
+figures, and what drives the difference, are in Finding 1.
 
 ---
 
-## Finding 1 — A 14× seam inside `BaseMarketValue`
+## Finding 1 — Extraction labor is priced several times above fabrication labor
 
 The project set out to compare two value systems that were never reconciled:
 `workAmount` (labor time) versus `BaseMarketValue` (authored price). That turned
@@ -40,41 +45,75 @@ The real seam is inside `BaseMarketValue` itself.
 
 With embodied labor solved independently of price — 653 defs, seeded at
 extraction, no market value anywhere in the derivation — you can ask what labor
-rate the price structure actually implies:
+rate the price structure actually implies. Splitting labor by where it was
+spent fits far better than one rate for all of it:
 
-| model | fit | R² |
+| model | R² (levels) | R² (log) |
 |---|---|---|
-| one rate for all labor | 26.7 silver/work-hour | 0.852 |
-| **split by origin** | **extraction 94.8/hr, fabrication 6.8/hr** | **0.948** |
+| one rate for all labor | 0.852 | 0.548 |
+| **split into extraction and fabrication** | **0.948** | **0.712** |
 
-**a/b = 14.0×.** One extra parameter takes R² from 0.852 to 0.948.
+**The split is real in both spaces.** One extra parameter buys +0.096 R² in
+levels and +0.163 in logs, and the extraction coefficient exceeds the
+fabrication coefficient under every estimator tried.
 
-And the gradient is monotone. If a single rate governed the economy, a good's
-implied rate would not move with its labor mix. It moves, hard:
+### The magnitude is estimator-dependent, and that matters
+
+| estimator | extraction | fabrication | ratio |
+|---|---|---|---|
+| OLS in levels | 94.8/hr | 6.8/hr | **14.0×** |
+| OLS, equal relative weight | 47.9/hr | 15.7/hr | **3.1×** |
+| least squares in log space | 97.6/hr | 26.1/hr | **3.7×** |
+
+*(animal products excluded — see below)*
+
+The 14× figure is real but concentrated: in levels, **the ten most expensive
+goods carry 47% of the fit's squared-error weight**, and the top fifty carry
+76%. Those are the plasteel-and-components tier — armor, bionics, ship parts —
+which are material-heavy by construction. So 14× is a fair statement about
+*where the game's total value sits*, and an unfair one about a typical item.
+
+Weight every good equally instead and the gap falls to **3–4×**. That is the
+number to defend. The honest headline is that extraction labor is priced
+*several times* above fabrication labor, robustly, and that the exact multiple
+is a choice about what you are averaging over.
+
+### The gradient
+
+If a single rate governed the economy, a good's implied rate would not move
+with its labor mix. It moves monotonically:
 
 | fabrication share of a good's embodied labor | n | median implied rate |
 |---|---|---|
-| 0–20% | 186 | **344.8** silver/hr |
+| 0–20% | 58 | **114.6** silver/hr |
 | 20–40% | 42 | 90.1 |
 | 40–60% | 56 | 85.9 |
 | 60–80% | 151 | 33.4 |
 | 80–100% | 212 | **24.2** |
 
-**In play:** an hour at a workbench adds roughly 7 silver of value. The same
-hour at a mining face adds roughly 95. Crafting barely pays. Essentially all
-value in RimWorld originates where materials enter the colony, and the labor
-that transforms them is very nearly free.
+**Animal products are excluded from this table**, and the reason is Finding 2.
+Included, the top bucket reads 345/hr — 3.6× the fitted extraction
+coefficient, which would be an outright contradiction. It isn't one: a median
+over defs weights a thrumbo hide the same as a steel bar, while least squares
+effectively ignores it, so the butchery artifact inflates the top bucket
+without touching the fit. Excluded, the top bucket reads 114.6/hr against a
+fitted 94.8 — consistent, as it should be.
 
-### Why this is believable
+**In play:** an hour at a workbench adds roughly 7–16 silver of value depending
+on estimator. The same hour at a mining face adds roughly 48–95. Crafting
+pays poorly; value is claimed where materials enter the colony.
+
+### Why the direction is believable
 
 The regression was never told RimWorld's hardcoded fabrication constant. It
 fits `b` from prices and labor amounts derived by separate routes — and returns
-**0.0027 against a true value of 0.0036**, within 30%. A prediction about a
-number the pipeline never saw.
+**0.0027 against a true value of 0.0036** in levels, within 30%. A prediction
+about a number the pipeline never saw.
 
 Independently, the extraction rate of **94.8/hr** matches the **101/hr**
-estimated from a completely different dataset (30 hand-authored primitive
-prices, Finding 4) by a different method — agreement within 6%.
+estimated from a different dataset (30 hand-authored primitive prices,
+Finding 4) — though see the caveats: those two share their plant-labor input,
+so this is consistency, not independent corroboration.
 
 ---
 
@@ -178,6 +217,31 @@ psilocap 69×, gold 58×.
 
 ---
 
+## Supporting finding — recipe ingredient counts are not counts
+
+If you have ever read a RimWorld recipe def, this is worth knowing.
+
+`Make_ComponentSpacer` asks for `<Gold>0.3</Gold>`. It does not consume a third
+of a gold bar. It consumes **three**.
+
+A recipe's `<count>` is denominated in *ingredient-value units*, not thing
+counts, and the conversion is per-ingredient:
+
+```csharp
+CountRequiredOfFor = ceil(count / IngredientValueGetter.ValuePerUnitOf(def))
+    volume getter:     IsStuff ? (smallVolume ? 0.1 : 1.0) : 1.0
+    nutrition getter:  IsNutritionGivingIngestible ? Nutrition : 0
+```
+
+So gold and silver — the only two small-volume stuffs in the game — are
+denominated in tenths. And every cooking recipe uses the *nutrition* getter, so
+`CookMealSimple`'s `count 0.5` means **ten units** of a 0.05-nutrition food,
+not half a unit.
+
+Reading these fields at face value understates gold-bearing recipes by 10× and
+meal ingredients by 20×. It is not documented anywhere, and it is invisible
+unless you check against the game's own computed figures.
+
 ## Supporting finding — where the designer overrode the formula
 
 49 defs carry an authored price *and* a computable cost, meaning someone looked
@@ -261,7 +325,8 @@ not a self-consistency check.
 | animal body sizes | **125/125** |
 | animal nutrition-to-adulthood | **100/100** |
 
-Those checks found **seven genuine bugs**, all now fixed:
+Those checks caught **seven errors in this analysis**, all now fixed. They are
+mistakes in the modelling, not defects in RimWorld:
 
 1. Gestation omitted from animal rearing cost entirely.
 2. An off-by-one in the life-stage walk (RimWorld charges each interval at the
@@ -269,23 +334,41 @@ Those checks found **seven genuine bugs**, all now fixed:
 3. Missing `postProcessCurve` on meat and leather yields — every small animal
    understated.
 4. `gestationPeriodDays` defaults to **−1**, not 0, and the negative propagates.
-5. Recipe `<count>` is in *ingredient-value* units, not thing counts — gold's
-   `0.3` means 3, and a meal's `0.5` means 10 units of food.
+5. Recipe `<count>` read as a thing count (see the supporting finding above).
 6. Pairing the cheapest count with a different alternative's price.
 7. `MarketValue` inherits `roundToFiveOver = 200` from an abstract parent, so
    values above 200 round to the nearest 5. This is why an assault rifle
    computing to 482 actually prices at 480.
 
-Bugs 4 and 7 share a cause worth naming: **RimWorld's defaults and inherited
+Errors 4 and 7 share a cause worth naming: **RimWorld's defaults and inherited
 fields are invisible in the XML you can read.** Both were found only because
 the game's own numbers disagreed.
 
 ### What is *not* validated
 
-**Plant harvest labor.** Mining labor was verified against `JobDriver_Mine`
-IL. Plant harvest was taken directly from `harvestWork`/`harvestYield` with no
-cross-check — and those numbers seed the extraction rate that Finding 1 rests
-on. This is the one remaining unverified link in the chain.
+**Plant harvest labor.** Mining labor was verified against `JobDriver_Mine` IL.
+Plant harvest was taken directly from `harvestWork`/`harvestYield` with no
+cross-check against the game.
+
+The exposure is bounded, but not by the argument you might reach for first: the
+30-primitive estimate and the full solve are *not* independent here — 22 of
+those 30 primitives are harvested, and both estimates read the same
+`harvestWork` field. Their agreement is shared-input consistency, not
+corroboration.
+
+The real bound is direct sensitivity. Scaling every plant's harvest labor and
+re-solving:
+
+| harvest labor scaled | extraction | fabrication | ratio | R² |
+|---|---|---|---|---|
+| ×0.50 | 92.4/hr | 7.6/hr | 12.1× | 0.940 |
+| ×1.00 | 94.8/hr | 6.8/hr | 14.0× | 0.948 |
+| ×2.00 | 93.7/hr | 6.7/hr | 13.9× | 0.951 |
+
+**A factor-of-two error in plant harvest labor moves the extraction
+coefficient by about 3%.** Aggregate extraction labor is dominated by minerals
+feeding the expensive material-heavy goods, so plants simply do not carry
+enough weight to threaten Finding 1. The caveat is real but small.
 
 ### Other limits
 
@@ -335,6 +418,7 @@ but obvious the moment it sits on the item.
 The two unreconciled value systems in RimWorld are not `workAmount` versus
 `BaseMarketValue`.
 
-They are **extraction labor versus fabrication labor, priced 14× apart inside
-`BaseMarketValue` itself** — a seam nobody drew on purpose, running through
-every price in the game.
+They are **extraction labor versus fabrication labor, priced several times
+apart inside `BaseMarketValue` itself** — roughly 3× across typical goods and
+14× across the game's total value. A seam nobody drew on purpose, running
+through every price in the game.

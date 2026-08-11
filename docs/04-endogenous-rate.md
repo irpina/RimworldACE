@@ -15,21 +15,22 @@ Converges in 4 iterations. Cycles (steel → components → machines → steel) 
 no special handling: every option cost is non-negative and monotone in its
 inputs, so a cycle can never lower a cost and simply never wins.
 
-- **516 defs** get an embodied-labor value; 1295 are unreachable from
+- **653 defs** get an embodied-labor value; 1285 are unreachable from
   extraction (animals, plants, generated meat/leather defs, buildings needing
   trade-only inputs like Neutroamine, and everything gated behind
   `specialProducts`).
-- Production depth: 35 at depth 0 (extraction), 243 at depth 1, 159 at depth
-  2, 79 at depth 3. RimWorld's production graph is shallow.
-- 171 defs used a substitutable input (cheapest-by-labor); 20 had more than
+- Production depth: 163 at depth 0 (extraction), 252 at depth 1, 159 at
+  depth 2, 79 at depth 3. RimWorld's production graph is shallow.
+- 180 defs used a substitutable input (cheapest-by-labor); 109 had more than
   one production option and took the minimum-labor path. Both flagged in
   `out/embodied_labor.csv`.
 - **Joint production arrives through the back door.** There are zero
   multi-output *recipes* in XML, so the apportionment rule looked unreachable
   at first. But mining spoil is a joint product (space + chunks), and the
-  choice turned out to matter a lot — see below. `APPORTION` is still unused;
-  the stone case is handled by `BYPRODUCT` instead. Incorporating animals
-  (meat + leather from one carcass) will make `APPORTION` load-bearing.
+  choice turned out to matter a lot — see below. The stone case is handled by
+  `BYPRODUCT`; butchery (meat + leather from one carcass) by `APPORTION` in
+  `animals.py` — see `05-animals.md`, where the same test that settled stone
+  turned out **not** to discriminate.
 
 ### Mining spoil: a joint-production call the data settled
 
@@ -46,6 +47,9 @@ obvious first move and it is wrong:
 |---|---|---|---|---|
 | bears full mining labor | 60.7/hr | 14.0/hr | 4.3× | 0.854 |
 | **free byproduct** | **96.5/hr** | **6.6/hr** | **14.7×** | **0.948** |
+
+*(figures from the solve as it stood at that point, before animal products;
+the comparison between the two rows is what matters, not the absolute values)*
 
 Charging it halves the extraction rate, breaks agreement with the
 independent primitives estimate (~101/hr), and drops R² by 0.09. Treating
@@ -68,26 +72,27 @@ actually be produced. This changes 225 defs by up to 4.5×. Every headline
 number below is reported under both settings; the conclusion does not depend
 on the choice.
 
-## Result: there is no single rate, and the gap is 14.7×
+## Result: there is no single rate
 
-Two models, both through the origin, over the 510 defs with a price:
+Two models, both through the origin, over the 647 defs with a price:
 
 | model | | R² |
 |---|---|---|
-| `price = r · L` | r = 0.01028 (**25.7** silver/work-hour) | 0.816 |
-| `price = a·E + b·F` | a = 0.03861 (**96.5**/hr), b = 0.00263 (**6.6**/hr) | **0.948** |
+| `price = r · L` | r = 0.01068 (**26.7** silver/work-hour) | 0.852 |
+| `price = a·E + b·F` | a = 0.03792 (**94.8**/hr), b = 0.00271 (**6.8**/hr) | **0.948** |
 
 where `E` is labor originating at extraction and `F` is labor added by
-fabrication (`E + F = L` exactly, verified on all 516 rows).
+fabrication (`E + F = L` exactly, verified on all 653 rows).
 
-Adding one parameter takes R² from 0.816 to 0.948. **a/b = 14.7×.**
+Adding one parameter takes R² from 0.852 to 0.948. **a/b = 14.0× in levels** —
+but see the estimator-sensitivity section below before quoting that number.
 
-### Two independent confirmations
+### Two confirmations
 
 **The fabrication rate was predicted and recovered.** RimWorld hardcodes
 `0.0036` silver/tick for fabrication work. The regression was never given
 that number — it fits `b` from prices and labor amounts derived separately —
-and returns **0.00263, i.e. 0.73× the hardcoded constant.** That is a
+and returns **0.0027, i.e. 0.75× the hardcoded constant.** That is a
 falsifiable prediction about a number the pipeline never saw, landing within
 30% of it. It is a sanity check on the whole chain, not an exact recovery —
 the residual 27% is real and most plausibly reflects that our fabrication
@@ -95,10 +100,11 @@ labor includes *upstream* fabrication (components made rather than bought at
 their authored 32 silver), which RimWorld's own formula never charges for.
 
 **The extraction rate matches the primitives analysis.** `02-primitives.md`
-estimated a median 101 silver/work-hour for extraction labor from 30 hand-
-authored primitive prices. This regression, over a different set of 516 defs
-by a different method, returns **96.5 silver/work-hour** — agreement within
-5%, from independent data.
+estimated a median 101 silver/work-hour from 30 hand-authored primitive
+prices; this regression returns **94.8** — within 6%. Note this is
+consistency, not independent corroboration: 22 of those 30 primitives are
+harvested, and both estimates read the same `harvestWork` field. For a real
+bound on that shared input, see the plant sensitivity in `robustness.py`.
 
 ### The gradient
 
@@ -108,45 +114,75 @@ labor mix. They move monotonically:
 | fabrication share of embodied labor | n | median implied rate |
 |---|---|---|
 | 0–20% | 58 | 114.6 silver/hr |
-| 20–40% | 47 | 96.8 |
-| 40–60% | 63 | 78.7 |
-| 60–80% | 173 | 35.6 |
-| 80–100% | 169 | 23.6 |
+| 20–40% | 42 | 90.1 |
+| 40–60% | 56 | 85.9 |
+| 60–80% | 151 | 33.4 |
+| 80–100% | 212 | 24.2 |
+
+Animal products are excluded here. Included, the top bucket reads 345/hr,
+because a median over defs weights a thrumbo hide the same as a steel bar
+while least squares effectively ignores it - the butchery artifact of
+`05-animals.md` inflates the bucket without touching the fit.
 
 Five buckets, strictly monotone, a 4.9× fall. The more of a good's labor is
 fabrication, the less that labor is worth.
 
-### Robustness
+### Robustness to the scavenging policy
 
 | | single r | a (extraction) | b (fabrication) | a/b | R² |
 |---|---|---|---|---|---|
-| `SCAVENGING=exclude` | 0.01070 | 96.5/hr | 6.6/hr | 14.7× | 0.948 |
+| `SCAVENGING=exclude` | 0.01068 | 94.8/hr | 6.8/hr | 14.0× | 0.948 |
 | `SCAVENGING=include` | 0.01302 | 91.9/hr | 6.4/hr | 14.5× | 0.946 |
 
-Once stone is treated correctly the scavenging choice barely matters — 14.7×
+Once stone is treated correctly the scavenging choice barely matters — 14.0×
 versus 14.5×. The component question was load-bearing only while the stone
 byproduct question was being answered wrongly.
 
+## Robustness: the magnitude is estimator-dependent
+
+The fit above is OLS in levels, which minimises absolute error and is
+therefore dominated by expensive goods: **the ten priciest goods carry 47% of
+the squared-error weight, the top fifty carry 76%.** Re-weighting changes the
+ratio a lot:
+
+| estimator | extraction | fabrication | ratio |
+|---|---|---|---|
+| OLS in levels | 94.8/hr | 6.8/hr | **14.0x** |
+| OLS, equal relative weight | 47.9/hr | 15.7/hr | **3.1x** |
+| least squares in log space | 97.6/hr | 26.1/hr | **3.7x** |
+
+*(animal products excluded)*
+
+What survives every estimator: extraction exceeds fabrication, and two rates
+beat one. The log-space R2 goes 0.548 -> 0.712 with all defs, 0.777 -> 0.839
+with animals excluded. So the split is real; the multiple is a choice about
+what you average over. 14x describes where the game's total value sits; 3-4x
+describes a typical item.
+
+`robustness.py` reproduces all of this, plus the plant-labor sensitivity.
+
 ## What it means
 
-**RimWorld's economy pays roughly 97 silver per hour of extraction labor and
-roughly 7 per hour of fabrication labor.** The 11× asymmetry found in the
+**RimWorld's economy pays several times more for an hour of extraction labor
+than for an hour of fabrication labor** — roughly 95 versus 7 weighting by
+total value, roughly 48 versus 16 weighting goods equally. The asymmetry found in the
 primitives is not an artifact of that small sample — it is the dominant
-structural feature of the whole price system, and it survives every robustness
-check applied.
+structural feature of the whole price system. Its *direction* survives every
+robustness check applied; its magnitude does not, ranging from ~3x to 14x
+depending on weighting.
 
 Mechanically the cause is now clear. RimWorld computes a fabricated good's
 price as authored input prices plus one hardcoded constant times the final
-step's work. The authored input prices embed an implicit labor rate an order
-of magnitude higher than that constant, and the two were never reconciled —
+step's work. The authored input prices embed an implicit labor rate several times higher
+than that constant, and the two were never reconciled —
 exactly the unreconciled pair of value systems the project set out to find,
 but located at a different seam than expected. It is not `workAmount` versus
 `BaseMarketValue`. It is **extraction labor versus fabrication labor**, priced
-14.7× apart inside `BaseMarketValue` itself.
+several times apart inside `BaseMarketValue` itself.
 
-For play, this says something concrete: in RimWorld, crafting barely pays. A
-colonist-hour at a workbench adds ~7 silver of value; the same hour at a
-mining face adds ~97. Value is claimed where materials enter the colony, and
+For play, this says something concrete: in RimWorld, crafting pays poorly. A
+colonist-hour at a workbench adds ~7-16 silver of value depending on
+estimator; the same hour at a mining face adds ~48-95. Value is claimed where materials enter the colony, and
 labor spent transforming them is nearly free — which is precisely the
 divergence between labor time and value that the mod exists to surface.
 

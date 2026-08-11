@@ -26,8 +26,9 @@ primitives (the only genuinely empirical question), then list the overrides.
 
 **1. A 13.8× seam inside `BaseMarketValue`.** The two unreconciled value
 systems are not `workAmount` versus `BaseMarketValue`, as the brief assumed.
-They are *extraction labor versus fabrication labor*, priced 14.0× apart
-inside `BaseMarketValue` itself. With embodied labor solved independently of
+They are *extraction labor versus fabrication labor*, priced several times
+apart inside `BaseMarketValue` itself — 14.0× under OLS in levels, 3–4× under
+relative or log weighting (see `robustness.py`). With embodied labor solved independently of
 price, a single-rate model fits at R² 0.816; splitting labor by origin fits at
 **R² 0.948** — extraction at **94.8 silver/work-hour**, fabrication at
 **6.8**. RimWorld computes a good's price as authored input prices plus one
@@ -95,9 +96,10 @@ against computed costs from 18.75 to 92.50.
 (653 defs, seeded at extraction, no market value anywhere in the derivation),
 a single-rate model fits at R² 0.816. Splitting labor by origin fits at
 **R² 0.948**: extraction labor is priced at **94.8 silver/work-hour**,
-fabrication labor at **6.8** — a **14.0× gap**. Implied rates fall
-monotonically across five buckets as a good's fabrication share rises
-(387.6 → 24.3 silver/hr). There is no single rate.
+fabrication labor at **6.8** — a **14.0× gap** in levels, narrowing to 3–4×
+under relative or log weighting. Implied rates fall monotonically across five
+buckets as a good's fabrication share rises (114.6 → 24.2 silver/hr, animal
+products excluded). There is no single rate.
 
 Two independent checks landed. The regression was never given RimWorld's
 hardcoded `0.0036` fabrication constant and recovered **0.00263** — within
@@ -108,9 +110,9 @@ different data by a different method.
 
 **The one line to carry forward:** the two unreconciled value systems are not
 `workAmount` versus `BaseMarketValue`. They are **extraction labor versus
-fabrication labor, priced 14.0× apart inside `BaseMarketValue` itself.** In
-RimWorld, crafting barely pays: an hour at a workbench adds ~7 silver, an hour
-at a mining face ~97.
+fabrication labor, priced several times apart inside `BaseMarketValue`
+itself** — 14× across the game's total value, 3–4× across a typical good. In
+RimWorld, crafting pays poorly either way.
 
 ## Structural note
 
@@ -145,6 +147,7 @@ constant capital is circulating.
 | `validate_recipes.py` | Diffs `value_model.py` against the game's Recipes table. Caught the ingredient-count bug. |
 | `validate_prices.py` | Diffs base and calculated market values against the game's Acquisition table: 92/92 and 33/33. Caught the inherited `roundToFiveOver`. |
 | `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
+| `robustness.py` | Estimator sensitivity (levels / relative / log), the bucket table with and without animal products, and plant-labor sensitivity. |
 
 Only dependency is `pefile`, which was already installed. Nothing was
 downloaded.
