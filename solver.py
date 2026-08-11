@@ -19,7 +19,8 @@ APPORTION in animals.py).
 """
 import csv
 import math
-from defs import DefDb, stat, cost_list, cost_stuff_count, fnum
+from defs import (DefDb, stat, cost_list, cost_stuff_count, fnum,
+                  count_required, recipe_getter)
 from primitives import mining_rows, plant_rows
 
 INF = float("inf")
@@ -48,7 +49,7 @@ class Option:
     def __init__(self, work, inputs, yield_n, kind, subst=False, label="",
                  method=None):
         self.work = work
-        self.inputs = inputs        # [(frozenset(alternatives), qty)]
+        self.inputs = inputs        # [{defName: qty}] - one dict per ingredient
         self.yield_n = yield_n or 1.0
         self.kind = kind            # extract | recipe | cost
         self.subst = subst
@@ -94,7 +95,7 @@ class Graph:
             if n:
                 # hay carries its own embodied labor; 0.05 nutrition per unit
                 units = n / 0.05
-                paths.append(("hayfed", 0.0, [(frozenset(["Hay"]), units)]))
+                paths.append(("hayfed", 0.0, [{"Hay": units}]))
             for label, extra, inputs in paths:
                 total = r["butcher_work"] + extra
                 meat_share, leather_share = apportion(r, total, mv,
@@ -155,8 +156,15 @@ class Graph:
                 work=r["ticks_per_unit"], inputs=[], yield_n=1.0,
                 kind="extract", label=r["source"], method=r["method"]))
 
-    def _resolve_filter(self, li):
-        """Return (alternatives, qty). alternatives is a frozenset of defNames."""
+    def _resolve_filter(self, li, getter="volume"):
+        """Return (alternatives, qty). alternatives is a frozenset of defNames.
+
+        qty is the *thing count*, converted from the recipe's ingredient-value
+        units per IngredientCount.CountRequiredOfFor. Because the conversion
+        is per-ingredient-def, a substitutable set can imply different counts
+        for different members; we take the cheapest member's conversion, which
+        matches the cheapest-by-labor rule used everywhere else.
+        """
         f = li.find("filter")
         alts = set()
         if f is not None:
@@ -175,10 +183,15 @@ class Graph:
         alts &= set(self.things)
         cnt = li.findtext("count")
         try:
-            qty = float(cnt) if cnt else 1.0
+            base = float(cnt) if cnt else 1.0
         except ValueError:
-            qty = 1.0
-        return frozenset(alts), qty
+            base = 1.0
+        conv = {}
+        for a in alts:
+            c = count_required(base, self.things[a], getter)
+            if c:
+                conv[a] = c
+        return conv
 
     def _add_recipes(self):
         for _, rdn, r in self.db.defs("RecipeDef"):
@@ -196,14 +209,15 @@ class Graph:
             ings = r.find("ingredients")
             inputs, subst = [], False
             ok = True
+            getter = recipe_getter(r)
             for li in (ings if ings is not None else []):
-                alts, qty = self._resolve_filter(li)
+                alts = self._resolve_filter(li, getter)
                 if not alts:
                     ok = False
                     break
                 if len(alts) > 1:
                     subst = True
-                inputs.append((alts, qty))
+                inputs.append(alts)
             if not ok:
                 continue
             for p in prods:
@@ -226,7 +240,7 @@ class Graph:
                 continue
             work = max(stat(el, "WorkToMake") or 0.0,
                        stat(el, "WorkToBuild") or 0.0)
-            inputs = [(frozenset([td]), qty) for td, qty in cl]
+            inputs = [{td: qty} for td, qty in cl]
             subst = False
             if csc > 0:
                 sc = el.find("stuffCategories")
@@ -236,7 +250,7 @@ class Graph:
                         alts |= self.stuff_by_cat.get(li.text.strip(), set())
                 alts &= set(self.things)
                 if alts:
-                    inputs.append((frozenset(alts), csc))
+                    inputs.append({a: csc for a in alts})
                     subst = subst or len(alts) > 1
             self.options[dn].append(Option(
                 work=work, inputs=inputs, yield_n=1.0,
@@ -245,11 +259,15 @@ class Graph:
     # ---------------------------------------------------------- the solve
     def option_cost(self, o, val):
         total = o.work
-        for alts, qty in o.inputs:
-            cheapest = min((val.get(a, INF) for a in alts), default=INF)
-            if cheapest == INF:
+        for alts in o.inputs:
+            best = INF
+            for a, qty in alts.items():
+                v = val.get(a, INF)
+                if v < INF and qty * v < best:
+                    best = qty * v
+            if best == INF:
                 return INF
-            total += qty * cheapest
+            total += best
         return total / o.yield_n
 
     def solve(self, scavenging=None):
@@ -297,17 +315,17 @@ class Graph:
                     total = o.work
                     dmax = 0
                     ok = True
-                    for alts, qty in o.inputs:
-                        # cheapest-by-labor valid input
-                        cheapest, cd = INF, 0
-                        for a in alts:
+                    for alts in o.inputs:
+                        # cheapest-by-labor valid input, count and price paired
+                        bestcost, cd = INF, 0
+                        for a, qty in alts.items():
                             v = val.get(a, INF)
-                            if v < cheapest:
-                                cheapest, cd = v, (depth.get(a) or 0)
-                        if cheapest == INF:
+                            if v < INF and qty * v < bestcost:
+                                bestcost, cd = qty * v, (depth.get(a) or 0)
+                        if bestcost == INF:
                             ok = False
                             break
-                        total += qty * cheapest
+                        total += bestcost
                         dmax = max(dmax, cd)
 
                     if not ok:
@@ -343,17 +361,17 @@ class Graph:
             return 0.0, 0.0
         _stack = _stack | {d}
         ext = fab = 0.0
-        for alts, qty in o.inputs:
-            cheapest, pick = INF, None
-            for a in alts:
+        for alts in o.inputs:
+            best, pick, pqty = INF, None, 0.0
+            for a, qty in alts.items():
                 v = self.val.get(a, INF)
-                if v < cheapest:
-                    cheapest, pick = v, a
+                if v < INF and qty * v < best:
+                    best, pick, pqty = qty * v, a, qty
             if pick is None:
                 continue
             e, f = self.decompose(pick, _stack)
-            ext += qty * e
-            fab += qty * f
+            ext += pqty * e
+            fab += pqty * f
         # Primary production (mining, harvesting, husbandry) is extraction;
         # everything else adds fabrication labor. Inputs are accumulated
         # either way - hay-fed husbandry is an extraction option that still
@@ -374,12 +392,14 @@ class Graph:
         costs = []
         for o in opts:
             total, ok = o.work, True
-            for alts, qty in o.inputs:
-                cheapest = min((self.val.get(a, INF) for a in alts), default=INF)
-                if cheapest == INF:
+            for alts in o.inputs:
+                best = min((qty * self.val.get(a, INF)
+                            for a, qty in alts.items()
+                            if self.val.get(a, INF) < INF), default=INF)
+                if best == INF:
                     ok = False
                     break
-                total += qty * cheapest
+                total += best
             if ok:
                 costs.append(total / o.yield_n)
         if len(costs) < 2 or min(costs) <= 0:

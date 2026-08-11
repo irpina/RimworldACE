@@ -8,6 +8,7 @@ because things like <MarketValue> commonly live on an abstract base
 """
 import copy
 import glob
+import math
 import os
 import xml.etree.ElementTree as ET
 
@@ -154,6 +155,56 @@ def cost_stuff_count(el):
         return float(n.strip()) if n else 0.0
     except ValueError:
         return 0.0
+
+
+def nutrition(el):
+    """Nutrition per unit, however the def happens to declare it."""
+    v = stat(el, "Nutrition")
+    if v is not None:
+        return v
+    ing = el.find("ingestible")
+    if ing is not None:
+        for tag in ("CachedNutrition", "nutrition"):
+            t = ing.findtext(tag)
+            if t:
+                try:
+                    return float(t.strip())
+                except ValueError:
+                    pass
+    return None
+
+
+def value_per_unit(el, getter="volume"):
+    """IngredientValueGetter.ValuePerUnitOf (IL).
+
+    Volume:    def.IsStuff ? (smallVolume ? 0.1 : 1.0) : 1.0
+    Nutrition: def.IsNutritionGivingIngestible ? Nutrition : 0
+    """
+    if getter == "nutrition":
+        return nutrition(el) or 0.0
+    if el.find("stuffProps") is None:
+        return 1.0
+    small = (el.findtext("smallVolume") or "").strip().lower() == "true"
+    return 0.1 if small else 1.0
+
+
+def count_required(count, el, getter="volume"):
+    """IngredientCount.CountRequiredOfFor: ceil(count / valuePerUnit).
+
+    A recipe's <count> is in *ingredient value* units, not thing counts.
+    Make_ComponentSpacer asks for `<Gold>0.3</Gold>`, and gold is small-volume
+    stuff, so that is really 3 gold. Cooking recipes use the nutrition getter,
+    so CookMealSimple's `count 0.5` is 10 units of 0.05-nutrition food.
+    """
+    vpu = value_per_unit(el, getter)
+    if vpu <= 0:
+        return None
+    return math.ceil(count / vpu)
+
+
+def recipe_getter(recipe_el):
+    cls = (recipe_el.findtext("ingredientValueGetterClass") or "").strip()
+    return "nutrition" if "Nutrition" in cls else "volume"
 
 
 def text(el, path, default=None):

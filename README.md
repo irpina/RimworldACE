@@ -26,11 +26,11 @@ primitives (the only genuinely empirical question), then list the overrides.
 
 **1. A 13.8× seam inside `BaseMarketValue`.** The two unreconciled value
 systems are not `workAmount` versus `BaseMarketValue`, as the brief assumed.
-They are *extraction labor versus fabrication labor*, priced 13.8× apart
+They are *extraction labor versus fabrication labor*, priced 14.0× apart
 inside `BaseMarketValue` itself. With embodied labor solved independently of
 price, a single-rate model fits at R² 0.816; splitting labor by origin fits at
-**R² 0.948** — extraction at **95.4 silver/work-hour**, fabrication at
-**6.9**. RimWorld computes a good's price as authored input prices plus one
+**R² 0.948** — extraction at **94.8 silver/work-hour**, fabrication at
+**6.8**. RimWorld computes a good's price as authored input prices plus one
 hardcoded constant times the final step's work, and those authored prices
 embed an implicit labor rate an order of magnitude above that constant. In
 play: an hour at a workbench adds ~7 silver, an hour at a mining face ~95.
@@ -94,21 +94,21 @@ against computed costs from 18.75 to 92.50.
 **The endogenous rate.** With embodied labor solved independently of price
 (653 defs, seeded at extraction, no market value anywhere in the derivation),
 a single-rate model fits at R² 0.816. Splitting labor by origin fits at
-**R² 0.948**: extraction labor is priced at **95.4 silver/work-hour**,
-fabrication labor at **6.9** — a **13.8× gap**. Implied rates fall
+**R² 0.948**: extraction labor is priced at **94.8 silver/work-hour**,
+fabrication labor at **6.8** — a **14.0× gap**. Implied rates fall
 monotonically across five buckets as a good's fabrication share rises
 (387.6 → 24.3 silver/hr). There is no single rate.
 
 Two independent checks landed. The regression was never given RimWorld's
 hardcoded `0.0036` fabrication constant and recovered **0.00263** — within
 30%, a sanity check on the chain rather than an exact recovery. And the
-extraction rate of 95.4/hr matches the **101/hr** estimated separately in
+extraction rate of 94.8/hr matches the **101/hr** estimated separately in
 `02-primitives.md` from 30 hand-authored prices — agreement within 5% from
 different data by a different method.
 
 **The one line to carry forward:** the two unreconciled value systems are not
 `workAmount` versus `BaseMarketValue`. They are **extraction labor versus
-fabrication labor, priced 13.8× apart inside `BaseMarketValue` itself.** In
+fabrication labor, priced 14.0× apart inside `BaseMarketValue` itself.** In
 RimWorld, crafting barely pays: an hour at a workbench adds ~7 silver, an hour
 at a mining face ~97.
 
@@ -142,6 +142,7 @@ constant capital is circulating.
 | `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` is the documented swap point. |
 | `animals.py` | Generated meat defs, butchery yields, husbandry labor. `APPORTION` splits a carcass between meat and leather. |
 | `validate_animals.py` | Diffs our animal model against RimWorld's own dev-mode export in `data/`. Currently 100% on meat, body size and nutrition. |
+| `validate_recipes.py` | Diffs `value_model.py` against the game's Recipes table. Caught the ingredient-count bug. |
 | `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
 
 Only dependency is `pefile`, which was already installed. Nothing was

@@ -3,7 +3,8 @@
 See docs/01-formula.md. Used to ask what the formula *would* have produced
 for defs where a human authored an explicit MarketValue instead.
 """
-from defs import DefDb, stat, cost_list, cost_stuff_count, fnum
+from defs import (DefDb, stat, cost_list, cost_stuff_count, fnum,
+                  count_required, recipe_getter)
 
 LABOR_COEFF = 0.0036
 WORK_THRESHOLD = 2.0
@@ -32,6 +33,7 @@ class Model:
             if target in idx:
                 continue          # first match wins
             ings = r.find("ingredients")
+            getter = recipe_getter(r)
             fixed = []
             ok = True
             for li in (ings if ings is not None else []):
@@ -43,7 +45,14 @@ class Model:
                     ok = False    # not a fixed ingredient -> whole lookup aborts
                     break
                 cnt = li.findtext("count")
-                fixed.append((allowed[0], float(cnt) if cnt else 1.0))
+                base = float(cnt) if cnt else 1.0
+                el = self.things.get(allowed[0])
+                # <count> is in ingredient-value units, not thing counts
+                qty = count_required(base, el, getter) if el is not None else base
+                if qty is None:
+                    ok = False
+                    break
+                fixed.append((allowed[0], qty))
             if not ok:
                 continue
             try:
