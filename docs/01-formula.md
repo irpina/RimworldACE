@@ -29,7 +29,13 @@ in this order:
    valued as if it were made of steel: `CalculatedBaseMarketValue(def, Steel)`.
 5. **Otherwise** — `CalculatedBaseMarketValue(def, stuff)`.
 
-Then `ThingComp.GetStatOffset` / stat factors are applied over the result.
+Then `ThingComp.GetStatOffset` / stat factors are applied, and finally
+`StatWorker.FinalizeValue` rounds the result to the nearest 5 whenever it
+exceeds `roundToFiveOver`. `MarketValue` does not declare that field — it
+inherits **200** from the abstract `MarketValueBase`, so reading the raw node
+misses it entirely. This is why an assault rifle costing `114 + 224 + 144 =
+482` actually prices at **480**, and a sniper rifle's 532 at 530, while the
+revolver's 135.4 is left alone.
 
 So: **an explicit `<MarketValue>` in `statBases` short-circuits everything.**
 The computed path exists only for defs that do not declare one.
@@ -88,8 +94,9 @@ metadata Constant table). So the labor coefficient is exactly:
 > **9 silver per in-game work-hour**, at nominal work speed.
 
 An assault rifle (`WorkToMake` 40000, cost 60 steel + 7 components) therefore
-prices as `60×1.9 + 7×32 + 40000×0.0036` = `114 + 224 + 144` = **482 silver**,
-of which 30% is labor and 70% is transmitted input value.
+prices as `60×1.9 + 7×32 + 40000×0.0036` = `114 + 224 + 144` = 482, rounded to
+**480 silver** by `roundToFiveOver` (see below), of which ~30% is labor and
+~70% is transmitted input value.
 
 ## Which recipe gets used
 

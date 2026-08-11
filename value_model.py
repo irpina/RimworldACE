@@ -10,6 +10,17 @@ LABOR_COEFF = 0.0036
 WORK_THRESHOLD = 2.0
 STUFF_FALLBACK = 2.0
 
+# StatWorker.FinalizeValue (IL): if val > stat.roundToFiveOver, round to the
+# nearest 5. MarketValue does not declare it - it inherits roundToFiveOver=200
+# from the abstract MarketValueBase, which is why reading the raw node misses
+# it. This is what makes Gun_AssaultRifle 480 rather than 482, and
+# Gun_SniperRifle 530 rather than 532, while the revolver's 135.4 is untouched.
+ROUND_TO_FIVE_OVER = 200.0
+
+
+def finalize(v):
+    return round(v / 5.0) * 5.0 if v > ROUND_TO_FIVE_OVER else v
+
 
 class Model:
     def __init__(self, db=None):
@@ -88,13 +99,14 @@ class Model:
             return 0.0
         authored = stat(el, "MarketValue")
         if authored is not None:
-            self._cache[defname] = authored
-            return authored
+            v = finalize(authored)
+            self._cache[defname] = v
+            return v
         _stack = _stack or set()
         if defname in _stack:
             return 0.0                       # cycle guard
         _stack = _stack | {defname}
-        v = self.calculated(defname, _stack=_stack)
+        v = finalize(self.calculated(defname, _stack=_stack))
         self._cache[defname] = v
         return v
 

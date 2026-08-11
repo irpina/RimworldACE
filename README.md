@@ -143,6 +143,7 @@ constant capital is circulating.
 | `animals.py` | Generated meat defs, butchery yields, husbandry labor. `APPORTION` splits a carcass between meat and leather. |
 | `validate_animals.py` | Diffs our animal model against RimWorld's own dev-mode export in `data/`. Currently 100% on meat, body size and nutrition. |
 | `validate_recipes.py` | Diffs `value_model.py` against the game's Recipes table. Caught the ingredient-count bug. |
+| `validate_prices.py` | Diffs base and calculated market values against the game's Acquisition table: 92/92 and 33/33. Caught the inherited `roundToFiveOver`. |
 | `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
 
 Only dependency is `pefile`, which was already installed. Nothing was
