@@ -28,6 +28,7 @@ primitives (the only genuinely empirical question), then list the overrides.
 | [01-formula.md](docs/01-formula.md) | What is RimWorld's value formula, exactly? |
 | [02-primitives.md](docs/02-primitives.md) | Do authored prices track extraction labor? |
 | [03-overrides.md](docs/03-overrides.md) | Where did a human override the formula? |
+| [04-endogenous-rate.md](docs/04-endogenous-rate.md) | What labor rate does the price structure actually imply? |
 
 **The formula.** Value = transmitted input value + `0.0036` silver per tick of
 work, divided by yield, with an authored `MarketValue` short-circuiting the
@@ -50,11 +51,26 @@ marked up; Anomaly serums carry 10–11× markups. The dominant pattern is
 flattening a category to one round number — all seven shell types cost 55
 against computed costs from 18.75 to 92.50.
 
-**The one number to carry forward:** extraction labor generates a median
-**101 silver per work-hour**; manufacturing labor generates exactly **9**. An
-11× asymmetry between where value is created and where labor is spent, and it
-is structural — the manufacturing rate is one hardcoded constant, the
-extraction rate emerges from ~400 authored numbers never reconciled against it.
+**The endogenous rate.** With embodied labor solved independently of price
+(496 defs, seeded at extraction, no market value anywhere in the derivation),
+a single-rate model fits at R² 0.841. Splitting labor by origin fits at
+**R² 0.957**: extraction labor is priced at **98.4 silver/work-hour**,
+fabrication labor at **7.8** — a **12.7× gap**. Implied rates fall
+monotonically across five buckets as a good's fabrication share rises
+(114.6 → 23.6 silver/hr). There is no single rate.
+
+Two independent checks landed. The regression was never given RimWorld's
+hardcoded `0.0036` fabrication constant and recovered **0.00310** (0.86×;
+0.00426 under the other scavenging policy, bracketing it). And the extraction
+rate of 98.4/hr matches the **101/hr** estimated separately in
+`02-primitives.md` from 30 hand-authored prices — agreement within 3% from
+different data by a different method.
+
+**The one line to carry forward:** the two unreconciled value systems are not
+`workAmount` versus `BaseMarketValue`. They are **extraction labor versus
+fabrication labor, priced 12.7× apart inside `BaseMarketValue` itself.** In
+RimWorld, crafting barely pays: an hour at a workbench adds ~8 silver, an hour
+at a mining face ~98.
 
 ## Structural note for the mod (not this session)
 
@@ -83,12 +99,14 @@ constant capital is circulating.
 | `primitives.py` | Extraction labor per unit → `out/primitives.csv`. |
 | `analyze_primitives.py` | Correlations, implemented inline — no new dependencies. |
 | `overrides.py` | Authored vs computed → `out/overrides.csv`. |
+| `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` and `APPORTION` are the documented swap points. |
+| `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
 
 Only dependency is `pefile`, which was already installed. Nothing was
 downloaded.
 
 ```bash
-python primitives.py && python analyze_primitives.py && python overrides.py
+python primitives.py && python analyze_primitives.py && python overrides.py && python solver.py && python rate_test.py
 ```
 
 ## Known gaps

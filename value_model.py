@@ -50,7 +50,12 @@ class Model:
                 yield_n = float(p.text.strip())
             except (AttributeError, ValueError):
                 yield_n = 1.0
-            work = fnum(r, "workAmount") or 0.0
+            # RecipeDef.WorkAmountForStuff: workAmount < 0 falls back to the
+            # first product's WorkToMake stat.
+            work = fnum(r, "workAmount")
+            if work is None or work < 0:
+                prod_el = self.things.get(target)
+                work = (stat(prod_el, "WorkToMake") or 0.0) if prod_el is not None else 0.0
             idx[target] = {"work": work, "yield": yield_n, "ingredients": fixed}
         return idx
 
