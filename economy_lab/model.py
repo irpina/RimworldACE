@@ -5,12 +5,15 @@ calibration before any RimWorld assembly work:
 
 * prices clear locally from inventory and unmet effective demand;
 * regions produce, consume, hold stock and keep silver balances;
+* production consumes accounted material inputs and can be input-constrained;
 * costly, delayed, capacity-limited routes permit planetary arbitrage;
 * persistent excess profit induces delayed capacity investment;
 * every commodity and silver movement is recorded in an invariant ledger.
 
-It is not yet the final economic model. In particular, there are no production
-inputs, labor markets, credit, resource reserves, or dynamic labor values.
+It is not yet the final economic model. In particular, there are no labor
+markets, credit, resource reserves, capital-goods costs, or dynamic labor
+values. The modelling choices behind input-output production are recorded in
+`docs/08-accounted-input-design.md`; read that before changing them.
 """
 
 from __future__ import annotations
@@ -21,6 +24,10 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 
 EPSILON = 1e-9
+
+#: How a producer behaves when it holds only part of its required inputs.
+PROPORTIONAL = "proportional"
+ALL_OR_NOTHING = "all_or_nothing"
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,83 @@ class Commodity:
     inventory_price_sensitivity: float = 0.90
     minimum_price_factor: float = 0.10
     maximum_price_factor: float = 10.0
+    #: RimWorld's Mass stat. Only used to apportion joint-product costs.
+    mass_per_unit: float = 1.0
+
+
+@dataclass(frozen=True)
+class Process:
+    """One technology: what it consumes, what it yields, and at what cost.
+
+    Quantities are per *run*. A producer's daily runs are its capacity divided
+    by `capacity_per_run`, so a single-output process with unit capacity cost
+    reduces exactly to the earlier "capacity is units per day" model.
+
+    `outputs` is a mapping from the outset because joint production is normal
+    in this domain rather than exceptional. When there is more than one output,
+    `apportionment` decides how `direct_labor` and `unit_operating_cost` are
+    split between them; see `share_of_cost`.
+    """
+
+    name: str
+    outputs: Dict[str, float]
+    inputs: Dict[str, float] = field(default_factory=dict)
+    direct_labor: float = 0.0
+    capacity_per_run: float = 1.0
+    unit_operating_cost: float = 0.0
+    apportionment: str = "mass"
+
+    @property
+    def primary(self) -> str:
+        """The largest output by quantity; ties broken by name."""
+        return max(sorted(self.outputs), key=lambda c: self.outputs[c])
+
+    def runs_for(self, capacity_per_day: float) -> float:
+        return capacity_per_day / max(self.capacity_per_run, EPSILON)
+
+    def share_of_cost(
+        self, commodity: str, commodities: Dict[str, Commodity]
+    ) -> float:
+        """Fraction of this process's joint cost borne by one output.
+
+        Mass apportionment: physical, and therefore not circular in the price
+        it is meant to help explain. It is a documented choice, not a truth;
+        see `docs/08-accounted-input-design.md`.
+        """
+        if commodity not in self.outputs:
+            return 0.0
+        if len(self.outputs) == 1:
+            return 1.0
+        if self.apportionment != "mass":
+            raise ValueError(f"unknown apportionment rule {self.apportionment!r}")
+
+        def weight(name: str) -> float:
+            mass = commodities[name].mass_per_unit if name in commodities else 1.0
+            return mass * self.outputs[name]
+
+        total = sum(weight(name) for name in self.outputs)
+        if total <= EPSILON:
+            # Massless outputs cannot be told apart by mass; split evenly and
+            # say so rather than dividing by zero.
+            return 1.0 / len(self.outputs)
+        return weight(commodity) / total
+
+    def labor_per_unit(
+        self, commodity: str, commodities: Dict[str, Commodity]
+    ) -> float:
+        units = self.outputs.get(commodity, 0.0)
+        if units <= EPSILON:
+            return 0.0
+        return self.direct_labor * self.share_of_cost(commodity, commodities) / units
+
+    def operating_cost_per_unit(
+        self, commodity: str, commodities: Dict[str, Commodity]
+    ) -> float:
+        units = self.outputs.get(commodity, 0.0)
+        if units <= EPSILON:
+            return 0.0
+        share = self.share_of_cost(commodity, commodities)
+        return self.unit_operating_cost * share / units
 
 
 @dataclass
@@ -47,6 +131,20 @@ class Producer:
     active: bool = True
     output_total: float = 0.0
     cash: float = 0.0
+    #: Required. Production is no longer a free ledger source.
+    process: Optional[Process] = None
+
+    def __post_init__(self) -> None:
+        if self.process is None:
+            raise ValueError(
+                f"producer {self.name!r} needs a Process; free production was "
+                "removed when input-output accounting landed"
+            )
+        if self.commodity not in self.process.outputs:
+            raise ValueError(
+                f"producer {self.name!r} claims commodity {self.commodity!r} "
+                f"which process {self.process.name!r} does not output"
+            )
 
     def utilization(self, price: float) -> float:
         """Smoothly curtail production when price falls below cash cost."""
@@ -60,6 +158,16 @@ class Producer:
         span = self.full_utilization_price_ratio - self.zero_utilization_price_ratio
         return (ratio - self.zero_utilization_price_ratio) / max(span, EPSILON)
 
+    def desired_runs(self, price: float) -> float:
+        return self.process.runs_for(self.capacity_per_day) * self.utilization(price)
+
+    def input_per_day(self, commodity: str) -> float:
+        """Input required per day at full capacity, ignoring price curtailment."""
+        per_run = self.process.inputs.get(commodity, 0.0)
+        if per_run <= 0 or not self.active:
+            return 0.0
+        return self.process.runs_for(self.capacity_per_day) * per_run
+
 
 @dataclass
 class CapacityProject:
@@ -68,6 +176,7 @@ class CapacityProject:
     unit_cost: float
     completes_day: int
     name: str
+    process: Optional[Process] = None
 
 
 @dataclass
@@ -91,6 +200,18 @@ class Region:
             for p in self.producers
             if p.active and p.commodity == commodity
         )
+
+    def throughput_demand(self, commodity: str) -> float:
+        """Final demand plus demand derived from local input requirements.
+
+        Intermediate goods have no final demand, so scaling their inventory
+        targets and price pressure by final demand alone would give them a
+        target of zero and collapse them to the price floor. This is a strict
+        generalization: a commodity nothing is made from has zero derived
+        demand and behaves exactly as before.
+        """
+        derived = sum(p.input_per_day(commodity) for p in self.producers if p.active)
+        return self.base_daily_demand.get(commodity, 0.0) + derived
 
     def daily_demand(self, commodity: Commodity) -> float:
         base = self.base_daily_demand.get(commodity.name, 0.0)
@@ -137,6 +258,10 @@ class Ledger:
     external_destruction: Dict[str, float] = field(default_factory=dict)
     production: Dict[str, float] = field(default_factory=dict)
     consumption: Dict[str, float] = field(default_factory=dict)
+    #: Material consumed as a production input, kept apart from final
+    #: consumption so a unit used up making something else is still a
+    #: declared sink rather than a leak.
+    intermediate_consumption: Dict[str, float] = field(default_factory=dict)
     transport_cash: float = 0.0
     initial_cash: float = 0.0
 
@@ -161,11 +286,15 @@ class Economy:
         expectation_alpha: float = 0.05,
         zero_utilization_price_ratio: float = 0.70,
         full_utilization_price_ratio: float = 1.05,
+        input_rationing: str = PROPORTIONAL,
     ) -> None:
+        if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
+            raise ValueError(f"unknown input rationing rule {input_rationing!r}")
         self.commodities = {c.name: c for c in commodities}
         self.regions = {r.name: r for r in regions}
         self.routes = list(routes)
         self.shipments: List[Shipment] = []
+        self.input_rationing = input_rationing
         self.day = 0
         self.investment_interval_days = investment_interval_days
         self.investment_lead_days = investment_lead_days
@@ -178,6 +307,24 @@ class Economy:
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
         self.history: List[dict] = []
+
+        # Remembered so replacement capacity can be built for a commodity
+        # whose every producer has since been destroyed.
+        self.known_processes: Dict[str, Process] = {}
+        for region in self.regions.values():
+            for producer in region.producers:
+                process = producer.process
+                unknown = (
+                    set(process.inputs) | set(process.outputs)
+                ) - set(self.commodities)
+                if unknown:
+                    # An input or output outside the declared commodity set
+                    # would enter or leave the material ledger untracked.
+                    raise ValueError(
+                        f"process {process.name!r} references undeclared "
+                        f"commodities: {sorted(unknown)}"
+                    )
+                self.known_processes.setdefault(producer.commodity, process)
 
         for region in self.regions.values():
             for commodity in self.commodities.values():
@@ -244,14 +391,33 @@ class Economy:
         return removed
 
     def commodity_balance(self, commodity: str) -> float:
-        """Return residual of the closed material accounting identity."""
+        """Return residual of the closed material accounting identity.
+
+        Every unit must trace to a declared source (opening stock, production,
+        external injection) and leave through a declared sink (final
+        consumption, use as a production input, external destruction) or still
+        be held somewhere.
+        """
         initial = self.history[0]["system_inventory"][commodity]
         produced = self.ledger.production.get(commodity, 0.0)
         injected = self.ledger.external_injections.get(commodity, 0.0)
         destroyed = self.ledger.external_destruction.get(commodity, 0.0)
         consumed = self.ledger.consumption.get(commodity, 0.0)
+        used_as_input = self.ledger.intermediate_consumption.get(commodity, 0.0)
         current = self.system_inventory(commodity)
-        return initial + produced + injected - destroyed - consumed - current
+        return (
+            initial
+            + produced
+            + injected
+            - destroyed
+            - consumed
+            - used_as_input
+            - current
+        )
+
+    def commodity_balances(self) -> Dict[str, float]:
+        """Material residual for every commodity, not just the headline one."""
+        return {name: self.commodity_balance(name) for name in self.commodities}
 
     def cash_balance(self) -> float:
         """Return residual of the currently modelled silver accounts."""
@@ -299,22 +465,100 @@ class Economy:
                         project.unit_cost,
                         self.zero_utilization_price_ratio,
                         self.full_utilization_price_ratio,
+                        process=project.process
+                        or self.known_processes[project.commodity],
                     )
                 )
             region.projects = pending
 
     def _produce(self) -> None:
+        """Run every process against the region's opening inventory.
+
+        Production is simultaneous: all producers draw on the stock the day
+        opened with, and output lands only once every draw is done, so the
+        result does not depend on the order producers sit in a list. A shock
+        therefore takes one day per production stage to travel downstream,
+        which is a visible property rather than a hidden one.
+        """
         for region in self.regions.values():
-            for producer in region.producers:
-                if producer.commodity not in self.commodities:
+            # Unmet demand is rebuilt from scratch each day. Production adds
+            # input shortfalls, consumption adds final shortfalls.
+            for name in self.commodities:
+                region.unmet_demand[name] = 0.0
+
+            opening = dict(region.inventory)
+            active = [
+                p
+                for p in region.producers
+                if p.active
+                and p.capacity_per_day > 0
+                and p.commodity in self.commodities
+            ]
+            desired = {
+                id(p): p.desired_runs(region.prices[p.commodity]) for p in active
+            }
+
+            # Pro-rata by requirement, so contention for a scarce shared input
+            # is order-independent. Single pass: a producer throttled by some
+            # other input leaves its allocation unused, and that slack stays in
+            # inventory for tomorrow rather than being reallocated today.
+            required: Dict[str, float] = {}
+            for producer in active:
+                runs = desired[id(producer)]
+                for name, per_run in producer.process.inputs.items():
+                    required[name] = required.get(name, 0.0) + runs * per_run
+
+            ration: Dict[str, float] = {}
+            for name, need in required.items():
+                if need <= EPSILON:
+                    ration[name] = 1.0
+                else:
+                    ration[name] = min(1.0, opening.get(name, 0.0) / need)
+
+            drawn: Dict[str, float] = {}
+            produced: Dict[str, float] = {}
+            for producer in active:
+                runs = desired[id(producer)]
+                if runs <= EPSILON:
                     continue
-                price = region.prices[producer.commodity]
-                output = producer.capacity_per_day * producer.utilization(price)
-                if output <= 0:
+                inputs = producer.process.inputs
+                # Liebig: inputs are complements, so the scarcest one binds.
+                available = min((ration[n] for n in inputs), default=1.0)
+                if self.input_rationing == ALL_OR_NOTHING:
+                    available = 1.0 if available >= 1.0 - EPSILON else 0.0
+                runs *= available
+                if runs <= EPSILON:
                     continue
-                region.inventory[producer.commodity] += output
-                producer.output_total += output
-                Ledger.add(self.ledger.production, producer.commodity, output)
+                for name, per_run in inputs.items():
+                    drawn[name] = drawn.get(name, 0.0) + runs * per_run
+                for name, per_run in producer.process.outputs.items():
+                    if name not in self.commodities:
+                        continue
+                    produced[name] = produced.get(name, 0.0) + runs * per_run
+                producer.output_total += runs * producer.process.outputs.get(
+                    producer.commodity, 0.0
+                )
+
+            for name, amount in drawn.items():
+                region.inventory[name] -= amount
+                Ledger.add(self.ledger.intermediate_consumption, name, amount)
+            for name, amount in produced.items():
+                region.inventory[name] += amount
+                Ledger.add(self.ledger.production, name, amount)
+
+            # An input a producer could not source is real unmet demand for
+            # that input. Without this an upstream shortage would cut
+            # downstream output while never registering in the input's own
+            # price, so scarcity would propagate as quantity but never as a
+            # price signal.
+            for name, need in required.items():
+                # Only what this commodity's own scarcity denied. Measuring
+                # `need - drawn` instead would book the unused slack of a
+                # producer throttled by some *other* input as unmet demand
+                # here, inventing a shortage in a commodity that was ample.
+                shortfall = need * (1.0 - ration[name])
+                if shortfall > EPSILON:
+                    region.unmet_demand[name] += shortfall
 
     def _consume(self) -> None:
         for region in self.regions.values():
@@ -324,7 +568,7 @@ class Economy:
                 consumed = min(desired, available)
                 unmet = desired - consumed
                 region.inventory[commodity.name] -= consumed
-                region.unmet_demand[commodity.name] = unmet
+                region.unmet_demand[commodity.name] += unmet
                 region.consumed_total[commodity.name] += consumed
                 Ledger.add(self.ledger.consumption, commodity.name, consumed)
 
@@ -332,7 +576,14 @@ class Economy:
         for region in self.regions.values():
             for commodity in self.commodities.values():
                 name = commodity.name
-                base_demand = max(region.base_daily_demand.get(name, 0.0), EPSILON)
+                throughput = region.throughput_demand(name)
+                if throughput <= EPSILON:
+                    # Neither consumed nor used as an input here. That is "not
+                    # traded in this region", not "infinitely oversupplied",
+                    # so leave the price alone instead of driving it to the
+                    # floor on a division by nothing.
+                    continue
+                base_demand = throughput
                 target = base_demand * commodity.target_inventory_days
                 coverage_gap = (target - region.inventory[name]) / max(target, EPSILON)
                 unmet_ratio = region.unmet_demand[name] / base_demand
@@ -360,11 +611,22 @@ class Economy:
         """
         for route in sorted(self.routes, key=lambda x: (x.a, x.b)):
             remaining_capacity = route.capacity_per_day
+            a, b = self.regions[route.a], self.regions[route.b]
+            freight = route.freight_per_unit * (1.0 + route.risk_markup)
+
+            # Scarce freight goes to the widest spread first: arbitrageurs ship
+            # the most profitable cargo, not the alphabetically first one. With
+            # a single commodity this is an identity.
+            candidates = []
             for name in sorted(self.commodities):
+                spread = abs(a.prices[name] - b.prices[name]) - freight
+                if spread > 0:
+                    candidates.append((spread, name))
+            candidates.sort(key=lambda item: (-item[0], item[1]))
+
+            for _, name in candidates:
                 if remaining_capacity <= EPSILON:
                     break
-                a, b = self.regions[route.a], self.regions[route.b]
-                freight = route.freight_per_unit * (1.0 + route.risk_markup)
                 if b.prices[name] > a.prices[name] + freight:
                     source, destination = a, b
                 elif a.prices[name] > b.prices[name] + freight:
@@ -374,11 +636,10 @@ class Economy:
 
                 commodity = self.commodities[name]
                 source_target = (
-                    source.base_daily_demand.get(name, 0.0)
-                    * commodity.target_inventory_days
+                    source.throughput_demand(name) * commodity.target_inventory_days
                 )
                 destination_target = (
-                    destination.base_daily_demand.get(name, 0.0)
+                    destination.throughput_demand(name)
                     * commodity.target_inventory_days
                 )
                 exportable = max(0.0, source.inventory[name] - source_target)
@@ -437,8 +698,11 @@ class Economy:
     def _invest(self) -> None:
         for region in self.regions.values():
             for name, commodity in self.commodities.items():
-                demand = region.base_daily_demand.get(name, 0.0)
-                if demand <= 0:
+                # Throughput, not final demand: otherwise an intermediate good
+                # would never attract replacement capacity, because nobody
+                # eats it.
+                demand = region.throughput_demand(name)
+                if demand <= 0 or name not in self.known_processes:
                     continue
                 existing = region.capacity(name)
                 pipeline = sum(
@@ -466,6 +730,14 @@ class Economy:
                 ):
                     continue
                 amount = shortfall * self.investment_fraction_of_shortfall
+                existing_process = next(
+                    (
+                        p.process
+                        for p in region.producers
+                        if p.active and p.commodity == name
+                    ),
+                    self.known_processes[name],
+                )
                 region.projects.append(
                     CapacityProject(
                         name,
@@ -473,6 +745,7 @@ class Economy:
                         assumed_cost,
                         self.day + self.investment_lead_days,
                         f"entrant-{region.name}-{name}-{self.day}",
+                        process=existing_process,
                     )
                 )
 
