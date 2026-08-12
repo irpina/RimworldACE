@@ -114,8 +114,15 @@ def summary(economy: Economy) -> Dict[str, object]:
     commodity = economy.commodities["yayo"]
     regions: Dict[str, object] = {}
     for name, region in economy.regions.items():
+        price_series = economy.series(name, "yayo")
+        minimum_price = min(price_series)
+        maximum_price = max(price_series)
         regions[name] = {
             "price": round(region.prices["yayo"], 3),
+            "minimum_price": round(minimum_price, 3),
+            "minimum_price_day": price_series.index(minimum_price),
+            "maximum_price": round(maximum_price, 3),
+            "maximum_price_day": price_series.index(maximum_price),
             "labor_value": commodity.labor_value,
             "price_to_labor_value": round(
                 region.prices["yayo"] / commodity.labor_value, 3

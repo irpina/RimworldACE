@@ -6,6 +6,7 @@ from economy_lab.scenarios import (
     equilibrium,
     producer_loss,
     seeded_two_region_economy,
+    summary,
 )
 
 
@@ -30,6 +31,12 @@ class EconomyInvariantTests(unittest.TestCase):
         second = arbitrage(days_after_shock=90)
         self.assertEqual(first.history, second.history)
         self.assertEqual(first.shipments, second.shipments)
+
+    def test_scenario_summary_exposes_shock_extrema(self):
+        report = summary(arbitrage(days_after_shock=90))
+        affected = report["regions"]["Dust Basin"]
+        self.assertLess(affected["minimum_price"], affected["price"])
+        self.assertGreater(affected["minimum_price_day"], 30)
 
     def test_all_benchmark_scenarios_close_the_ledgers(self):
         for economy in (arbitrage(), producer_loss()):
