@@ -61,6 +61,7 @@ class ScenarioParameters:
     unmet_demand_price_pressure: float = 2.0
     speculative_inventory_limit: float = 0.50
     expectation_alpha: float = 0.05
+    replenishment_rate: float = 0.10
     glut_fraction_of_annual_demand: float = 0.25
     producer_loss_fraction: float = 0.60
 
@@ -291,6 +292,7 @@ def seeded_two_region_economy(
         unmet_demand_price_pressure=parameters.unmet_demand_price_pressure,
         speculative_inventory_limit=parameters.speculative_inventory_limit,
         expectation_alpha=parameters.expectation_alpha,
+        replenishment_rate=parameters.replenishment_rate,
         zero_utilization_price_ratio=parameters.zero_utilization_price_ratio,
         full_utilization_price_ratio=parameters.full_utilization_price_ratio,
         input_rationing=input_rationing,

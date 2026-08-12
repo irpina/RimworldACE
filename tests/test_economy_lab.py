@@ -204,6 +204,25 @@ class ProcessAccountingTests(unittest.TestCase):
                     places=9,
                 )
 
+    def test_glut_overhang_drains_toward_upstream_targets(self):
+        economy = regional_glut(days_after_injection=240)
+        local = economy.regions["Dust Basin"]
+        for name in (LEAVES, CHEMFUEL):
+            target = (
+                local.throughput_demand(name)
+                * economy.commodities[name].target_inventory_days
+            )
+            self.assertAlmostEqual(local.inventory[name], target, places=6)
+
+    def test_equilibrium_is_exactly_stationary_for_every_commodity(self):
+        economy = equilibrium(days=240)
+        for region_name in economy.regions:
+            for name in economy.commodities:
+                prices = economy.series(region_name, name)
+                stocks = economy.series(region_name, name, field="inventory")
+                self.assertEqual(min(prices), max(prices))
+                self.assertEqual(min(stocks), max(stocks))
+
 
 class JointProductApportionmentTests(unittest.TestCase):
     """Mass apportionment is a documented choice; this pins the arithmetic."""

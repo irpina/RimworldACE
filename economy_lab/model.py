@@ -284,6 +284,7 @@ class Economy:
         unmet_demand_price_pressure: float = 2.0,
         speculative_inventory_limit: float = 0.50,
         expectation_alpha: float = 0.05,
+        replenishment_rate: float = 0.10,
         zero_utilization_price_ratio: float = 0.70,
         full_utilization_price_ratio: float = 1.05,
         input_rationing: str = PROPORTIONAL,
@@ -303,6 +304,9 @@ class Economy:
         self.unmet_demand_price_pressure = unmet_demand_price_pressure
         self.speculative_inventory_limit = speculative_inventory_limit
         self.expectation_alpha = expectation_alpha
+        if not 0.0 <= replenishment_rate <= 1.0:
+            raise ValueError("replenishment_rate must be between zero and one")
+        self.replenishment_rate = replenishment_rate
         self.zero_utilization_price_ratio = zero_utilization_price_ratio
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
@@ -487,16 +491,20 @@ class Economy:
                 region.unmet_demand[name] = 0.0
 
             opening = dict(region.inventory)
-            active = [
+            active = sorted(
+                (
                 p
                 for p in region.producers
                 if p.active
                 and p.capacity_per_day > 0
                 and p.commodity in self.commodities
-            ]
+                ),
+                key=lambda p: (p.name, p.commodity),
+            )
             desired = {
                 id(p): p.desired_runs(region.prices[p.commodity]) for p in active
             }
+            planned = self._planned_runs(region, opening, active, desired)
 
             # Pro-rata by requirement, so contention for a scarce shared input
             # is order-independent. Single pass: a producer throttled by some
@@ -504,7 +512,7 @@ class Economy:
             # inventory for tomorrow rather than being reallocated today.
             required: Dict[str, float] = {}
             for producer in active:
-                runs = desired[id(producer)]
+                runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     required[name] = required.get(name, 0.0) + runs * per_run
 
@@ -518,7 +526,7 @@ class Economy:
             drawn: Dict[str, float] = {}
             produced: Dict[str, float] = {}
             for producer in active:
-                runs = desired[id(producer)]
+                runs = planned[id(producer)]
                 if runs <= EPSILON:
                     continue
                 inputs = producer.process.inputs
@@ -559,6 +567,70 @@ class Economy:
                 shortfall = need * (1.0 - ration[name])
                 if shortfall > EPSILON:
                     region.unmet_demand[name] += shortfall
+
+    def _planned_runs(
+        self,
+        region: Region,
+        opening: Dict[str, float],
+        active: List[Producer],
+        desired: Dict[int, float],
+    ) -> Dict[int, float]:
+        """Plan output from intended outflow and a damped stock correction.
+
+        Every iteration reads the same opening inventory. Iteration only lets
+        downstream run plans become today's upstream input orders; it does not
+        make today's output available as today's input. Production therefore
+        remains simultaneous and independent of producer list order.
+        """
+        planned = dict(desired)
+        for _ in range(1000):
+            intended_outflow = {
+                name: region.daily_demand(commodity)
+                for name, commodity in self.commodities.items()
+            }
+            for producer in active:
+                runs = planned[id(producer)]
+                for name, per_run in producer.process.inputs.items():
+                    intended_outflow[name] += runs * per_run
+
+            requested_output: Dict[str, float] = {}
+            for name, commodity in self.commodities.items():
+                target = (
+                    region.throughput_demand(name)
+                    * commodity.target_inventory_days
+                )
+                correction = self.replenishment_rate * (
+                    target - opening.get(name, 0.0)
+                )
+                requested_output[name] = max(
+                    0.0, intended_outflow[name] + correction
+                )
+
+            desired_output: Dict[str, float] = {
+                name: 0.0 for name in self.commodities
+            }
+            for producer in active:
+                units = producer.process.outputs[producer.commodity]
+                desired_output[producer.commodity] += (
+                    desired[id(producer)] * units
+                )
+
+            revised: Dict[int, float] = {}
+            for producer in active:
+                name = producer.commodity
+                available_output = desired_output[name]
+                if available_output <= EPSILON:
+                    factor = 0.0
+                else:
+                    factor = min(1.0, requested_output[name] / available_output)
+                revised[id(producer)] = desired[id(producer)] * factor
+            if all(
+                abs(revised[key] - planned[key]) <= EPSILON
+                for key in revised
+            ):
+                return revised
+            planned = revised
+        raise RuntimeError("production-order plan did not converge")
 
     def _consume(self) -> None:
         for region in self.regions.values():
