@@ -3,7 +3,10 @@
 **Last updated:** 2026-08-11  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **Current branch:** `master`  
-**Latest Stage 0 commit:** `d284af9`  
+**Latest Stage 0 model commit:** `d284af9`  
+**Behavioral baseline:** `5ae57f7`  
+**Sensitivity harness:** `f2c490c`  
+**Pre-process predictions:** `cae1ba2`  
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -216,6 +219,9 @@ Commits:
 
 - `54d88ce` — Add deterministic Stage 0 economy laboratory
 - `d284af9` — Report Stage 0 shock extrema
+- `5ae57f7` — Freeze Stage 0 behavior before input-output production
+- `f2c490c` — Add Stage 0 parameter sensitivity harness
+- `cae1ba2` — Record pre-process behavioral predictions
 
 ### Current vertical slice
 
@@ -253,7 +259,59 @@ Run:
 ```text
 python -m unittest discover -s tests -v
 python -m economy_lab all
+python -m economy_lab.baseline
+python -m economy_lab.sensitivity
 ```
+
+### Behavioral observation checkpoint
+
+`economy_lab/behavior_baseline.json` freezes 13 current behavioral metrics.
+`python -m economy_lab.baseline` re-runs the scenarios and prints reference,
+current value, absolute delta, and percentage delta. It is deliberately a
+report rather than a pass/fail test; the eight existing tests remain the
+authoritative invariant checks. Replace the reference only with
+`--write-reference` after an understood behavioral change, and say why the
+numbers moved in the commit message.
+
+Frozen headline metrics include:
+
+- local glut trough: **12.790741** on day 67;
+- distant glut trough: **20.105683** on day 82;
+- local half-gap recovery: **9 days / 0.6 quadrums**;
+- arbitrage exports: **13 units**;
+- producer-loss peak: **38.630290** on day 119;
+- 80% capacity recovery: **75 days / 5 quadrums**;
+- equilibrium price range: **0** in both regions.
+
+`python -m economy_lab.sensitivity` deliberately runs a one-at-a-time ±10%
+sweep over 31 exposed calibration parameters. It writes:
+
+- `economy_lab/sensitivity_results.csv` — 806 detailed parameter/output rows;
+- `economy_lab/sensitivity_ranking.txt` — parameters ranked by their strongest
+  normalized output response.
+
+The sweep did not reveal one overwhelmingly dominant coefficient. Daily demand
+and productive capacity tied for the strongest response through arbitrage
+volume; reference price and Dust Basin unit cost followed through a quantized
+two-day movement in glut recovery. Investment timing and fraction most strongly
+control capacity recovery. Integer scheduling makes the investment-interval
+response phase-sensitive rather than smooth.
+
+Twelve parameters produced no movement in the captured outputs at ±10%:
+expectation smoothing, initial cash, investment margin threshold, labor value,
+all three loss-route settings, both price clamps, River unit cost, speculative
+inventory limit, and unmet-demand price pressure. These are scenario-local
+findings, not proof that the parameters are globally irrelevant.
+
+The sensitivity refactor exposed previously hard-coded coefficients through
+`ScenarioParameters` while preserving every default. The baseline report
+remains all-zero after the refactor and all eight tests pass.
+
+Predicted changes from accounted-input production are frozen in
+`docs/07-accounted-input-predictions.md`. The expected pattern is a shallower,
+shorter glut; a higher, longer producer-loss shortage; and near-stationary
+equilibrium. Compare actual changes against the prediction, but do not tune the
+new model merely to make the forecast come true.
 
 ---
 
@@ -332,6 +390,11 @@ Two safe tracks can now proceed independently:
    membership, persist them, and display them read-only. Do not run a claimed
    production economy or alter vanilla prices until the Stage 0 material
    circuit is credible.
+
+Before implementing processes, run the baseline reporter once. After the
+process change, run it again and record the deltas before deciding whether to
+update the reference. Run the sensitivity sweep deliberately after the new
+model stabilizes; it is not intended for per-commit testing.
 
 ---
 
