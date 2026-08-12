@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <MainButtonDef>
+    <defName>SocialProduction_Economy</defName>
+    <label>economy</label>
+    <description>Inspect the experimental world economy. This display does not alter vanilla trade prices.</description>
+    <tabWindowClass>SocialProduction.Economy.MainTabWindow_Economy</tabWindowClass>
+    <order>45</order>
+  </MainButtonDef>
+</Defs>

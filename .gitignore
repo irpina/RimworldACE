@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+economy_mod/Source/**/bin/
+economy_mod/Source/**/obj/
