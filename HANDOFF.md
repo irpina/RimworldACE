@@ -4,7 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **Current branch:** `master`  
 **Latest Stage 0 commit:** `d284af9`  
-**Latest Stage 1 commit:** `6794dfc`
+**Latest Stage 1 implementation:** `6794dfc`  
+**Stage 1 verification checkpoint:** `906f63e`
 
 Read this file first when taking over the project. Then read `FINDINGS.md` before
 changing any labor figures or assumptions.
@@ -275,7 +276,12 @@ Runtime verification on RimWorld 1.6.4871 rev591 passed:
 - after the player settlement appeared it observed 106;
 - crossing one in-game day incremented the economy counter from 0 to 1;
 - `Autosave-4.rws` serialized `completedDays=1`,
-  `lastProcessedTick=60000`, and `observedSettlementCount=106`.
+  `lastProcessedTick=60000`, and `observedSettlementCount=106`;
+- all eight deterministic Stage 0 tests still pass after adding the runtime
+  project.
+
+Save serialization is confirmed. A deliberate save/reload read-back test has
+not yet been completed, so do not report reload persistence as verified.
 
 The local build toolchain is:
 
@@ -284,6 +290,8 @@ The local build toolchain is:
 - target framework `net472`;
 - official `Microsoft.NETFramework.ReferenceAssemblies` 1.0.3 build package;
 - direct references to RimWorld's shipped managed assemblies.
+
+The user explicitly approved installing these required build dependencies.
 
 The mod is development-linked into RimWorld's `Mods` folder as
 `SocialProductionEconomy`. The build command and overrideable game path are
