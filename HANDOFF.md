@@ -3,7 +3,8 @@
 **Last updated:** 2026-08-11  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **Current branch:** `master`  
-**Latest Stage 0 commit:** `d284af9`
+**Latest Stage 0 commit:** `d284af9`  
+**Latest Stage 1 commit:** `6794dfc`
 
 Read this file first when taking over the project. Then read `FINDINGS.md` before
 changing any labor figures or assumptions.
@@ -255,6 +256,44 @@ python -m economy_lab all
 
 ---
 
+## Stage 1 runtime shell
+
+Stage 1 has begun as an isolated read-only RimWorld 1.6 mod in `economy_mod`.
+Commit `6794dfc` adds:
+
+- a persistent `EconomyWorldComponent` with a 60,000-tick daily cadence;
+- observation of generated world settlements;
+- a read-only Economy main tab, ordered between Animals and Wildlife;
+- explicit UI copy that vanilla prices remain unchanged;
+- no Harmony and no gameplay mutation.
+
+Runtime verification on RimWorld 1.6.4871 rev591 passed:
+
+- the assembly built with zero warnings;
+- the mod loaded beside Labor Content with no XML or assembly errors;
+- the tab appeared and initially observed 105 settlements;
+- after the player settlement appeared it observed 106;
+- crossing one in-game day incremented the economy counter from 0 to 1;
+- `Autosave-4.rws` serialized `completedDays=1`,
+  `lastProcessedTick=60000`, and `observedSettlementCount=106`.
+
+The local build toolchain is:
+
+- .NET SDK 8.0.424 at
+  `C:\Users\PintS\Documents\Codex\tools\dotnet-sdk-8`;
+- target framework `net472`;
+- official `Microsoft.NETFramework.ReferenceAssemblies` 1.0.3 build package;
+- direct references to RimWorld's shipped managed assemblies.
+
+The mod is development-linked into RimWorld's `Mods` folder as
+`SocialProductionEconomy`. The build command and overrideable game path are
+documented in `economy_mod/README.md`.
+
+This is intentionally a runtime shell, not integration of the incomplete
+Stage 0 production model.
+
+---
+
 ## Immediate next work
 
 The next Stage 0 slice should replace free single-output production with
@@ -277,8 +316,14 @@ Recommended order:
 7. After the market/resource laboratory is credible, add the local subsistence
    basket and hired-worker contracts.
 
-Do not begin RimWorld C# integration yet. The laboratory still omits too much
-of the production and resource circuit for runtime plumbing to be useful.
+Two safe tracks can now proceed independently:
+
+1. In Stage 0, replace free single-output production with accounted
+   input-output processes in the order above.
+2. In Stage 1, generate deterministic settlement profiles and regional
+   membership, persist them, and display them read-only. Do not run a claimed
+   production economy or alter vanilla prices until the Stage 0 material
+   circuit is credible.
 
 ---
 
