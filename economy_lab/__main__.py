@@ -5,7 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 
-from .scenarios import arbitrage, equilibrium, producer_loss, regional_glut, summary
+from .scenarios import (
+    arbitrage,
+    equilibrium,
+    input_shortage,
+    producer_loss,
+    regional_glut,
+    summary,
+)
 
 
 SCENARIOS = {
@@ -13,6 +20,7 @@ SCENARIOS = {
     "glut": regional_glut,
     "producer-loss": producer_loss,
     "arbitrage": arbitrage,
+    "input-shortage": input_shortage,
 }
 
 
