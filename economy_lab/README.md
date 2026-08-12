@@ -91,13 +91,15 @@ The calibration is expressed relative to regional flows:
 
 These are provisional gameplay targets, not empirical elasticity claims.
 
-## A caveat on the frozen baseline
+## Scope of the frozen baseline
 
-`behavior_baseline.json` watches yayo and only yayo. Accounted-input production
-left all thirteen of its metrics bit-identical while adding substantial upstream
-behavior it cannot see — see `docs/09-accounted-input-results.md`. Until upstream
-metrics are added, the unit tests rather than the baseline reporter are what
-protect the production machinery.
+`behavior_baseline.json` retains the original thirteen yayo metrics and also
+observes upstream chemfuel and psychoid leaves during the glut and producer-loss
+shocks. For each upstream commodity it freezes post-shock price and inventory
+extrema (including their days). The genuinely stationary glut path also records
+its settled price and stock; the still-moving producer-loss path labels its last
+observation as terminal rather than implying equilibrium. The reporter remains
+observational; the invariant tests protect correctness.
 
 ## Intentionally absent from this slice
 

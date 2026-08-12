@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Iterable
+
+from .model import Economy
 
 from .scenarios import (
     DAYS_PER_QUADRUM,
     ScenarioParameters,
     arbitrage,
+    CHEMFUEL,
     equilibrium,
+    LEAVES,
     producer_loss,
     regional_glut,
 )
@@ -18,10 +22,69 @@ SHOCK_DAY = 60
 LOCAL_REGION = "Dust Basin"
 DISTANT_REGION = "Green River"
 COMMODITY = "yayo"
+UPSTREAM_COMMODITIES = (LEAVES, CHEMFUEL)
 
 
 def _metric(value: float, unit: str) -> Dict[str, object]:
     return {"value": round(value, 6), "unit": unit}
+
+
+def _shock_extrema_metrics(
+    *,
+    scenario: str,
+    economy: Economy,
+    commodities: Iterable[str],
+    terminal_label: str,
+) -> Dict[str, Dict[str, object]]:
+    """Observe upstream paths already retained in a scenario's history."""
+    metrics: Dict[str, Dict[str, object]] = {}
+    for commodity in commodities:
+        prefix = f"{scenario}.local.{commodity}"
+        prices = economy.series(LOCAL_REGION, commodity)
+        inventories = economy.series(
+            LOCAL_REGION, commodity, field="inventory"
+        )
+        shock_prices = prices[SHOCK_DAY + 1 :]
+        shock_inventories = inventories[SHOCK_DAY + 1 :]
+
+        price_trough = min(shock_prices)
+        price_peak = max(shock_prices)
+        inventory_trough = min(shock_inventories)
+        inventory_peak = max(shock_inventories)
+
+        metrics.update(
+            {
+                f"{prefix}.price_trough": _metric(price_trough, "silver"),
+                f"{prefix}.price_trough_day": _metric(
+                    SHOCK_DAY + 1 + shock_prices.index(price_trough), "day"
+                ),
+                f"{prefix}.price_peak": _metric(price_peak, "silver"),
+                f"{prefix}.price_peak_day": _metric(
+                    SHOCK_DAY + 1 + shock_prices.index(price_peak), "day"
+                ),
+                f"{prefix}.inventory_trough": _metric(
+                    inventory_trough, "units"
+                ),
+                f"{prefix}.inventory_trough_day": _metric(
+                    SHOCK_DAY
+                    + 1
+                    + shock_inventories.index(inventory_trough),
+                    "day",
+                ),
+                f"{prefix}.inventory_peak": _metric(inventory_peak, "units"),
+                f"{prefix}.inventory_peak_day": _metric(
+                    SHOCK_DAY + 1 + shock_inventories.index(inventory_peak),
+                    "day",
+                ),
+                f"{prefix}.{terminal_label}_price": _metric(
+                    prices[-1], "silver"
+                ),
+                f"{prefix}.{terminal_label}_inventory": _metric(
+                    inventories[-1], "units"
+                ),
+            }
+        )
+    return metrics
 
 
 def collect_behavioral_metrics(
@@ -69,7 +132,7 @@ def collect_behavioral_metrics(
 
     arbitrage_volume = trade.regions[LOCAL_REGION].exported_total[COMMODITY]
 
-    return {
+    metrics = {
         "arbitrage.export_volume": _metric(arbitrage_volume, "units"),
         "equilibrium.distant_price_range": _metric(
             max(stable_distant) - min(stable_distant), "silver"
@@ -94,3 +157,20 @@ def collect_behavioral_metrics(
         "producer_loss.local_peak_day": _metric(loss_peak_day, "day"),
         "producer_loss.local_peak_price": _metric(loss_peak, "silver"),
     }
+    metrics.update(
+        _shock_extrema_metrics(
+            scenario="glut",
+            economy=glut,
+            commodities=UPSTREAM_COMMODITIES,
+            terminal_label="settled",
+        )
+    )
+    metrics.update(
+        _shock_extrema_metrics(
+            scenario="producer_loss",
+            economy=loss,
+            commodities=UPSTREAM_COMMODITIES,
+            terminal_label="terminal",
+        )
+    )
+    return metrics

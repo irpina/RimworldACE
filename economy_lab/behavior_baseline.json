@@ -22,6 +22,86 @@
       "unit": "silver",
       "value": 20.105683
     },
+    "glut.local.chemfuel.inventory_peak": {
+      "unit": "units",
+      "value": 124.276777
+    },
+    "glut.local.chemfuel.inventory_peak_day": {
+      "unit": "day",
+      "value": 72
+    },
+    "glut.local.chemfuel.inventory_trough": {
+      "unit": "units",
+      "value": 120.0
+    },
+    "glut.local.chemfuel.inventory_trough_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "glut.local.chemfuel.price_peak": {
+      "unit": "silver",
+      "value": 2.3
+    },
+    "glut.local.chemfuel.price_peak_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "glut.local.chemfuel.price_trough": {
+      "unit": "silver",
+      "value": 2.21552
+    },
+    "glut.local.chemfuel.price_trough_day": {
+      "unit": "day",
+      "value": 180
+    },
+    "glut.local.chemfuel.settled_inventory": {
+      "unit": "units",
+      "value": 124.276777
+    },
+    "glut.local.chemfuel.settled_price": {
+      "unit": "silver",
+      "value": 2.21552
+    },
+    "glut.local.psychoid_leaves.inventory_peak": {
+      "unit": "units",
+      "value": 1771.071075
+    },
+    "glut.local.psychoid_leaves.inventory_peak_day": {
+      "unit": "day",
+      "value": 72
+    },
+    "glut.local.psychoid_leaves.inventory_trough": {
+      "unit": "units",
+      "value": 1600.0
+    },
+    "glut.local.psychoid_leaves.inventory_trough_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "glut.local.psychoid_leaves.price_peak": {
+      "unit": "silver",
+      "value": 1.9
+    },
+    "glut.local.psychoid_leaves.price_peak_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "glut.local.psychoid_leaves.price_trough": {
+      "unit": "silver",
+      "value": 1.698233
+    },
+    "glut.local.psychoid_leaves.price_trough_day": {
+      "unit": "day",
+      "value": 180
+    },
+    "glut.local.psychoid_leaves.settled_inventory": {
+      "unit": "units",
+      "value": 1771.071075
+    },
+    "glut.local.psychoid_leaves.settled_price": {
+      "unit": "silver",
+      "value": 1.698233
+    },
     "glut.local_half_recovery_days": {
       "unit": "days",
       "value": 9
@@ -45,6 +125,86 @@
     "producer_loss.capacity_recovery_quadrums": {
       "unit": "quadrums",
       "value": 5.0
+    },
+    "producer_loss.local.chemfuel.inventory_peak": {
+      "unit": "units",
+      "value": 167.446333
+    },
+    "producer_loss.local.chemfuel.inventory_peak_day": {
+      "unit": "day",
+      "value": 77
+    },
+    "producer_loss.local.chemfuel.inventory_trough": {
+      "unit": "units",
+      "value": 121.2
+    },
+    "producer_loss.local.chemfuel.inventory_trough_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "producer_loss.local.chemfuel.price_peak": {
+      "unit": "silver",
+      "value": 2.178103
+    },
+    "producer_loss.local.chemfuel.price_peak_day": {
+      "unit": "day",
+      "value": 61
+    },
+    "producer_loss.local.chemfuel.price_trough": {
+      "unit": "silver",
+      "value": 1.086166
+    },
+    "producer_loss.local.chemfuel.price_trough_day": {
+      "unit": "day",
+      "value": 83
+    },
+    "producer_loss.local.chemfuel.terminal_inventory": {
+      "unit": "units",
+      "value": 156.123638
+    },
+    "producer_loss.local.chemfuel.terminal_price": {
+      "unit": "silver",
+      "value": 1.666634
+    },
+    "producer_loss.local.psychoid_leaves.inventory_peak": {
+      "unit": "units",
+      "value": 1793.121599
+    },
+    "producer_loss.local.psychoid_leaves.inventory_peak_day": {
+      "unit": "day",
+      "value": 210
+    },
+    "producer_loss.local.psychoid_leaves.inventory_trough": {
+      "unit": "units",
+      "value": 925.541877
+    },
+    "producer_loss.local.psychoid_leaves.inventory_trough_day": {
+      "unit": "day",
+      "value": 92
+    },
+    "producer_loss.local.psychoid_leaves.price_peak": {
+      "unit": "silver",
+      "value": 1.76235
+    },
+    "producer_loss.local.psychoid_leaves.price_peak_day": {
+      "unit": "day",
+      "value": 127
+    },
+    "producer_loss.local.psychoid_leaves.price_trough": {
+      "unit": "silver",
+      "value": 0.488952
+    },
+    "producer_loss.local.psychoid_leaves.price_trough_day": {
+      "unit": "day",
+      "value": 72
+    },
+    "producer_loss.local.psychoid_leaves.terminal_inventory": {
+      "unit": "units",
+      "value": 1793.121599
+    },
+    "producer_loss.local.psychoid_leaves.terminal_price": {
+      "unit": "silver",
+      "value": 1.648383
     },
     "producer_loss.local_peak_day": {
       "unit": "day",

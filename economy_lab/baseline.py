@@ -36,21 +36,23 @@ def print_delta_table(
     reference: Dict[str, Dict[str, object]],
     current: Dict[str, Dict[str, object]],
 ) -> None:
+    name_width = max(48, *(len(name) for name in set(reference) | set(current)))
     print(
-        f"{'metric':48} {'reference':>12} {'current':>12} "
+        f"{'metric':{name_width}} {'reference':>12} {'current':>12} "
         f"{'delta':>12} {'delta %':>10}"
     )
-    print("-" * 110)
+    print("-" * (name_width + 62))
     for name in sorted(set(reference) | set(current)):
         if name not in reference:
             print(
-                f"{name:48} {'missing':>12} "
+                f"{name:{name_width}} {'missing':>12} "
                 f"{_number(float(current[name]['value'])):>12}"
             )
             continue
         if name not in current:
             print(
-                f"{name:48} {_number(float(reference[name]['value'])):>12} "
+                f"{name:{name_width}} "
+                f"{_number(float(reference[name]['value'])):>12} "
                 f"{'missing':>12}"
             )
             continue
@@ -59,7 +61,8 @@ def print_delta_table(
         delta = actual - expected
         percent = "n/a" if expected == 0 else f"{delta / abs(expected) * 100:+.3f}%"
         print(
-            f"{name:48} {_number(expected):>12} {_number(actual):>12} "
+            f"{name:{name_width}} {_number(expected):>12} "
+            f"{_number(actual):>12} "
             f"{_number(delta):>12} {percent:>10}"
         )
 
