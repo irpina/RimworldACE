@@ -6,6 +6,7 @@ from typing import Dict
 
 from .scenarios import (
     DAYS_PER_QUADRUM,
+    ScenarioParameters,
     arbitrage,
     equilibrium,
     producer_loss,
@@ -13,7 +14,6 @@ from .scenarios import (
 )
 
 
-REFERENCE_PRICE = 21.0
 SHOCK_DAY = 60
 LOCAL_REGION = "Dust Basin"
 DISTANT_REGION = "Green River"
@@ -24,12 +24,15 @@ def _metric(value: float, unit: str) -> Dict[str, object]:
     return {"value": round(value, 6), "unit": unit}
 
 
-def collect_behavioral_metrics() -> Dict[str, Dict[str, object]]:
+def collect_behavioral_metrics(
+    parameters: ScenarioParameters | None = None,
+) -> Dict[str, Dict[str, object]]:
     """Run the existing scenarios and return a flat, diff-friendly metric map."""
-    stable = equilibrium()
-    glut = regional_glut()
-    loss = producer_loss()
-    trade = arbitrage()
+    parameters = parameters or ScenarioParameters()
+    stable = equilibrium(parameters=parameters)
+    glut = regional_glut(parameters=parameters)
+    loss = producer_loss(parameters=parameters)
+    trade = arbitrage(parameters=parameters)
 
     stable_local = stable.series(LOCAL_REGION, COMMODITY)
     stable_distant = stable.series(DISTANT_REGION, COMMODITY)
@@ -42,7 +45,9 @@ def collect_behavioral_metrics() -> Dict[str, Dict[str, object]]:
     distant_trough = min(distant_shock)
     local_trough_day = SHOCK_DAY + 1 + local_shock.index(local_trough)
     distant_trough_day = SHOCK_DAY + 1 + distant_shock.index(distant_trough)
-    halfway_price = local_trough + (REFERENCE_PRICE - local_trough) / 2.0
+    halfway_price = (
+        local_trough + (parameters.reference_price - local_trough) / 2.0
+    )
     half_recovery_day = next(
         day
         for day in range(local_trough_day, len(glut_local))
@@ -58,7 +63,7 @@ def collect_behavioral_metrics() -> Dict[str, Dict[str, object]]:
     capacity_recovery_day = next(
         day
         for day in range(SHOCK_DAY + 1, len(loss_capacity))
-        if loss_capacity[day] >= 8.0
+        if loss_capacity[day] >= parameters.producer_capacity_per_day * 0.80
     )
     capacity_recovery_days = capacity_recovery_day - SHOCK_DAY
 

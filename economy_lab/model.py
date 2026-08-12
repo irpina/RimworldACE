@@ -42,6 +42,8 @@ class Producer:
     commodity: str
     capacity_per_day: float
     unit_cost: float
+    zero_utilization_price_ratio: float = 0.70
+    full_utilization_price_ratio: float = 1.05
     active: bool = True
     output_total: float = 0.0
     cash: float = 0.0
@@ -51,11 +53,12 @@ class Producer:
         if not self.active or self.capacity_per_day <= 0:
             return 0.0
         ratio = price / max(self.unit_cost, EPSILON)
-        if ratio <= 0.70:
+        if ratio <= self.zero_utilization_price_ratio:
             return 0.0
-        if ratio >= 1.05:
+        if ratio >= self.full_utilization_price_ratio:
             return 1.0
-        return (ratio - 0.70) / 0.35
+        span = self.full_utilization_price_ratio - self.zero_utilization_price_ratio
+        return (ratio - self.zero_utilization_price_ratio) / max(span, EPSILON)
 
 
 @dataclass
@@ -153,6 +156,11 @@ class Economy:
         investment_lead_days: int = 45,
         investment_margin_threshold: float = 0.18,
         investment_fraction_of_shortfall: float = 0.45,
+        unmet_demand_price_pressure: float = 2.0,
+        speculative_inventory_limit: float = 0.50,
+        expectation_alpha: float = 0.05,
+        zero_utilization_price_ratio: float = 0.70,
+        full_utilization_price_ratio: float = 1.05,
     ) -> None:
         self.commodities = {c.name: c for c in commodities}
         self.regions = {r.name: r for r in regions}
@@ -163,6 +171,11 @@ class Economy:
         self.investment_lead_days = investment_lead_days
         self.investment_margin_threshold = investment_margin_threshold
         self.investment_fraction_of_shortfall = investment_fraction_of_shortfall
+        self.unmet_demand_price_pressure = unmet_demand_price_pressure
+        self.speculative_inventory_limit = speculative_inventory_limit
+        self.expectation_alpha = expectation_alpha
+        self.zero_utilization_price_ratio = zero_utilization_price_ratio
+        self.full_utilization_price_ratio = full_utilization_price_ratio
         self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
         self.history: List[dict] = []
 
@@ -284,6 +297,8 @@ class Economy:
                         project.commodity,
                         project.capacity_per_day,
                         project.unit_cost,
+                        self.zero_utilization_price_ratio,
+                        self.full_utilization_price_ratio,
                     )
                 )
             region.projects = pending
@@ -323,7 +338,7 @@ class Economy:
                 unmet_ratio = region.unmet_demand[name] / base_demand
                 pressure = (
                     commodity.inventory_price_sensitivity * coverage_gap
-                    + 2.0 * unmet_ratio
+                    + self.unmet_demand_price_pressure * unmet_ratio
                 )
                 old = region.prices[name]
                 low = commodity.reference_price * commodity.minimum_price_factor
@@ -375,7 +390,7 @@ class Economy:
                 # when the spread is large enough. Their speculative room
                 # shrinks continuously as prices converge.
                 speculative_room = destination_target * min(
-                    0.50,
+                    self.speculative_inventory_limit,
                     gross_spread / max(destination.prices[name], EPSILON),
                 )
                 import_room = shortage + max(0.0, speculative_room)
@@ -411,7 +426,7 @@ class Economy:
                 remaining_capacity -= quantity
 
     def _update_expectations(self) -> None:
-        alpha = 0.05
+        alpha = self.expectation_alpha
         for region in self.regions.values():
             for name in self.commodities:
                 region.expected_prices[name] = (

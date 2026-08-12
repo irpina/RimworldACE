@@ -34,6 +34,14 @@ intended:
 python -m economy_lab.baseline --write-reference
 ```
 
+Run the deliberate one-at-a-time parameter sensitivity sweep. It perturbs each
+exposed calibration parameter independently and writes both detailed CSV and a
+plain-text ranking; it is not part of per-commit testing:
+
+```text
+python -m economy_lab.sensitivity
+```
+
 Run the acceptance tests:
 
 ```text

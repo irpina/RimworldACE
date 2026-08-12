@@ -1,0 +1,44 @@
+Stage 0 one-at-a-time parameter sensitivity (nominally +/-10%)
+
+Score is the largest normalized output response divided by the actual
+input change. Nonzero outputs use proportional change. The equilibrium
+price-range baselines are zero, so their absolute movement is normalized
+to the 21-silver reference price. Integer day parameters are rounded and
+their actual perturbation is reported in the CSV.
+
+rank  parameter                                   score  direction strongest output
+----------------------------------------------------------------------------------------------------------------
+   1  daily_demand                               2.3077  plus      arbitrage.export_volume (+3.000000 units)
+   2  producer_capacity_per_day                  2.3077  minus     arbitrage.export_volume (+3.000000 units)
+   3  reference_price                            2.2222  minus     glut.local_half_recovery_days (-2.000000 days)
+   4  dust_unit_cost                             2.2222  plus      glut.local_half_recovery_days (-2.000000 days)
+   5  investment_interval_days                   2.0000  plus      producer_loss.capacity_recovery_quadrums (-0.666667 quadrums)
+   6  investment_fraction_of_shortfall           2.0000  minus     producer_loss.capacity_recovery_days (+15.000000 days)
+   7  full_utilization_price_ratio               1.5385  minus     arbitrage.export_volume (+2.000000 units)
+   8  inventory_price_sensitivity                1.1111  minus     glut.local_half_recovery_quadrums (+0.066667 quadrums)
+   9  demand_elasticity                          1.1111  minus     glut.local_half_recovery_quadrums (+0.066667 quadrums)
+  10  target_inventory_days                      1.1111  minus     glut.local_half_recovery_quadrums (-0.066667 quadrums)
+  11  standard_route_capacity_per_day            1.0000  plus      arbitrage.export_volume (+1.300000 units)
+  12  producer_loss_fraction                     0.8663  plus      producer_loss.local_peak_price (+3.346602 silver)
+  13  zero_utilization_price_ratio               0.7692  minus     arbitrage.export_volume (+1.000000 units)
+  14  price_adjustment_speed                     0.7692  minus     arbitrage.export_volume (+1.000000 units)
+  15  standard_freight_per_unit                  0.7692  minus     arbitrage.export_volume (+1.000000 units)
+  16  investment_lead_days                       0.6000  minus     producer_loss.capacity_recovery_days (-5.000000 days)
+  17  glut_fraction_of_annual_demand             0.4309  minus     glut.local_trough_price (+0.551189 silver)
+  18  standard_travel_days                       0.3175  plus      arbitrage.export_volume (+0.688005 units)
+  19  risk_markup                                0.2128  minus     arbitrage.export_volume (+0.276672 units)
+  20  expectation_alpha                          0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  21  initial_cash                               0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  22  investment_margin_threshold                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  23  labor_value                                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  24  loss_freight_per_unit                      0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  25  loss_route_capacity_per_day                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  26  loss_travel_days                           0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  27  maximum_price_factor                       0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  28  minimum_price_factor                       0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  29  river_unit_cost                            0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  30  speculative_inventory_limit                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+  31  unmet_demand_price_pressure                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+
+No measured effect on the captured outputs:
+  expectation_alpha, initial_cash, investment_margin_threshold, labor_value, loss_freight_per_unit, loss_route_capacity_per_day, loss_travel_days, maximum_price_factor, minimum_price_factor, river_unit_cost, speculative_inventory_limit, unmet_demand_price_pressure
