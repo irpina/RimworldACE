@@ -1,12 +1,15 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-08-11  
+**Last updated:** 2026-08-12  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `d284af9`  
-**Behavioral baseline:** `5ae57f7`  
+**Latest Stage 0 model commit:** `f52fcd0` (accounted input-output production)  
+**Behavioral baseline:** `5ae57f7`, still current — nothing moved  
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
+**Process design decisions:** `863ee42`  
+**Process tests:** `57b05ed`  
+**Process results:** `98ae17e`  
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -213,7 +216,10 @@ Locations:
 - `economy_lab/__main__.py` — JSON scenario runner;
 - `tests/test_economy_lab.py` — behavioral and accounting tests;
 - `economy_lab/README.md` — current scope and commands;
-- `docs/06-stage0-economy-lab.md` — short design note.
+- `docs/06-stage0-economy-lab.md` — short design note;
+- `docs/07-accounted-input-predictions.md` — forecasts, recorded before the fact;
+- `docs/08-accounted-input-design.md` — process-model decisions and alternatives;
+- `docs/09-accounted-input-results.md` — what the forecasts got wrong and why.
 
 Commits:
 
@@ -222,20 +228,63 @@ Commits:
 - `5ae57f7` — Freeze Stage 0 behavior before input-output production
 - `f2c490c` — Add Stage 0 parameter sensitivity harness
 - `cae1ba2` — Record pre-process behavioral predictions
+- `863ee42` — Record accounted-input design decisions before implementing
+- `f52fcd0` — Replace free production with accounted input-output processes
+- `57b05ed` — Add process-level material-balance tests and input-shortage scenario
+- `98ae17e` — Record accounted-input results
 
 ### Current vertical slice
 
-The model currently has one commodity (`yayo`), two regional markets, and one
-expensive planetary route. It supports:
+The model has a three-commodity circuit that forks, two regional markets, and
+one expensive planetary route:
 
+```
+chemfuel ──┬──> psychoid farm ──> psychoid leaves ──> drug lab ──> yayo
+           └────────────────────────────────────────────^
+```
+
+It supports:
+
+- accounted input-output production: producers own a `Process` and must source
+  real inventory; one that cannot is rationed, not subsidised;
 - daily production and price-sensitive consumption;
 - persistent regional inventory and cash;
 - damped local price formation from stocks and unmet demand;
 - costly, delayed, capacity-limited arbitrage;
-- destruction of productive capacity;
+- destruction of productive capacity, upstream or downstream;
 - delayed investment and replacement capacity;
 - fixed labor value beside dynamic market price;
-- explicit commodity and silver balance checks.
+- explicit commodity and silver balance checks, with productive consumption
+  booked separately from final consumption.
+
+### Process-model decisions — read before changing
+
+`docs/08-accounted-input-design.md` records each choice and its alternatives.
+The load-bearing ones:
+
+- **joint products are apportioned by mass**, not by value, because value
+  apportionment would be circular in a laboratory whose purpose is to let
+  prices form from material conditions. Implemented and unit-tested; no current
+  process actually has a byproduct;
+- **partial input availability is proportional** — 60% of inputs means 60% of
+  output. `all_or_nothing` exists as a parameter. Proportional is the default
+  because a regional producer is an aggregate of many small runs, and because a
+  discontinuity here would manufacture limit cycles that look like economic
+  results;
+- **production is simultaneous** against opening stock, so results do not
+  depend on producer list order. Cost: one day per stage of propagation delay;
+- **contention is pro-rata by requirement**, single pass. A producer throttled
+  by another input leaves slack unallocated that day; the slack stays in
+  inventory, so nothing is destroyed and the ledger closes;
+- **inventory targets scale by throughput demand** (final plus derived).
+  Without this, intermediate goods would have a target of zero and collapse to
+  the price floor;
+- **freight goes to the widest spread first**, not alphabetically.
+
+Per-unit ratios and reference prices are read from RimWorld defs. One link is a
+flagged stylization: vanilla drug labs and psychoid fields do not consume
+chemfuel. It is there because the circuit needs a commodity consumed by more
+than one producer, and contention is where accounting bugs hide.
 
 ### Current calibrated behavior
 
@@ -247,21 +296,65 @@ expensive planetary route. It supports:
 - destroying 60% of regional capacity raises the price to **38.630**;
 - replacement capacity restores at least 80% of baseline supply within the
   four-to-eight-quadrum target;
-- all eight tests pass;
-- commodity and silver residuals close to floating-point zero;
+- all 23 tests pass, the original eight unchanged;
+- commodity and silver residuals close to floating-point zero for all three
+  commodities;
 - identical inputs reproduce identical histories.
 
 These are provisional gameplay targets, not empirical claims about real-world
 elasticities.
+
+### Accounted-input production changed none of them
+
+Full comparison in `docs/09-accounted-input-results.md`. Eleven of the thirteen
+predictions in `docs/07` forecast movement; all eleven are wrong. The frozen
+reference was therefore **not** rewritten.
+
+Three reasons, only one of which was anticipated:
+
+1. **A glut cannot be damped by an input constraint.** A glut in the final good
+   means producing less, which demands *fewer* inputs. The prediction was
+   describing the cash channel — producers paying for what they consume — which
+   is deliberately not in this slice.
+2. **Capacity entry is still free**, which `docs/07` explicitly flagged as the
+   assumption its producer-loss forecast depended on.
+3. **Every stage carries twenty days of cover and no benchmark shock attacks an
+   input.** The tightest the four frozen scenarios ever reach is 11.68 days.
+   The constraint is correct and simply never binds.
+
+What the metrics cannot see, because they watch yayo only:
+
+- destroying 60% of the drug labs now crashes the psychoid leaf price 74%
+  (1.900 → 0.489) and chemfuel 53% (2.300 → 1.086);
+- a one-off glut leaves **permanent upstream hysteresis** — yayo returns
+  exactly to 21.000/200 while leaves settle at 1.698/1771 and stay there.
+
+**Instrumentation gap.** `behavior_baseline.json` would stay entirely green if
+input consumption were deleted tomorrow. Extending observation was out of scope
+this session, so it is recorded here: the next session should add upstream
+metrics — minimum days of cover per input, peak unmet input demand, upstream
+price trough — before the model grows further. Until then the unit tests, not
+the baseline reporter, protect this work.
+
+The new `input-shortage` scenario is the one that binds: 70% of Dust Basin's
+psychoid fields destroyed, leaf stock draining 56/day for a silent month before
+yayo notices, leaf price up 5× against yayo's 1.75×, and the drug lab running at
+3 yayo/day against a capacity of 10 rather than shutting.
 
 Run:
 
 ```text
 python -m unittest discover -s tests -v
 python -m economy_lab all
+python -m economy_lab input-shortage
 python -m economy_lab.baseline
 python -m economy_lab.sensitivity
 ```
+
+The sensitivity sweep has **not** been re-run since accounted inputs landed;
+`sensitivity_results.csv` and `sensitivity_ranking.txt` describe the free-
+production model. Re-run it once the model stabilizes, and expect the new
+process ratios and the derived-demand price rule to change the ranking.
 
 ### Behavioral observation checkpoint
 
@@ -362,25 +455,28 @@ Stage 0 production model.
 
 ## Immediate next work
 
-The next Stage 0 slice should replace free single-output production with
-input-output processes.
+Steps 1–4 below are **done** (`f52fcd0`, `57b05ed`). Resume at step 5.
 
-Recommended order:
-
-1. Add `Process` definitions with material inputs, outputs, direct labor,
-   capacity, and unit operating cost.
-2. Add at least three linked commodities, probably:
-   - psychoid leaves;
-   - yayo;
-   - a generic subsistence/input commodity if needed for the first circuit.
-3. Require production to consume accounted inventory.
-4. Add process-level material-balance tests and an input shortage scenario.
-5. Make investment consume an explicit capital-good or construction fund
-   rather than creating capacity freely.
+1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
+   capacity, and unit operating cost.~~
+2. ~~Add at least three linked commodities.~~ Done as a forking circuit:
+   chemfuel feeds both the psychoid fields and the drug lab.
+3. ~~Require production to consume accounted inventory.~~
+4. ~~Add process-level material-balance tests and an input shortage
+   scenario.~~
+5. **Next:** make investment consume an explicit capital-good or construction
+   fund rather than creating capacity freely. This is also the missing half of
+   the cost floor: the material floor landed this session, the cash floor did
+   not. Consider making producers pay for their inputs at the same time, since
+   `docs/09` shows that is the channel the glut prediction actually needed.
 6. Only then add finite resource reserves, grade depletion, marginal extraction
    cost, and differential rent.
 7. After the market/resource laboratory is credible, add the local subsistence
    basket and hired-worker contracts.
+
+Before step 5, add upstream metrics to the frozen baseline — see the
+instrumentation gap noted above. Doing it first means step 5's deltas are
+actually measurable.
 
 Two safe tracks can now proceed independently:
 
@@ -400,18 +496,24 @@ model stabilizes; it is not intended for per-commit testing.
 
 ## Known Stage 0 omissions
 
-- production inputs and joint products;
+- capital-goods costs for capacity investment;
+- producers paying cash for their inputs — the material floor exists, the cost
+  floor does not, and `unit_cost` still does not include input prices;
+- labor value propagated endogenously through processes; `Process.direct_labor`
+  is recorded but `Commodity.labor_value` remains the static `FINDINGS.md`
+  figure;
+- joint products in an actual scenario — the mass apportionment rule is
+  implemented and unit-tested, but every current process has one output;
 - resource reserves, grades, and rent;
 - labor supply and wages;
 - the poverty/subsistence basket;
-- capital-goods costs for capacity investment;
 - credit, bankruptcy, and liquidity-constrained consumption;
-- more than one commodity or two regions;
+- more than three commodities or two regions;
 - RimWorld save/UI/runtime integration.
 
-Current production is an explicit ledger source, and capacity entry is free.
-The model therefore closes its declared commodity ledger, but it is not yet a
-closed reproduction model.
+Production now consumes accounted inventory, so supply finally has a material
+floor. Capacity entry is still a free ledger source, so the model closes its
+declared commodity ledger but is not yet a closed reproduction model.
 
 ---
 
