@@ -10,6 +10,8 @@
 **Process design decisions:** `863ee42`  
 **Process tests:** `57b05ed`  
 **Process results:** `98ae17e`  
+**Upstream behavioral baseline:** `e2a7c43`
+**Hysteresis investigation:** `097e40c`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -220,6 +222,8 @@ Locations:
 - `docs/07-accounted-input-predictions.md` — forecasts, recorded before the fact;
 - `docs/08-accounted-input-design.md` — process-model decisions and alternatives;
 - `docs/09-accounted-input-results.md` — what the forecasts got wrong and why.
+- `docs/10-upstream-observation-results.md` — upstream metrics, hysteresis
+  investigation, and observation limits.
 
 Commits:
 
@@ -232,6 +236,8 @@ Commits:
 - `f52fcd0` — Replace free production with accounted input-output processes
 - `57b05ed` — Add process-level material-balance tests and input-shortage scenario
 - `98ae17e` — Record accounted-input results
+- `e2a7c43` — Freeze newly observed upstream behavior
+- `097e40c` — Document the upstream hysteresis control bug
 
 ### Current vertical slice
 
@@ -322,19 +328,18 @@ Three reasons, only one of which was anticipated:
    input.** The tightest the four frozen scenarios ever reach is 11.68 days.
    The constraint is correct and simply never binds.
 
-What the metrics cannot see, because they watch yayo only:
+The old thirteen metrics could not see the following because they watched yayo
+only:
 
 - destroying 60% of the drug labs now crashes the psychoid leaf price 74%
   (1.900 → 0.489) and chemfuel 53% (2.300 → 1.086);
 - a one-off glut leaves **permanent upstream hysteresis** — yayo returns
   exactly to 21.000/200 while leaves settle at 1.698/1771 and stay there.
 
-**Instrumentation gap.** `behavior_baseline.json` would stay entirely green if
-input consumption were deleted tomorrow. Extending observation was out of scope
-this session, so it is recorded here: the next session should add upstream
-metrics — minimum days of cover per input, peak unmet input demand, upstream
-price trough — before the model grows further. Until then the unit tests, not
-the baseline reporter, protect this work.
+That instrumentation gap is now closed for price and stock paths. The baseline
+adds forty upstream observations while leaving all thirteen original metrics
+unchanged. It covers price and inventory extrema with their days, plus a settled
+glut endpoint and terminal producer-loss endpoint for both leaves and chemfuel.
 
 The new `input-shortage` scenario is the one that binds: 70% of Dust Basin's
 psychoid fields destroyed, leaf stock draining 56/day for a silent month before
@@ -358,10 +363,11 @@ process ratios and the derived-demand price rule to change the ranking.
 
 ### Behavioral observation checkpoint
 
-`economy_lab/behavior_baseline.json` freezes 13 current behavioral metrics.
+`economy_lab/behavior_baseline.json` freezes 53 current behavioral metrics: the
+original thirteen final-good observations plus forty upstream observations.
 `python -m economy_lab.baseline` re-runs the scenarios and prints reference,
 current value, absolute delta, and percentage delta. It is deliberately a
-report rather than a pass/fail test; the eight existing tests remain the
+report rather than a pass/fail test; the 23 invariant tests remain the
 authoritative invariant checks. Replace the reference only with
 `--write-reference` after an understood behavioral change, and say why the
 numbers moved in the commit message.
@@ -375,6 +381,34 @@ Frozen headline metrics include:
 - producer-loss peak: **38.630290** on day 119;
 - 80% capacity recovery: **75 days / 5 quadrums**;
 - equilibrium price range: **0** in both regions.
+
+New upstream headline observations include:
+
+- glut leaf settlement: **1.698233 / 1,771.071075 units**;
+- glut chemfuel settlement: **2.215520 / 124.276777 units**;
+- producer-loss leaf trough: **0.488952** on day 72;
+- producer-loss chemfuel trough: **1.086166** on day 83.
+
+The glut hysteresis has been investigated and is a **control-law bug**, not a
+capacity reallocation and not a ledger leak. During yayo curtailment, upstream
+producers stay at full output and accumulate exactly the inputs the drug lab did
+not consume. When yayo recovers, inflow again exactly equals input use. The
+lower upstream prices remain above full-utilization thresholds, so the excess
+stock has no drain and persists forever. The overhang identity closes to about
+1e-12, all capacities remain unchanged, and no projects are created. Full
+evidence is in `docs/10-upstream-observation-results.md`. No fix was made; choose
+and document an excess-inventory production control before changing behavior.
+
+Arbitrage is currently single-commodity by calibration, not design. Standard
+freight is **3.85** after risk markup while the glut's widest intermediate spread
+is about **0.2**. Falling freight or rising upstream volatility can therefore
+switch multi-commodity arbitrage on abruptly, with goods competing for route
+capacity.
+
+Recovery-day metrics are quantized to daily threshold crossings. Add a
+continuous complement—preferably area between the price path and baseline over
+a fixed window—in a later observation session, without changing the existing
+metric semantics.
 
 `python -m economy_lab.sensitivity` deliberately runs a one-at-a-time ±10%
 sweep over 31 exposed calibration parameters. It writes:
@@ -455,7 +489,9 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–4 below are **done** (`f52fcd0`, `57b05ed`). Resume at step 5.
+Steps 1–4 below are **done** (`f52fcd0`, `57b05ed`). Upstream observation is
+also done (`e2a7c43`). Before step 5, resolve the newly confirmed hysteresis bug
+in a deliberate behavior-change session.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -464,19 +500,21 @@ Steps 1–4 below are **done** (`f52fcd0`, `57b05ed`). Resume at step 5.
 3. ~~Require production to consume accounted inventory.~~
 4. ~~Add process-level material-balance tests and an input shortage
    scenario.~~
-5. **Next:** make investment consume an explicit capital-good or construction
-   fund rather than creating capacity freely. This is also the missing half of
-   the cost floor: the material floor landed this session, the cash floor did
-   not. Consider making producers pay for their inputs at the same time, since
-   `docs/09` shows that is the channel the glut prediction actually needed.
+5. **Next economic feature:** make investment consume an explicit capital-good
+   or construction fund rather than creating capacity freely. This is also the
+   missing half of the cost floor: the material floor landed this session, the
+   cash floor did not. Consider making producers pay for their inputs at the
+   same time, since `docs/09` shows that is the channel the glut prediction
+   actually needed.
 6. Only then add finite resource reserves, grade depletion, marginal extraction
    cost, and differential rent.
 7. After the market/resource laboratory is credible, add the local subsistence
    basket and hired-worker contracts.
 
-Before step 5, add upstream metrics to the frozen baseline — see the
-instrumentation gap noted above. Doing it first means step 5's deltas are
-actually measurable.
+Before step 5, decide how excess intermediate inventory curtails upstream
+production, document the choice, implement it separately, inspect every baseline
+delta, and deliberately rewrite the reference only after the movement is
+understood. The upstream metrics needed to see that change are already frozen.
 
 Two safe tracks can now proceed independently:
 
