@@ -20,6 +20,20 @@ Run all example scenarios:
 python -m economy_lab all
 ```
 
+Compare current behavior with the deliberately frozen reference. This is a
+report only; movement does not make the command fail:
+
+```text
+python -m economy_lab.baseline
+```
+
+Replace the reference only when a behavioral change is understood and
+intended:
+
+```text
+python -m economy_lab.baseline --write-reference
+```
+
 Run the acceptance tests:
 
 ```text

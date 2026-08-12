@@ -1,0 +1,58 @@
+{
+  "description": "Stage 0 behavioral reference; update deliberately.",
+  "format_version": 1,
+  "metrics": {
+    "arbitrage.export_volume": {
+      "unit": "units",
+      "value": 13.0
+    },
+    "equilibrium.distant_price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "equilibrium.local_price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "glut.distant_trough_day": {
+      "unit": "day",
+      "value": 82
+    },
+    "glut.distant_trough_price": {
+      "unit": "silver",
+      "value": 20.105683
+    },
+    "glut.local_half_recovery_days": {
+      "unit": "days",
+      "value": 9
+    },
+    "glut.local_half_recovery_quadrums": {
+      "unit": "quadrums",
+      "value": 0.6
+    },
+    "glut.local_trough_day": {
+      "unit": "day",
+      "value": 67
+    },
+    "glut.local_trough_price": {
+      "unit": "silver",
+      "value": 12.790741
+    },
+    "producer_loss.capacity_recovery_days": {
+      "unit": "days",
+      "value": 75
+    },
+    "producer_loss.capacity_recovery_quadrums": {
+      "unit": "quadrums",
+      "value": 5.0
+    },
+    "producer_loss.local_peak_day": {
+      "unit": "day",
+      "value": 119
+    },
+    "producer_loss.local_peak_price": {
+      "unit": "silver",
+      "value": 38.63029
+    }
+  }
+}
