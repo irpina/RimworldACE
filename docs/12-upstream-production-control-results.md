@@ -30,6 +30,12 @@ contracts, leaf and chemfuel production contract with it rather than continuing
 at capacity. The upstream stocks therefore remain at their pre-shock targets
 throughout the scenario instead of accumulating 171.071 leaves and 4.277 fuel.
 
+This makes the upstream extrema degenerate in the glut scenario. Both price
+"troughs" occur on day 61 at exactly the reference price because neither price
+ever falls; leaf price is 1.9 throughout and chemfuel is 2.3 throughout. Their
+inventory peaks and troughs likewise coincide with the unchanged 1,600/120
+buffers. Those metrics now mean "no upstream excursion," not a shock minimum.
+
 The same replenishment rule also acts on yayo itself. Excess final stock cuts
 planned output more directly, so the local trough is shallower (12.790741 to
 14.340916) even though half-gap recovery takes two more whole days. The distant
@@ -51,6 +57,39 @@ As replacement labs arrive, orders and targets rise again.
 
 The producer-loss endpoints are still terminal observations, not equilibria.
 Their paths remain in recovery at day 210.
+
+### Long-horizon producer-loss check
+
+The scenario was extended well past its frozen day-210 endpoint. It converges
+rather than drifting indefinitely:
+
+| total day | leaf price / stock | chemfuel price / stock |
+|---:|---:|---:|
+| 210 (frozen terminal) | 2.103104 / 1,427.549520 | 2.378374 / 115.688738 |
+| 400 | 2.094932 / 1,451.165209 | 2.376110 / 116.279130 |
+| 460 | 2.094927 / 1,451.176570 | 2.376108 / 116.279414 |
+| 660 | 2.094927 / 1,451.177714 | 2.376108 / 116.279443 |
+
+Over the final 100 days at day 660, the leaf price range is about 1e-8 and the
+chemfuel range about 3e-9. The path is therefore convergent, and the frozen
+day-210 values are a transient recovery checkpoint close to—though not equal
+to—the asymptote.
+
+The asymptote is **not** the original 1,600/120 buffer. This exposes a remaining
+capacity/investment limitation. At restored final-good capacity, the farm's 80
+leaves/day and refinery's 6 chemfuel/day exactly equal steady productive use.
+The replenishment controller requests additional output to refill the depleted
+buffers, but both upstream producers are already at their capacity ceiling.
+Investment sees no flow-capacity shortfall and therefore creates no replenishment
+headroom. Prices settle above reference at the stocks implied by that permanent
+buffer deficit.
+
+This is mathematically coherent scar tissue after a capacity shock, but it is a
+second form of hysteresis and not yet a settled economic design. Do not patch it
+inside the control rule. Revisit it explicitly when step 5 makes investment
+consume capital goods: decide whether inventory deficits can induce temporary
+or permanent capacity above steady flow, or whether some other rationing channel
+must create replenishment room.
 
 ### Input shortage
 

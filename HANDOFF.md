@@ -416,6 +416,18 @@ whether that plan is profitable and financeable. When the cash channel lands,
 actual production should be limited by both rather than using profitability as
 an accidental demand signal.
 
+Two interpretation notes from the post-implementation review:
+
+- glut upstream extrema are now degenerate by design: price peak and trough are
+  both the reference price on day 61, and stock peak/trough both equal the
+  unchanged buffer. They mean "no upstream excursion," not a timed trough;
+- extending producer loss to day 660 confirms convergence, but to a displaced
+  buffer: leaves settle near **2.094927 / 1,451.1777** and chemfuel near
+  **2.376108 / 116.27944**. Upstream capacity exactly matches restored steady
+  use, so it has no headroom to refill stock, while current investment sees no
+  flow-capacity shortfall. Treat this as a remaining investment-design question,
+  not as unresolved numerical drift. Details are in `docs/12`.
+
 Arbitrage is currently single-commodity by calibration, not design. Standard
 freight is **3.85** after risk markup while the glut's widest intermediate spread
 is about **0.2**. Falling freight or rising upstream volatility can therefore
@@ -530,7 +542,9 @@ Steps 1–4 and the production-control correction are **done** (`f52fcd0`,
 The excess-inventory control is implemented and the understood baseline movement
 is frozen. Step 5 can now add input payments and capital-goods costs without also
 having to invent a demand signal. Keep the material plan and cash constraint as
-separate mechanisms.
+separate mechanisms. Before implementing investment, explicitly decide whether
+a buffer deficit may induce capacity above steady throughput; that decision
+controls whether post-shock upstream buffer scar tissue is permanent.
 
 Two safe tracks can now proceed independently:
 
