@@ -17,6 +17,8 @@ supports:
 
 - accounted input-output production: a producer must source real inventory,
   and one that cannot is rationed rather than subsidised;
+- damped demand-led replenishment: production follows intended outflow plus a
+  proportional correction toward material inventory targets;
 - local production, consumption, inventory, prices, and silver;
 - a costly route with finite daily capacity and delivery time;
 - profitable planetary arbitrage when a regional spread covers freight;
@@ -100,6 +102,10 @@ extrema (including their days). The genuinely stationary glut path also records
 its settled price and stock; the still-moving producer-loss path labels its last
 observation as terminal rather than implying equilibrium. The reporter remains
 observational; the invariant tests protect correctness.
+
+The current reference describes demand-led replenishment. Its design and the
+complete old-to-new comparison are in `docs/11-upstream-production-control.md`
+and `docs/12-upstream-production-control-results.md`.
 
 ## Intentionally absent from this slice
 

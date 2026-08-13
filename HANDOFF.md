@@ -3,8 +3,8 @@
 **Last updated:** 2026-08-12  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `f52fcd0` (accounted input-output production)  
-**Behavioral baseline:** `5ae57f7`, still current — nothing moved  
+**Latest Stage 0 model commit:** `c028cd6` (demand-led production control)
+**Behavioral baseline:** `05996ae` (53 metrics after production control)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -12,6 +12,8 @@
 **Process results:** `98ae17e`  
 **Upstream behavioral baseline:** `e2a7c43`
 **Hysteresis investigation:** `097e40c`
+**Production-control design:** `cbeb720`
+**Production-control results:** `3f9c20b`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -224,6 +226,10 @@ Locations:
 - `docs/09-accounted-input-results.md` — what the forecasts got wrong and why.
 - `docs/10-upstream-observation-results.md` — upstream metrics, hysteresis
   investigation, and observation limits.
+- `docs/11-upstream-production-control.md` — demand-control decision and
+  rejected alternatives, recorded before implementation;
+- `docs/12-upstream-production-control-results.md` — complete 53-metric delta
+  table and acceptance rationale.
 
 Commits:
 
@@ -238,6 +244,10 @@ Commits:
 - `98ae17e` — Record accounted-input results
 - `e2a7c43` — Freeze newly observed upstream behavior
 - `097e40c` — Document the upstream hysteresis control bug
+- `cbeb720` — Decide damped upstream replenishment control
+- `c028cd6` — Add damped demand-led production planning
+- `3f9c20b` — Record demand-led production deltas
+- `05996ae` — Refresh baseline for demand-led replenishment
 
 ### Current vertical slice
 
@@ -253,6 +263,8 @@ It supports:
 
 - accounted input-output production: producers own a `Process` and must source
   real inventory; one that cannot is rationed, not subsidised;
+- demand-led production planning: wanted output follows current final and
+  productive outflow plus a damped correction toward material stock targets;
 - daily production and price-sensitive consumption;
 - persistent regional inventory and cash;
 - damped local price formation from stocks and unmet demand;
@@ -302,7 +314,7 @@ than one producer, and contention is where accounting bugs hide.
 - destroying 60% of regional capacity raises the price to **38.630**;
 - replacement capacity restores at least 80% of baseline supply within the
   four-to-eight-quadrum target;
-- all 23 tests pass, the original eight unchanged;
+- all 25 tests pass, including all prior 23 unchanged;
 - commodity and silver residuals close to floating-point zero for all three
   commodities;
 - identical inputs reproduce identical histories.
@@ -359,7 +371,9 @@ python -m economy_lab.sensitivity
 The sensitivity sweep has **not** been re-run since accounted inputs landed;
 `sensitivity_results.csv` and `sensitivity_ranking.txt` describe the free-
 production model. Re-run it once the model stabilizes, and expect the new
-process ratios and the derived-demand price rule to change the ranking.
+process ratios, derived-demand price rule, and exposed `replenishment_rate` to
+change the ranking. The committed stale output covers 31 parameters; a fresh
+run will include 32.
 
 ### Behavioral observation checkpoint
 
@@ -367,37 +381,40 @@ process ratios and the derived-demand price rule to change the ranking.
 original thirteen final-good observations plus forty upstream observations.
 `python -m economy_lab.baseline` re-runs the scenarios and prints reference,
 current value, absolute delta, and percentage delta. It is deliberately a
-report rather than a pass/fail test; the 23 invariant tests remain the
+report rather than a pass/fail test; the 25-test suite remains the
 authoritative invariant checks. Replace the reference only with
 `--write-reference` after an understood behavioral change, and say why the
 numbers moved in the commit message.
 
-Frozen headline metrics include:
+Current frozen headline metrics include:
 
-- local glut trough: **12.790741** on day 67;
-- distant glut trough: **20.105683** on day 82;
-- local half-gap recovery: **9 days / 0.6 quadrums**;
-- arbitrage exports: **13 units**;
+- local glut trough: **14.340916** on day 66;
+- distant glut trough: **20.415752** on day 81;
+- local half-gap recovery: **11 days / 0.733333 quadrums**;
+- arbitrage exports: **12.381259 units**;
 - producer-loss peak: **38.630290** on day 119;
 - 80% capacity recovery: **75 days / 5 quadrums**;
 - equilibrium price range: **0** in both regions.
 
-New upstream headline observations include:
+Current upstream headline observations include:
 
-- glut leaf settlement: **1.698233 / 1,771.071075 units**;
-- glut chemfuel settlement: **2.215520 / 124.276777 units**;
-- producer-loss leaf trough: **0.488952** on day 72;
-- producer-loss chemfuel trough: **1.086166** on day 83.
+- glut leaf settlement: **1.900000 / 1,600 units**;
+- glut chemfuel settlement: **2.300000 / 120 units**;
+- producer-loss leaf trough: **0.693449** on day 70;
+- producer-loss chemfuel trough: **1.918998** on day 69.
 
-The glut hysteresis has been investigated and is a **control-law bug**, not a
-capacity reallocation and not a ledger leak. During yayo curtailment, upstream
-producers stay at full output and accumulate exactly the inputs the drug lab did
-not consume. When yayo recovers, inflow again exactly equals input use. The
-lower upstream prices remain above full-utilization thresholds, so the excess
-stock has no drain and persists forever. The overhang identity closes to about
-1e-12, all capacities remain unchanged, and no projects are created. Full
-evidence is in `docs/10-upstream-observation-results.md`. No fix was made; choose
-and document an excess-inventory production control before changing behavior.
+The former glut hysteresis was a **control-law bug**, not a capacity reallocation
+or ledger leak. It is resolved by the design in `docs/11`: planned output follows
+intended outflow plus a 10% daily correction toward the existing material stock
+target. The mutually dependent order plans converge deterministically from the
+day's opening state, so production remains simultaneous. Leaves now stay at
+1,600 and chemfuel at 120 throughout the glut, both at reference price.
+
+The future cash cost floor does **not** replace this control. Material planning
+answers how much output is wanted; input payments and liquidity will answer
+whether that plan is profitable and financeable. When the cash channel lands,
+actual production should be limited by both rather than using profitability as
+an accidental demand signal.
 
 Arbitrage is currently single-commodity by calibration, not design. Standard
 freight is **3.85** after risk markup while the glut's widest intermediate spread
@@ -489,9 +506,8 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–4 below are **done** (`f52fcd0`, `57b05ed`). Upstream observation is
-also done (`e2a7c43`). Before step 5, resolve the newly confirmed hysteresis bug
-in a deliberate behavior-change session.
+Steps 1–4 and the production-control correction are **done** (`f52fcd0`,
+`57b05ed`, `c028cd6`). Resume at step 5.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -511,10 +527,10 @@ in a deliberate behavior-change session.
 7. After the market/resource laboratory is credible, add the local subsistence
    basket and hired-worker contracts.
 
-Before step 5, decide how excess intermediate inventory curtails upstream
-production, document the choice, implement it separately, inspect every baseline
-delta, and deliberately rewrite the reference only after the movement is
-understood. The upstream metrics needed to see that change are already frozen.
+The excess-inventory control is implemented and the understood baseline movement
+is frozen. Step 5 can now add input payments and capital-goods costs without also
+having to invent a demand signal. Keep the material plan and cash constraint as
+separate mechanisms.
 
 Two safe tracks can now proceed independently:
 
@@ -525,10 +541,10 @@ Two safe tracks can now proceed independently:
    production economy or alter vanilla prices until the Stage 0 material
    circuit is credible.
 
-Before implementing processes, run the baseline reporter once. After the
-process change, run it again and record the deltas before deciding whether to
-update the reference. Run the sensitivity sweep deliberately after the new
-model stabilizes; it is not intended for per-commit testing.
+Before any behavior change, run the baseline reporter once. After the change,
+run it again and record the deltas before deciding whether to update the
+reference. Run the sensitivity sweep deliberately after the model stabilizes;
+it is not intended for per-commit testing.
 
 ---
 
