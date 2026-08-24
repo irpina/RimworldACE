@@ -627,15 +627,20 @@ class LaborPowerTests(unittest.TestCase):
         self.assertAlmostEqual(consumed, produced, places=6)
 
     def test_rate_of_surplus_value_matches_the_closed_form(self):
-        """s/v = (working day - basket labor) / basket labor, per docs/17."""
+        """s/v = (working day - basket labor) / basket labor, per docs/17.
+
+        Since docs/23 the basket's labor content is the *endogenous* value
+        of a meal, which includes the fixed capital consumed making it, so
+        the closed form reads that rather than the raw direct-labor figure.
+        """
         parameters = ScenarioParameters()
+        economy = equilibrium(days=240)
         basket_ticks = (
-            parameters.meals_per_worker_day * parameters.meal_direct_labor
+            parameters.meals_per_worker_day * economy.labor_values[MEALS]
         )
         expected = (
             parameters.ticks_per_worker_day - basket_ticks
         ) / basket_ticks
-        economy = equilibrium(days=240)
         for rname in economy.regions:
             actual = economy.rate_of_surplus_value(rname)
             self.assertIsNotNone(actual)
@@ -762,11 +767,43 @@ class EndogenousLaborValueTests(unittest.TestCase):
     def setUpClass(cls):
         cls.economy = equilibrium(240)
 
-    def test_input_free_commodities_reproduce_the_closed_analysis(self):
+    def _capital_labor(self, commodity):
+        """Fixed capital labor transferred per unit (docs/23)."""
+        process = circuit_processes()[commodity]
+        _, labor = process.capital_consumed_per_unit(
+            commodity,
+            self.economy.capital_service_life_days,
+            self.economy.commodities,
+        )
+        return labor
+
+    def test_input_free_commodities_exceed_the_closed_analysis_by_capital(self):
         # Chemfuel and meals have no modelled inputs, so their value is
-        # their direct labor and must match the closed analysis to the bit.
-        self.assertEqual(self.economy.labor_values[CHEMFUEL], 25.0)
-        self.assertEqual(self.economy.labor_values[MEALS], 305.0)
+        # their direct labor plus the labor embodied in the plant that
+        # makes them. RimWorld's own formula transfers nothing from fixed
+        # capital (FINDINGS.md), so the model must now differ from the
+        # closed analysis by exactly that transfer and nothing else.
+        parameters = ScenarioParameters()
+        self.assertAlmostEqual(
+            self.economy.labor_values[CHEMFUEL],
+            parameters.chemfuel_direct_labor + self._capital_labor(CHEMFUEL),
+            places=10,
+        )
+        self.assertAlmostEqual(
+            self.economy.labor_values[MEALS],
+            parameters.meal_direct_labor + self._capital_labor(MEALS),
+            places=10,
+        )
+
+    def test_the_fixed_capital_transfer_is_a_negligible_share_of_value(self):
+        # The measured answer to "is the vanilla omission serious?" — no.
+        # RimWorld's buildings are cheap relative to their lifetime output.
+        for commodity in (CHEMFUEL, MEALS, LEAVES, YAYO):
+            share = (
+                self._capital_labor(commodity)
+                / self.economy.labor_values[commodity]
+            )
+            self.assertLess(share, 0.005)
 
     def test_downstream_values_differ_only_by_the_stylized_link(self):
         parameters = ScenarioParameters()
@@ -785,16 +822,34 @@ class EndogenousLaborValueTests(unittest.TestCase):
             parameters.chemfuel_per_yayo * 25.0
             + parameters.leaves_per_yayo * stylized_leaves
         )
-        self.assertAlmostEqual(
-            self.economy.labor_values[LEAVES],
-            vanilla_leaves + stylized_leaves,
-            places=10,
+        # Since docs/23 there is a third, named term: the labor embodied
+        # in each stage's plant, which vanilla transfers not at all.
+        chemfuel_value = self.economy.labor_values[CHEMFUEL]
+        leaves_capital = self._capital_labor(LEAVES)
+        yayo_capital = self._capital_labor(YAYO)
+        expected_leaves = (
+            vanilla_leaves
+            + parameters.chemfuel_per_leaf * chemfuel_value
+            + leaves_capital
+        )
+        expected_yayo = (
+            parameters.yayo_direct_labor
+            + parameters.leaves_per_yayo * expected_leaves
+            + parameters.chemfuel_per_yayo * chemfuel_value
+            + yayo_capital
         )
         self.assertAlmostEqual(
-            self.economy.labor_values[YAYO],
-            vanilla_yayo + stylized_yayo,
-            places=10,
+            self.economy.labor_values[LEAVES], expected_leaves, places=10
         )
+        self.assertAlmostEqual(
+            self.economy.labor_values[YAYO], expected_yayo, places=10
+        )
+        # And the gap from vanilla stays small and fully accounted for.
+        self.assertLess(
+            abs(self.economy.labor_values[YAYO] - vanilla_yayo) / vanilla_yayo,
+            0.03,
+        )
+        del stylized_leaves, stylized_yayo
 
     def test_value_is_transferred_labor_plus_living_labor(self):
         values = self.economy.labor_values
@@ -803,8 +858,13 @@ class EndogenousLaborValueTests(unittest.TestCase):
             quantity * values[name]
             for name, quantity in process.inputs.items()
         )
+        # Constant capital now has two parts: circulating inputs, and the
+        # fixed capital consumed making the product (docs/23).
+        fixed = self._capital_labor(YAYO)
         self.assertAlmostEqual(
-            values[YAYO], transferred + process.direct_labor, places=10
+            values[YAYO],
+            transferred + fixed + process.direct_labor,
+            places=10,
         )
 
     def test_authored_figures_are_not_overwritten(self):
@@ -931,7 +991,9 @@ class EndogenousLaborValueTests(unittest.TestCase):
         # the value holds rather than collapsing or jumping when output
         # stops, so the tolerance is tight but not zero.
         self.assertLess(max(series) - min(series), 1e-9)
-        self.assertAlmostEqual(min(series), 734.6, places=9)
+        self.assertAlmostEqual(
+            min(series), economy.labor_values[YAYO], places=9
+        )
 
 
 class RelativeSurplusValueTests(unittest.TestCase):
@@ -960,7 +1022,7 @@ class RelativeSurplusValueTests(unittest.TestCase):
             )
 
     def test_the_social_value_of_the_wage_good_falls(self):
-        self.assertEqual(self.before.labor_values[MEALS], 305.0)
+        self.assertGreater(self.before.labor_values[MEALS], 305.0)
         self.assertLess(self.economy.labor_values[MEALS], 280.0)
         self.assertGreater(self.economy.labor_values[MEALS], 228.75)
 
@@ -971,7 +1033,10 @@ class RelativeSurplusValueTests(unittest.TestCase):
         # The adopter produces below social value, the laggard above it.
         self.assertLess(dust, social)
         self.assertLess(social, river)
-        self.assertAlmostEqual(river, 305.0, places=6)
+        # The laggard runs only the old technique, so its individual value
+        # is exactly the undisturbed equilibrium value of a meal.
+        stable = equilibrium(240)
+        self.assertAlmostEqual(river, stable.labor_values[MEALS], places=6)
         # The adopter's own value lies between the two techniques it runs
         # (152.5 and 305). Since docs/21 the order book tilts toward the
         # cheaper producer, so the mix is no longer the 228.75 midpoint —
@@ -1159,15 +1224,22 @@ class CostCompetitionTests(unittest.TestCase):
         self.assertLess(self.region.prices[MEALS], 15.0)
 
     def test_the_labor_value_of_the_wage_good_does_not_move(self):
-        # No technique changed how much labor a meal takes.
-        self.assertEqual(self.economy.labor_values[MEALS], 305.0)
+        # No technique changed how much labor a meal takes, so the value
+        # must sit exactly where the undisturbed equilibrium leaves it.
+        stable = equilibrium(240)
+        self.assertEqual(
+            self.economy.labor_values[MEALS], stable.labor_values[MEALS]
+        )
 
     def test_money_wages_fall_while_the_value_of_labor_power_does_not(self):
         # The distinction the four ledgers exist to keep: the money form
         # of variable capital falls, its value does not.
+        stable = equilibrium(240)
         self.assertLess(self.region.wage_rate(), 30.0)
         self.assertAlmostEqual(
-            self.economy.basket_labor_value(self.region), 610.0, places=6
+            self.economy.basket_labor_value(self.region),
+            stable.basket_labor_value(stable.regions["Dust Basin"]),
+            places=6,
         )
 
     def test_the_rate_of_surplus_value_is_unchanged(self):
@@ -1186,12 +1258,17 @@ class CostCompetitionTests(unittest.TestCase):
         labor_saving = technique_change(180)
         capital_saving = self.economy
 
-        value_move_labor = abs(labor_saving.labor_values[MEALS] - 305.0) / 305.0
+        value_move_labor = (
+            abs(labor_saving.labor_values[MEALS] - 305.0) / 305.0
+        )
         price_move_labor = abs(
             labor_saving.regions["Dust Basin"].prices[MEALS] - 15.0
         ) / 15.0
+        stable = equilibrium(240)
+        base_meal_value = stable.labor_values[MEALS]
         value_move_capital = (
-            abs(capital_saving.labor_values[MEALS] - 305.0) / 305.0
+            abs(capital_saving.labor_values[MEALS] - base_meal_value)
+            / base_meal_value
         )
         price_move_capital = abs(self.region.prices[MEALS] - 15.0) / 15.0
 

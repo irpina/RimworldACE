@@ -119,6 +119,13 @@ class Process:
     capacity_per_run: float = 1.0
     unit_operating_cost: float = 0.0
     apportionment: str = "mass"
+    #: Fixed capital supporting one unit of daily output, in silver and in
+    #: work-ticks (docs/23).  Exogenous, like ``direct_labor``: the buildings
+    #: are not in the modelled circuit, so their values come from the closed
+    #: analysis rather than from the value solve.  Zero leaves bare models
+    #: bit-identical.
+    capital_money_per_capacity: float = 0.0
+    capital_labor_per_capacity: float = 0.0
 
     @property
     def primary(self) -> str:
@@ -172,6 +179,31 @@ class Process:
         share = self.share_of_cost(commodity, commodities)
         return self.unit_operating_cost * share / units
 
+    def capital_consumed_per_unit(
+        self,
+        commodity: str,
+        service_life_days: float,
+        commodities: Optional[Dict[str, "Commodity"]] = None,
+    ) -> Tuple[float, float]:
+        """Fixed capital transferred to one unit of output: (silver, ticks).
+
+        Use-based rather than time-based: one unit of daily capacity makes
+        one unit a day, so it makes ``service_life_days`` units across the
+        life of the capital that supports it.  Unit cost is therefore
+        independent of utilization, which keeps idle plant from feeding a
+        rising unit cost back into the price anchor (docs/23).
+        """
+        if service_life_days <= EPSILON:
+            return 0.0, 0.0
+        share = self.share_of_cost(commodity, commodities or {})
+        units = self.outputs.get(commodity, 0.0)
+        if units <= EPSILON:
+            return 0.0, 0.0
+        return (
+            self.capital_money_per_capacity * share / service_life_days,
+            self.capital_labor_per_capacity * share / service_life_days,
+        )
+
     def input_cost_per_run(self, prices: Dict[str, float]) -> float:
         """Silver cost of one run's inputs at the given regional prices."""
         return sum(
@@ -200,6 +232,11 @@ class Producer:
     #: stage.  The output weights for the social labor value solve are these
     #: realized runs, not capacity (see docs/19).
     last_runs: float = 0.0
+    #: Fixed capital consumed per unit of output, in silver and in
+    #: work-ticks (docs/23).  Set once from the process and the service
+    #: life; carved out of ``unit_cost`` rather than added to it.
+    capital_cost_per_unit: float = 0.0
+    capital_labor_per_unit: float = 0.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -213,19 +250,53 @@ class Producer:
                 f"which process {self.process.name!r} does not output"
             )
 
-    def effective_unit_cost(self, prices: Dict[str, float]) -> float:
-        """Operating overhead plus input cost at the given regional prices.
+    def attributable_unit_cost(self, prices: Dict[str, float]) -> float:
+        """Cost the model can actually account for: c + v, per unit.
 
-        This is the full per-unit cost used by the utilization curve. When
-        input prices rise, the effective cost rises and the producer curtails
-        earlier — a price-mediated feedback the demand-led control cannot
-        provide on its own.
+        Circulating inputs at current regional prices, wages, and fixed
+        capital consumed.  This is what the surplus ledger treats as cost;
+        it deliberately excludes ``unattributed_margin`` (docs/23).
+        """
+        input_cost = self.process.input_cost_per_run(prices)
+        output_per_run = self.process.outputs.get(self.commodity, 0.0)
+        per_unit_inputs = (
+            0.0 if output_per_run <= EPSILON else input_cost / output_per_run
+        )
+        return (
+            per_unit_inputs
+            + self.wage_cost_per_unit
+            + self.capital_cost_per_unit
+        )
+
+    def effective_unit_cost(self, prices: Dict[str, float]) -> float:
+        """The reservation price the utilization curve compares against.
+
+        Attributable cost plus the unattributed wedge.  A producer curtails
+        when the market price falls toward this, not toward bare c + v: the
+        wedge behaves like a required margin whether it is surplus or an
+        unmodelled cost, and the model cannot tell which (docs/23).
+
+        Deliberately still computed as ``unit_cost + inputs + wages``, the
+        same expression and the same float as before the reclassification,
+        so that splitting the overhead moves no behavior at all.  Capital
+        consumption is carved *out of* ``unit_cost`` for the ledger, not
+        added on top of it.
         """
         input_cost = self.process.input_cost_per_run(prices)
         output_per_run = self.process.outputs.get(self.commodity, 0.0)
         if output_per_run <= EPSILON:
             return self.unit_cost + self.wage_cost_per_unit
         return self.unit_cost + input_cost / output_per_run + self.wage_cost_per_unit
+
+    @property
+    def unattributed_margin(self) -> float:
+        """The old operating overhead, less what capital consumption claims.
+
+        Negative when the authored price does not cover attributable cost,
+        which is a finding about that price rather than an error, so it is
+        reported rather than clamped (docs/23).
+        """
+        return self.unit_cost - self.capital_cost_per_unit
 
     def utilization(self, price: float, prices: Optional[Dict[str, float]] = None) -> float:
         """Smoothly curtail production when price falls below cash cost."""
@@ -452,6 +523,7 @@ class Economy:
         labor_value_max_iterations: int = 1000,
         competitive_price_intensity: float = 0.5,
         competitive_share_elasticity: float = 2.0,
+        capital_service_life_days: float = 600.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -486,6 +558,7 @@ class Economy:
             raise ValueError("competitive_share_elasticity must be non-negative")
         self.competitive_price_intensity = competitive_price_intensity
         self.competitive_share_elasticity = competitive_share_elasticity
+        self.capital_service_life_days = capital_service_life_days
         #: Social labor values in work-ticks, solved from the process graph.
         #: Distinct from ``Commodity.labor_value``, which stays the authored
         #: FINDINGS.md figure.  See docs/19.
@@ -538,6 +611,9 @@ class Economy:
         self._update_labor_values(use_capacity=True)
         # The seeded sector cost each price anchor is measured against
         # (docs/21).  Recorded once, from the same capacity weights.
+        for region in self.regions.values():
+            for producer in region.producers:
+                self._set_capital_consumption(producer)
         for region in self.regions.values():
             self._update_wage_costs(region)
             for name in self.commodities:
@@ -695,18 +771,18 @@ class Economy:
                 if project.completes_day > self.day:
                     pending.append(project)
                     continue
-                region.producers.append(
-                    Producer(
-                        project.name,
-                        project.commodity,
-                        project.capacity_per_day,
-                        project.unit_cost,
-                        self.zero_utilization_price_ratio,
-                        self.full_utilization_price_ratio,
-                        process=project.process
-                        or self.known_processes[project.commodity],
-                    )
+                entrant = Producer(
+                    project.name,
+                    project.commodity,
+                    project.capacity_per_day,
+                    project.unit_cost,
+                    self.zero_utilization_price_ratio,
+                    self.full_utilization_price_ratio,
+                    process=project.process
+                    or self.known_processes[project.commodity],
                 )
+                self._set_capital_consumption(entrant)
+                region.producers.append(entrant)
             region.projects = pending
 
     def _produce(self) -> None:
@@ -1062,11 +1138,22 @@ class Economy:
                 for name in sorted(process.outputs):
                     if name not in labor:
                         continue
-                    labor[name] += (
+                    contributed = (
                         runs
                         * per_run_total
                         * process.share_of_cost(name, self.commodities)
                     )
+                    # Fixed capital transfers its own embodied labor to the
+                    # product — the part RimWorld's formula omits entirely
+                    # (FINDINGS.md; docs/23).  Already apportioned per unit
+                    # of output, so it scales with output, not with runs.
+                    _, capital_labor = process.capital_consumed_per_unit(
+                        name, self.capital_service_life_days, self.commodities
+                    )
+                    contributed += (
+                        runs * process.outputs[name] * capital_labor
+                    )
+                    labor[name] += contributed
             revised = dict(values)
             for name in solvable:
                 revised[name] = labor[name] / output[name]
@@ -1104,10 +1191,15 @@ class Economy:
                 for name, per_run in sorted(process.outputs.items()):
                     if name not in self.commodities:
                         continue
-                    region_labor[name] = region_labor.get(
-                        name, 0.0
-                    ) + runs * per_run_total * process.share_of_cost(
-                        name, self.commodities
+                    _, capital_labor = process.capital_consumed_per_unit(
+                        name, self.capital_service_life_days, self.commodities
+                    )
+                    region_labor[name] = (
+                        region_labor.get(name, 0.0)
+                        + runs
+                        * per_run_total
+                        * process.share_of_cost(name, self.commodities)
+                        + runs * per_run * capital_labor
                     )
                     region_output[name] = (
                         region_output.get(name, 0.0) + runs * per_run
@@ -1117,6 +1209,16 @@ class Economy:
                 for name, total in sorted(region_output.items())
                 if total > EPSILON
             }
+
+    def _set_capital_consumption(self, producer: Producer) -> None:
+        """Record what fixed capital this producer's technique consumes."""
+        money, labor = producer.process.capital_consumed_per_unit(
+            producer.commodity,
+            self.capital_service_life_days,
+            self.commodities,
+        )
+        producer.capital_cost_per_unit = money
+        producer.capital_labor_per_unit = labor
 
     def _update_wage_costs(self, region: Region) -> None:
         """Price each producer's living labor at the current basket cost.

@@ -143,6 +143,26 @@ class ScenarioParameters:
     cheap_provisioner_overhead_fraction: float = 0.6
     cost_competition_day: int = 60
 
+    # --- fixed capital (docs/23) ---------------------------------------------
+    # Each sector's real RimWorld building, in money and in embodied labor,
+    # from the closed analysis.  Machines are needed in proportion to the
+    # labor performed at them: one machine occupied for a worker-day supports
+    # `ticks_per_worker_day` of work, so a unit of daily output needs
+    # `direct_labor / ticks_per_worker_day` machines.
+    capital_service_life_days: float = 600.0
+    drug_lab_capital_money: float = 445.0
+    drug_lab_capital_labor: float = 41_607.5
+    psychoid_field_capital_money: float = 230.0
+    psychoid_field_capital_labor: float = 13_120.0
+    refinery_capital_money: float = 390.0
+    refinery_capital_labor: float = 25_835.0
+    provisioner_capital_money: float = 225.0
+    provisioner_capital_labor: float = 16_940.0
+
+    def machines_per_capacity(self, direct_labor: float) -> float:
+        """Machines needed to support one unit of daily output."""
+        return direct_labor / self.ticks_per_worker_day
+
     # --- resource reserves ---------------------------------------------------
     # Default: one large grade at the current operating overhead.  The reserve
     # is large enough that no existing scenario depletes it.  Override in the
@@ -277,12 +297,36 @@ def circuit_processes(
             # the 25 ticks the closed analysis measured for chemfuel.
             inputs={},
             direct_labor=parameters.chemfuel_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.chemfuel_direct_labor
+                )
+                * parameters.refinery_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.chemfuel_direct_labor
+                )
+                * parameters.refinery_capital_labor
+            ),
         ),
         LEAVES: Process(
             "psychoid farming",
             outputs={LEAVES: 1.0},
             inputs={CHEMFUEL: parameters.chemfuel_per_leaf},
             direct_labor=parameters.leaves_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.leaves_direct_labor
+                )
+                * parameters.psychoid_field_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.leaves_direct_labor
+                )
+                * parameters.psychoid_field_capital_labor
+            ),
         ),
         YAYO: Process(
             "yayo refining",
@@ -292,6 +336,18 @@ def circuit_processes(
                 CHEMFUEL: parameters.chemfuel_per_yayo,
             },
             direct_labor=parameters.yayo_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.yayo_direct_labor
+                )
+                * parameters.drug_lab_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.yayo_direct_labor
+                )
+                * parameters.drug_lab_capital_labor
+            ),
         ),
         MEALS: Process(
             "provisioning",
@@ -302,6 +358,18 @@ def circuit_processes(
             # ticks the closed analysis measured for MealSimple.
             inputs={},
             direct_labor=parameters.meal_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.meal_direct_labor
+                )
+                * parameters.provisioner_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.meal_direct_labor
+                )
+                * parameters.provisioner_capital_labor
+            ),
         ),
     }
 
@@ -487,6 +555,7 @@ def seeded_two_region_economy(
         labor_value_max_iterations=parameters.labor_value_max_iterations,
         competitive_price_intensity=parameters.competitive_price_intensity,
         competitive_share_elasticity=parameters.competitive_share_elasticity,
+        capital_service_life_days=parameters.capital_service_life_days,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -755,6 +824,16 @@ def technique_change(
                 outputs={MEALS: 1.0},
                 inputs={},
                 direct_labor=efficient_labor,
+                # Same kind of plant, but less labor time is spent at it, so
+                # fewer machines support a unit of daily output (docs/23).
+                capital_money_per_capacity=(
+                    parameters.machines_per_capacity(efficient_labor)
+                    * parameters.provisioner_capital_money
+                ),
+                capital_labor_per_capacity=(
+                    parameters.machines_per_capacity(efficient_labor)
+                    * parameters.provisioner_capital_labor
+                ),
             ),
         )
     )
