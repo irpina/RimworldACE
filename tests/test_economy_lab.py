@@ -984,11 +984,20 @@ class RelativeSurplusValueTests(unittest.TestCase):
         river_after = self.economy.rate_of_surplus_value("Green River")
         self.assertGreater(river_after, river_before)
 
-    def test_the_value_of_labor_power_falls_while_its_price_does_not(self):
+    def test_the_value_of_labor_power_falls_much_further_than_its_price(self):
         # Value and price are distinct quantities and must not be collapsed.
+        # Since docs/21 the price *does* respond to cost, so the claim is no
+        # longer that it stays put — it is that the two move by very
+        # different amounts. Labor is only a few percent of money cost
+        # (docs/21 section 1), so a labor-saving technique moves value by an
+        # order of magnitude more than it moves price.
         region = self.economy.regions["Dust Basin"]
-        self.assertLess(self.economy.basket_labor_value(region), 610.0)
-        self.assertAlmostEqual(region.wage_rate(), 30.0, places=6)
+        value_fall = (610.0 - self.economy.basket_labor_value(region)) / 610.0
+        price_fall = (30.0 - region.wage_rate()) / 30.0
+        self.assertGreater(value_fall, 0.10)
+        self.assertGreater(price_fall, 0.0)
+        self.assertLess(price_fall, 0.05)
+        self.assertGreater(value_fall, 5.0 * price_fall)
 
     def test_the_scenario_closes_every_ledger(self):
         for residual in self.economy.commodity_balances().values():

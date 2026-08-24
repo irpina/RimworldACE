@@ -131,6 +131,18 @@ class ScenarioParameters:
     meal_efficient_direct_labor: float = 152.5
     technique_change_day: int = 60
 
+    # --- competitive transmission (docs/21) ----------------------------------
+    #: How much of a relative cost change reaches the price anchor.  Zero
+    #: reproduces the reference-anchored model bit-for-bit.
+    competitive_price_intensity: float = 0.5
+    #: How sharply the order book favours the cheaper producer.  Zero is a
+    #: bit-exact no-op.
+    competitive_share_elasticity: float = 2.0
+    #: The cost-competition entrant's overhead, as a fraction of the
+    #: incumbent's: a capital-saving technique rather than a labor-saving one.
+    cheap_provisioner_overhead_fraction: float = 0.6
+    cost_competition_day: int = 60
+
     # --- resource reserves ---------------------------------------------------
     # Default: one large grade at the current operating overhead.  The reserve
     # is large enough that no existing scenario depletes it.  Override in the
@@ -473,6 +485,8 @@ def seeded_two_region_economy(
         employment_quantum=parameters.employment_quantum,
         labor_value_tolerance=parameters.labor_value_tolerance,
         labor_value_max_iterations=parameters.labor_value_max_iterations,
+        competitive_price_intensity=parameters.competitive_price_intensity,
+        competitive_share_elasticity=parameters.competitive_share_elasticity,
     )
     _assert_reference_full_utilization(economy)
     return economy

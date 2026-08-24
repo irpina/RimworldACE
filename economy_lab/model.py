@@ -283,6 +283,11 @@ class Region:
     #: prices.  An empty basket disables the whole wage circuit, which keeps
     #: bare-model tests bit-identical.
     subsistence_basket: Dict[str, float] = field(default_factory=dict)
+    #: Output-weighted average effective unit cost per commodity as seeded,
+    #: and the ratio of the current cost to it.  The price anchor moves with
+    #: that ratio (docs/21).  Held over when no producer is active.
+    seed_unit_cost: Dict[str, float] = field(default_factory=dict)
+    cost_ratio: Dict[str, float] = field(default_factory=dict)
     ticks_per_worker_day: float = 24000.0
     #: Fixed daily labor supply in worker-days; infinite means never binding.
     labor_pool: float = float("inf")
@@ -445,6 +450,8 @@ class Economy:
         employment_quantum: float = 2.0 ** -20,
         labor_value_tolerance: float = 1e-12,
         labor_value_max_iterations: int = 1000,
+        competitive_price_intensity: float = 0.5,
+        competitive_share_elasticity: float = 2.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -473,6 +480,12 @@ class Economy:
         self.employment_quantum = employment_quantum
         self.labor_value_tolerance = labor_value_tolerance
         self.labor_value_max_iterations = labor_value_max_iterations
+        if competitive_price_intensity < 0.0:
+            raise ValueError("competitive_price_intensity must be non-negative")
+        if competitive_share_elasticity < 0.0:
+            raise ValueError("competitive_share_elasticity must be non-negative")
+        self.competitive_price_intensity = competitive_price_intensity
+        self.competitive_share_elasticity = competitive_share_elasticity
         #: Social labor values in work-ticks, solved from the process graph.
         #: Distinct from ``Commodity.labor_value``, which stays the authored
         #: FINDINGS.md figure.  See docs/19.
@@ -523,6 +536,15 @@ class Economy:
         # Nothing has been produced yet, so the first solve weights the
         # installed structure rather than realized output (docs/19).
         self._update_labor_values(use_capacity=True)
+        # The seeded sector cost each price anchor is measured against
+        # (docs/21).  Recorded once, from the same capacity weights.
+        for region in self.regions.values():
+            self._update_wage_costs(region)
+            for name in self.commodities:
+                cost = self._sector_unit_cost(region, name, use_capacity=True)
+                if cost is not None:
+                    region.seed_unit_cost[name] = cost
+                region.cost_ratio.setdefault(name, 1.0)
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -537,6 +559,9 @@ class Economy:
             # the value prevailing when the day opened, which keeps the
             # model's one-day propagation rhythm (docs/19 section 6).
             self._update_labor_values()
+            # Measured from the same realized runs, and read by the price
+            # anchor below (docs/21).
+            self._update_cost_ratios()
             self._track_differential_rent()
             self._consume()
             self._workers_consume()
@@ -710,21 +735,7 @@ class Economy:
                     if producer.active and producer.commodity == name:
                         producer.unit_cost = marginal
 
-            # Update wage costs from the current basket cost, mirroring the
-            # marginal-grade update above.  With no basket the rate is zero
-            # and every wage cost stays 0.0 — bare models are unaffected.
-            wage_per_tick = region.wage_rate() / max(
-                region.ticks_per_worker_day, EPSILON
-            )
-            if region.subsistence_basket:
-                for producer in region.producers:
-                    if producer.active:
-                        producer.wage_cost_per_unit = (
-                            producer.process.labor_per_unit(
-                                producer.commodity, self.commodities
-                            )
-                            * wage_per_tick
-                        )
+            self._update_wage_costs(region)
 
             opening = dict(region.inventory)
             active = sorted(
@@ -1107,6 +1118,81 @@ class Economy:
                 if total > EPSILON
             }
 
+    def _update_wage_costs(self, region: Region) -> None:
+        """Price each producer's living labor at the current basket cost.
+
+        Mirrors the marginal-grade update on extraction costs: a daily
+        refresh of one component of effective unit cost.  With no
+        subsistence basket the rate is zero and every wage cost stays 0.0,
+        which keeps bare models bit-identical.
+
+        Called both from ``_produce`` and once at construction, so that the
+        seeded sector cost the price anchor is measured against includes
+        wages exactly as the daily measurement does.
+        """
+        if not region.subsistence_basket:
+            return
+        wage_per_tick = region.wage_rate() / max(
+            region.ticks_per_worker_day, EPSILON
+        )
+        for producer in region.producers:
+            if producer.active:
+                producer.wage_cost_per_unit = (
+                    producer.process.labor_per_unit(
+                        producer.commodity, self.commodities
+                    )
+                    * wage_per_tick
+                )
+
+    def _sector_unit_cost(
+        self, region: Region, commodity: str, *, use_capacity: bool = False
+    ) -> Optional[float]:
+        """Output-weighted average effective unit cost of a commodity's sector.
+
+        The same output weighting the social labor value uses (docs/19), for
+        the same reason: what the market faces is the cost of the producers
+        actually supplying it.  ``use_capacity`` seeds the very first
+        measurement, before anything has been produced.  Returns ``None``
+        when no producer is active, so the caller can hold the last ratio
+        rather than inventing one.
+        """
+        total_cost = 0.0
+        total_output = 0.0
+        for producer in region.producers:
+            if not producer.active or producer.commodity != commodity:
+                continue
+            runs = (
+                producer.process.runs_for(producer.capacity_per_day)
+                if use_capacity
+                else producer.last_runs
+            )
+            if runs <= EPSILON:
+                continue
+            output = runs * producer.process.outputs.get(commodity, 0.0)
+            if output <= EPSILON:
+                continue
+            total_cost += output * producer.effective_unit_cost(region.prices)
+            total_output += output
+        if total_output <= EPSILON:
+            return None
+        return total_cost / total_output
+
+    def _update_cost_ratios(self, *, use_capacity: bool = False) -> None:
+        """Refresh each region's cost ratio against its seeded sector cost."""
+        for region in self.regions.values():
+            for name in self.commodities:
+                cost = self._sector_unit_cost(
+                    region, name, use_capacity=use_capacity
+                )
+                seed = region.seed_unit_cost.get(name)
+                if cost is None or seed is None or seed <= EPSILON:
+                    # Hold the last ratio: cost describes conditions of
+                    # production, which do not vanish because nobody
+                    # produced today.
+                    region.cost_ratio.setdefault(name, 1.0)
+                    continue
+                region.cost_ratio[name] = cost / seed
+
     def basket_labor_value(self, region: Region) -> float:
         """Work-ticks needed to reproduce one worker-day of labor-power.
 
@@ -1223,7 +1309,18 @@ class Economy:
                 old = region.prices[name]
                 low = commodity.reference_price * commodity.minimum_price_factor
                 high = commodity.reference_price * commodity.maximum_price_factor
-                desired = commodity.reference_price * exp(pressure)
+                # The anchor moves with the sector's cost relative to its
+                # seeded cost (docs/21).  Written in this form because
+                # `1 + kappa * (ratio - 1)` is exactly 1.0 when the ratio is
+                # exactly 1.0, for any kappa, which is what keeps the
+                # four-year equilibrium price range at exactly zero.
+                anchor = commodity.reference_price * (
+                    1.0
+                    + self.competitive_price_intensity
+                    * (region.cost_ratio.get(name, 1.0) - 1.0)
+                )
+                anchor = max(anchor, low)
+                desired = anchor * exp(pressure)
                 desired = min(high, max(low, desired))
                 region.prices[name] = (
                     old
@@ -1451,6 +1548,7 @@ class Economy:
                         },
                         "cash": region.cash,
                         "worker_cash": region.worker_cash,
+                        "cost_ratio": dict(region.cost_ratio),
                         "employment": region.worker_days_earned,
                         "wage_rate": region.wage_rate(),
                         "reserves": {
