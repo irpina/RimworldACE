@@ -17,21 +17,29 @@ supports:
 
 - accounted input-output production: a producer must source real inventory,
   and one that cannot is rationed rather than subsidised;
+- cost floor: a producer's effective unit cost includes the market price of its
+  inputs at current regional rates, curtailing production on margin compression
+  before physical inputs are exhausted;
 - damped demand-led replenishment: production follows intended outflow plus a
   proportional correction toward material inventory targets;
 - local production, consumption, inventory, prices, and silver;
 - a costly route with finite daily capacity and delivery time;
 - profitable planetary arbitrage when a regional spread covers freight;
 - destruction of productive capacity, upstream or downstream;
-- delayed investment in replacement capacity;
-- explicit material ledgers separating final from productive consumption;
+- construction-fund investment: new capacity costs silver proportional to
+  effective unit cost, drawn when commissioned;
+- buffer-aware investment: stock deficits that surplus capacity cannot refill
+  within a planning horizon trigger proportional additional capacity;
+- explicit material and silver ledgers separating final from productive
+  consumption, with investment spending tracked;
 - fixed Labor Content value beside the market price.
 
 Per-unit ratios and reference prices are read from RimWorld's own defs. The
 modelling choices — mass apportionment for joint products, proportional input
 rationing, simultaneous production, derived demand — are recorded in
-`docs/08-accounted-input-design.md`. Read that before changing them; each was
-chosen deliberately and several have defensible alternatives.
+`docs/08-accounted-input-design.md`. The cost floor and investment decisions
+are in `docs/13-cost-floor-and-investment-design.md`. Read both before changing
+them; each was chosen deliberately and several have defensible alternatives.
 
 Run all example scenarios:
 
@@ -103,22 +111,21 @@ its settled price and stock; the still-moving producer-loss path labels its last
 observation as terminal rather than implying equilibrium. The reporter remains
 observational; the invariant tests protect correctness.
 
-The current reference describes demand-led replenishment. Its design and the
-complete old-to-new comparison are in `docs/11-upstream-production-control.md`
-and `docs/12-upstream-production-control-results.md`.
+The current reference describes the cost floor and buffer-aware investment
+model. Its design and results are in `docs/13-cost-floor-and-investment-design.md`
+and `docs/14-cost-floor-and-investment-results.md`.
 
 ## Intentionally absent from this slice
 
-- capital-goods and construction costs for new capacity;
-- producers paying cash for their inputs (the material floor is in, the cost
-  floor is not);
 - endogenous labor values propagated through processes;
 - resource reserves, grades, and rent;
 - labor supply, wages, and the subsistence basket;
 - credit and bankruptcy;
+- capacity depreciation or mothballing;
+- individual producer cash accounts and transfer pricing;
 - more than three commodities or two regions;
 - RimWorld runtime integration.
 
-Capacity entry is still a free ledger source. The next slice should make
-investment consume an explicit capital good or construction fund, then add
-finite extraction reserves before claiming a fully closed material economy.
+The next slice should add finite extraction reserves (starting with chemfuel
+synthesis, the model's only extraction process) and differential rent before
+claiming a fully closed material economy.

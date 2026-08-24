@@ -1,10 +1,11 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-08-12  
+**Last updated:** 2026-08-24  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
+**GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `c028cd6` (demand-led production control)
-**Behavioral baseline:** `05996ae` (53 metrics after production control)
+**Latest Stage 0 model commit:** `9f9825b` (cost floor + buffer investment)
+**Behavioral baseline:** `faa554b` (53 metrics after cost floor)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -14,6 +15,8 @@
 **Hysteresis investigation:** `097e40c`
 **Production-control design:** `cbeb720`
 **Production-control results:** `3f9c20b`
+**Cost-floor design:** `a3fcfe7`
+**Cost-floor results:** `9867014`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -229,7 +232,11 @@ Locations:
 - `docs/11-upstream-production-control.md` — demand-control decision and
   rejected alternatives, recorded before implementation;
 - `docs/12-upstream-production-control-results.md` — complete 53-metric delta
-  table and acceptance rationale.
+  table and acceptance rationale;
+- `docs/13-cost-floor-and-investment-design.md` — cost floor, construction-fund
+  investment, and buffer-deficit investment decisions;
+- `docs/14-cost-floor-and-investment-results.md` — 53-metric comparison,
+  prediction scorecard, convergence verification.
 
 Commits:
 
@@ -248,6 +255,13 @@ Commits:
 - `c028cd6` — Add damped demand-led production planning
 - `3f9c20b` — Record demand-led production deltas
 - `05996ae` — Refresh baseline for demand-led replenishment
+- `a1e95db` — Record long-run producer-loss convergence
+- `a3fcfe7` — Record cost-floor and investment design decisions
+- `e0e3dc7` — Add cost floor: producers pay for inputs via effective unit cost
+- `e513b0e` — Make capacity investment consume silver
+- `9f9825b` — Add buffer-deficit investment motive
+- `9867014` — Record cost-floor and investment results
+- `faa554b` — Refresh baseline for cost floor and buffer investment
 
 ### Current vertical slice
 
@@ -263,6 +277,9 @@ It supports:
 
 - accounted input-output production: producers own a `Process` and must source
   real inventory; one that cannot is rationed, not subsidised;
+- **cost floor**: producers' effective unit cost includes input prices at
+  current regional rates, driving the utilization curve; the drug lab
+  curtails on cost before running out of physical inputs;
 - demand-led production planning: wanted output follows current final and
   productive outflow plus a damped correction toward material stock targets;
 - daily production and price-sensitive consumption;
@@ -270,10 +287,15 @@ It supports:
 - damped local price formation from stocks and unmet demand;
 - costly, delayed, capacity-limited arbitrage;
 - destruction of productive capacity, upstream or downstream;
-- delayed investment and replacement capacity;
+- **construction-fund investment**: capacity investment consumes silver from
+  the regional pool at `construction_cost_multiplier × effective_unit_cost`
+  per unit of daily capacity;
+- **buffer-aware investment**: when a commodity's stock is persistently below
+  target and surplus capacity cannot close the gap within
+  `buffer_refill_horizon_days`, additional capacity is built;
 - fixed labor value beside dynamic market price;
 - explicit commodity and silver balance checks, with productive consumption
-  booked separately from final consumption.
+  booked separately from final consumption and investment spending tracked.
 
 ### Process-model decisions — read before changing
 
@@ -304,59 +326,71 @@ flagged stylization: vanilla drug labs and psychoid fields do not consume
 chemfuel. It is there because the circuit needs a commodity consumed by more
 than one producer, and contention is where accounting bugs hide.
 
+**Cost floor and investment decisions** are in
+`docs/13-cost-floor-and-investment-design.md`. The load-bearing additions:
+
+- **effective unit cost includes input prices**: `Producer.unit_cost` is now
+  operating overhead only; `effective_unit_cost(prices)` adds inputs at
+  current regional prices. The drug lab's operating overhead is zero (its
+  prior 14.0 was entirely consumed by the 15.66 input cost);
+- **investment consumes silver**: `construction_cost_multiplier` (default 60)
+  days of effective cost per unit of daily capacity, deducted when
+  commissioned. If the region cannot afford it, the project scales down;
+- **buffer-deficit investment**: when stock is below target and surplus
+  capacity cannot refill within `buffer_refill_horizon_days` (default 60),
+  additional capacity is built. The signal is proportional, not threshold;
+- **input purchases are internal**: the silver payment for inputs stays within
+  the regional pool (the producer buys from its own region). The behavioral
+  effect comes through the utilization curve seeing a higher cost, not through
+  a silver movement between entities.
+
 ### Current calibrated behavior
 
 - equilibrium remains exactly stable for four in-game years;
 - a glut equal to 25% of annual regional yayo consumption lowers the local
-  price from 21 to **12.791**;
-- the distant region only falls to **20.106**;
-- arbitrage exports **13 units** before the spread closes;
+  price from 21 to **14.356** (shallower than previously — the drug lab now
+  curtails on cost during the glut);
+- the distant region only falls to **20.464**;
+- arbitrage exports **11 units** before the spread closes;
 - destroying 60% of regional capacity raises the price to **38.630**;
 - replacement capacity restores at least 80% of baseline supply within the
   four-to-eight-quadrum target;
-- all 25 tests pass, including all prior 23 unchanged;
+- post-shock upstream buffers refill to target rather than persisting as
+  scar tissue (converges by day 400);
+- all 30 tests pass;
 - commodity and silver residuals close to floating-point zero for all three
-  commodities;
+  commodities, including investment spending;
 - identical inputs reproduce identical histories.
 
 These are provisional gameplay targets, not empirical claims about real-world
 elasticities.
 
-### Accounted-input production changed none of them
+### History of behavioral changes
 
-Full comparison in `docs/09-accounted-input-results.md`. Eleven of the thirteen
-predictions in `docs/07` forecast movement; all eleven are wrong. The frozen
-reference was therefore **not** rewritten.
+**Accounted-input production** (`docs/09`): moved zero of thirteen original
+metrics because the material constraint never binds at 20-day cover, capacity
+entry was free, and gluts cannot be damped by an input constraint. But it
+exposed upstream effects invisible to the yayo-only metrics: permanent
+hysteresis and a 74% leaf price crash on downstream capacity loss.
 
-Three reasons, only one of which was anticipated:
+**Demand-led production control** (`docs/12`): moved 39 of 53 metrics.
+Resolved the glut hysteresis. Upstream prices stay at reference throughout the
+glut. Producer-loss terminal values shift because investment targets follow
+throughput demand.
 
-1. **A glut cannot be damped by an input constraint.** A glut in the final good
-   means producing less, which demands *fewer* inputs. The prediction was
-   describing the cash channel — producers paying for what they consume — which
-   is deliberately not in this slice.
-2. **Capacity entry is still free**, which `docs/07` explicitly flagged as the
-   assumption its producer-loss forecast depended on.
-3. **Every stage carries twenty days of cover and no benchmark shock attacks an
-   input.** The tightest the four frozen scenarios ever reach is 11.68 days.
-   The constraint is correct and simply never binds.
+**Cost floor and investment** (`docs/14`): moved 16 of 53 metrics. The cost
+floor tightened the drug lab's margin (effective cost 15.66 vs prior 14.0),
+causing the glut trough to shallow (14.34 → 14.36), recovery to accelerate
+(11 → 9 days), and arbitrage volume to drop (12.38 → 11). The cost channel
+pre-empts material rationing in the input-shortage scenario: the drug lab
+curtails on cost before running out of leaves. Buffer-aware investment
+resolves the post-shock upstream scar — prices return to reference by day 400
+with stocks at their enlarged targets.
 
-The old thirteen metrics could not see the following because they watched yayo
-only:
-
-- destroying 60% of the drug labs now crashes the psychoid leaf price 74%
-  (1.900 → 0.489) and chemfuel 53% (2.300 → 1.086);
-- a one-off glut leaves **permanent upstream hysteresis** — yayo returns
-  exactly to 21.000/200 while leaves settle at 1.698/1771 and stay there.
-
-That instrumentation gap is now closed for price and stock paths. The baseline
-adds forty upstream observations while leaving all thirteen original metrics
-unchanged. It covers price and inventory extrema with their days, plus a settled
-glut endpoint and terminal producer-loss endpoint for both leaves and chemfuel.
-
-The new `input-shortage` scenario is the one that binds: 70% of Dust Basin's
-psychoid fields destroyed, leaf stock draining 56/day for a silent month before
-yayo notices, leaf price up 5× against yayo's 1.75×, and the drug lab running at
-3 yayo/day against a capacity of 10 rather than shutting.
+The `input-shortage` scenario exercises the material constraint: 70% of Dust
+Basin's psychoid fields destroyed, leaf price up 2.6× and yayo up 1.66×.
+With the cost floor, the drug lab curtails smoothly through cost rather than
+waiting for physical leaf exhaustion.
 
 Run:
 
@@ -388,10 +422,10 @@ numbers moved in the commit message.
 
 Current frozen headline metrics include:
 
-- local glut trough: **14.340916** on day 66;
-- distant glut trough: **20.415752** on day 81;
-- local half-gap recovery: **11 days / 0.733333 quadrums**;
-- arbitrage exports: **12.381259 units**;
+- local glut trough: **14.356472** on day 66;
+- distant glut trough: **20.464413** on day 80;
+- local half-gap recovery: **9 days / 0.6 quadrums**;
+- arbitrage exports: **11 units**;
 - producer-loss peak: **38.630290** on day 119;
 - 80% capacity recovery: **75 days / 5 quadrums**;
 - equilibrium price range: **0** in both regions.
@@ -401,7 +435,11 @@ Current upstream headline observations include:
 - glut leaf settlement: **1.900000 / 1,600 units**;
 - glut chemfuel settlement: **2.300000 / 120 units**;
 - producer-loss leaf trough: **0.693449** on day 70;
-- producer-loss chemfuel trough: **1.918998** on day 69.
+- producer-loss chemfuel trough: **1.918998** on day 69;
+- producer-loss leaf terminal: **2.507273 / 1,425.509** (day 210, still in
+  buffer-rebuild transit; converges to 1.900 / 1,891 by day 400);
+- producer-loss chemfuel terminal: **2.934490 / 103.895** (same — converges
+  to 2.300 / 151 by day 400).
 
 The former glut hysteresis was a **control-law bug**, not a capacity reallocation
 or ledger leak. It is resolved by the design in `docs/11`: planned output follows
@@ -410,23 +448,22 @@ target. The mutually dependent order plans converge deterministically from the
 day's opening state, so production remains simultaneous. Leaves now stay at
 1,600 and chemfuel at 120 throughout the glut, both at reference price.
 
-The future cash cost floor does **not** replace this control. Material planning
-answers how much output is wanted; input payments and liquidity will answer
-whether that plan is profitable and financeable. When the cash channel lands,
-actual production should be limited by both rather than using profitability as
-an accidental demand signal.
+The cash cost floor (`docs/13`, `docs/14`) does **not** replace this control.
+Material planning answers how much output is wanted; the cost floor answers
+whether the plan is profitable. Actual production is limited by both — the
+minimum of what the demand-led plan requests and what the utilization curve
+(now informed by input costs) allows.
 
-Two interpretation notes from the post-implementation review:
+Two interpretation notes:
 
-- glut upstream extrema are now degenerate by design: price peak and trough are
+- glut upstream extrema are degenerate by design: price peak and trough are
   both the reference price on day 61, and stock peak/trough both equal the
   unchanged buffer. They mean "no upstream excursion," not a timed trough;
-- extending producer loss to day 660 confirms convergence, but to a displaced
-  buffer: leaves settle near **2.094927 / 1,451.1777** and chemfuel near
-  **2.376108 / 116.27944**. Upstream capacity exactly matches restored steady
-  use, so it has no headroom to refill stock, while current investment sees no
-  flow-capacity shortfall. Treat this as a remaining investment-design question,
-  not as unresolved numerical drift. Details are in `docs/12`.
+- extending producer loss to day 660 now shows full convergence: leaves
+  settle at **1.900 / 1,891** and chemfuel at **2.300 / 151**, both at
+  reference price with stocks at target. The enlarged stocks reflect
+  additional installed capacity from buffer-rebuild investment. The former
+  permanent buffer scar (`docs/12`) is resolved.
 
 Arbitrage is currently single-commodity by calibration, not design. Standard
 freight is **3.85** after risk markup while the glut's widest intermediate spread
@@ -518,8 +555,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–4 and the production-control correction are **done** (`f52fcd0`,
-`57b05ed`, `c028cd6`). Resume at step 5.
+Steps 1–5 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -528,23 +564,21 @@ Steps 1–4 and the production-control correction are **done** (`f52fcd0`,
 3. ~~Require production to consume accounted inventory.~~
 4. ~~Add process-level material-balance tests and an input shortage
    scenario.~~
-5. **Next economic feature:** make investment consume an explicit capital-good
-   or construction fund rather than creating capacity freely. This is also the
-   missing half of the cost floor: the material floor landed this session, the
-   cash floor did not. Consider making producers pay for their inputs at the
-   same time, since `docs/09` shows that is the channel the glut prediction
-   actually needed.
-6. Only then add finite resource reserves, grade depletion, marginal extraction
-   cost, and differential rent.
+5. ~~Make investment consume a construction fund; add cost floor and buffer
+   investment.~~ Done: producers' effective cost includes input prices,
+   investment costs silver, buffer deficits trigger proportional investment.
+
+6. **Next economic feature:** add finite resource reserves, grade depletion,
+   marginal extraction cost, and differential rent. Chemfuel synthesis is
+   currently the only extraction process; it has no inputs and no reserve.
+   Making it draw from a finite reserve is the minimal change.
 7. After the market/resource laboratory is credible, add the local subsistence
    basket and hired-worker contracts.
 
-The excess-inventory control is implemented and the understood baseline movement
-is frozen. Step 5 can now add input payments and capital-goods costs without also
-having to invent a demand signal. Keep the material plan and cash constraint as
-separate mechanisms. Before implementing investment, explicitly decide whether
-a buffer deficit may induce capacity above steady throughput; that decision
-controls whether post-shock upstream buffer scar tissue is permanent.
+The sensitivity sweep has not been re-run since the cost floor landed;
+`sensitivity_results.csv` describes the free-production model. Re-run it once
+the model stabilizes. New parameters to include: `construction_cost_multiplier`,
+`min_investment_capacity`, `buffer_refill_horizon_days`.
 
 Two safe tracks can now proceed independently:
 
@@ -564,9 +598,8 @@ it is not intended for per-commit testing.
 
 ## Known Stage 0 omissions
 
-- capital-goods costs for capacity investment;
-- producers paying cash for their inputs — the material floor exists, the cost
-  floor does not, and `unit_cost` still does not include input prices;
+- ~~capital-goods costs for capacity investment~~ — done;
+- ~~producers paying cash for their inputs~~ — done via effective unit cost;
 - labor value propagated endogenously through processes; `Process.direct_labor`
   is recorded but `Commodity.labor_value` remains the static `FINDINGS.md`
   figure;
@@ -576,12 +609,16 @@ it is not intended for per-commit testing.
 - labor supply and wages;
 - the poverty/subsistence basket;
 - credit, bankruptcy, and liquidity-constrained consumption;
+- capacity depreciation or mothballing (idle surplus from buffer investment
+  persists indefinitely);
+- individual producer cash accounts and transfer pricing;
 - more than three commodities or two regions;
 - RimWorld save/UI/runtime integration.
 
-Production now consumes accounted inventory, so supply finally has a material
-floor. Capacity entry is still a free ledger source, so the model closes its
-declared commodity ledger but is not yet a closed reproduction model.
+Production consumes accounted inventory and pays a cost floor. Capacity
+investment consumes silver. Both material and silver ledgers close. The model
+is closer to a closed reproduction model but still lacks resource reserves,
+rent, and wages.
 
 ---
 
