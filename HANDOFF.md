@@ -259,6 +259,10 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/25-stage0-arc-summary.md` — the narrative summary of the whole
+  Stage 0 arc: what each layer measured, the three thesis-relevant
+  results, the wrong predictions, and the standing caveat on every
+  ratio built on v;
 - `docs/23-constant-capital-and-the-overhead-design.md` — fixed capital,
   the reclassification of the operating overhead, and the c/v/s ledger
   decided in advance;
