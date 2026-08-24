@@ -334,7 +334,76 @@ def _labor_metrics(
         "depletion.local.yayo.settled_price": _metric(
             depletion.regions[LOCAL_REGION].prices[YAYO], "silver"
         ),
+        # --- the value ledger (docs/23) ----------------------------------
+        # c, v and s in work-ticks, and the classical ratios built from
+        # them. Value ratios only: the value rate of profit is not money
+        # profitability and the two are never combined.
+        "equilibrium.value_ledger.constant_capital": _metric(
+            stable.ledger.constant_capital(LOCAL_REGION), "ticks"
+        ),
+        "equilibrium.value_ledger.fixed_capital_consumed": _metric(
+            stable.ledger.fixed_capital_consumed[LOCAL_REGION], "ticks"
+        ),
+        "equilibrium.value_ledger.fixed_share_of_constant": _metric(
+            stable.ledger.fixed_capital_consumed[LOCAL_REGION]
+            / stable.ledger.constant_capital(LOCAL_REGION),
+            "fraction",
+        ),
+        "equilibrium.value_ledger.variable_capital": _metric(
+            stable.ledger.necessary_labor[LOCAL_REGION], "ticks"
+        ),
+        "equilibrium.value_ledger.surplus_labor": _metric(
+            stable.ledger.surplus_labor(LOCAL_REGION), "ticks"
+        ),
+        "equilibrium.value_ledger.organic_composition": _metric(
+            stable.organic_composition(LOCAL_REGION), "ratio"
+        ),
+        "equilibrium.value_ledger.value_rate_of_profit": _metric(
+            stable.value_rate_of_profit(LOCAL_REGION), "ratio"
+        ),
+        # The wedge between RimWorld's authored price level and what the
+        # model can account for. Reported, not explained.
+        "equilibrium.wedge.meals_share_of_price": _metric(
+            _wedge_share(stable, LOCAL_REGION, MEALS), "fraction"
+        ),
+        "equilibrium.wedge.chemfuel_share_of_price": _metric(
+            _wedge_share(stable, LOCAL_REGION, CHEMFUEL), "fraction"
+        ),
+        "equilibrium.wedge.psychoid_leaves_share_of_price": _metric(
+            _wedge_share(stable, LOCAL_REGION, LEAVES), "fraction"
+        ),
+        "equilibrium.wedge.yayo_share_of_price": _metric(
+            _wedge_share(stable, LOCAL_REGION, YAYO), "fraction"
+        ),
+        # Surplus realized in money against surplus produced in labor.
+        # They agree for the wage good by construction and diverge
+        # elsewhere: the transformation problem, made arithmetic.
+        "equilibrium.realized.meals_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, MEALS), "ratio"
+        ),
+        "equilibrium.realized.yayo_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, YAYO), "ratio"
+        ),
+        "equilibrium.realized.chemfuel_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, CHEMFUEL), "ratio"
+        ),
+        "equilibrium.realized.psychoid_leaves_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, LEAVES), "ratio"
+        ),
     }
+
+
+def _wedge_share(economy: Economy, region: str, commodity: str) -> float:
+    parts = economy.price_decomposition(region, commodity)
+    return parts["margin"] / parts["price"]
+
+
+def _money_rate(economy: Economy, region: str, commodity: str) -> float:
+    """Money surplus over money wages, reading the wedge as surplus."""
+    parts = economy.price_decomposition(region, commodity)
+    if parts["wages"] <= 0.0:
+        return 0.0
+    return parts["surplus_if_margin_is_surplus"] / parts["wages"]
 
 
 def _cheapest_share(economy: Economy, region_name: str, commodity: str) -> float:

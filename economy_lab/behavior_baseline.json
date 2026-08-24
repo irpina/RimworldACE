@@ -70,6 +70,22 @@
       "unit": "ratio",
       "value": 38.298137
     },
+    "equilibrium.realized.chemfuel_money_rate": {
+      "unit": "ratio",
+      "value": 72.578333
+    },
+    "equilibrium.realized.meals_money_rate": {
+      "unit": "ratio",
+      "value": 38.331762
+    },
+    "equilibrium.realized.psychoid_leaves_money_rate": {
+      "unit": "ratio",
+      "value": 29.896313
+    },
+    "equilibrium.realized.yayo_money_rate": {
+      "unit": "ratio",
+      "value": 11.180992
+    },
     "equilibrium.value.chemfuel_ticks": {
       "unit": "ticks",
       "value": 25.044852
@@ -85,6 +101,50 @@
     "equilibrium.value.yayo_ticks": {
       "unit": "ticks",
       "value": 735.974952
+    },
+    "equilibrium.value_ledger.constant_capital": {
+      "unit": "ticks",
+      "value": 951309.810818
+    },
+    "equilibrium.value_ledger.fixed_capital_consumed": {
+      "unit": "ticks",
+      "value": 3353.972984
+    },
+    "equilibrium.value_ledger.fixed_share_of_constant": {
+      "unit": "fraction",
+      "value": 0.003526
+    },
+    "equilibrium.value_ledger.organic_composition": {
+      "unit": "ratio",
+      "value": 20.665732
+    },
+    "equilibrium.value_ledger.surplus_labor": {
+      "unit": "ticks",
+      "value": 1762985.910682
+    },
+    "equilibrium.value_ledger.value_rate_of_profit": {
+      "unit": "ratio",
+      "value": 1.767683
+    },
+    "equilibrium.value_ledger.variable_capital": {
+      "unit": "ticks",
+      "value": 46033.202324
+    },
+    "equilibrium.wedge.chemfuel_share_of_price": {
+      "unit": "fraction",
+      "value": 0.666372
+    },
+    "equilibrium.wedge.meals_share_of_price": {
+      "unit": "fraction",
+      "value": 0.666349
+    },
+    "equilibrium.wedge.psychoid_leaves_share_of_price": {
+      "unit": "fraction",
+      "value": 0.605752
+    },
+    "equilibrium.wedge.yayo_share_of_price": {
+      "unit": "fraction",
+      "value": -0.000515
     },
     "glut.distant_trough_day": {
       "unit": "day",
