@@ -969,8 +969,13 @@ class RelativeSurplusValueTests(unittest.TestCase):
         # The adopter produces below social value, the laggard above it.
         self.assertLess(dust, social)
         self.assertLess(social, river)
-        self.assertAlmostEqual(dust, 228.75, places=6)
         self.assertAlmostEqual(river, 305.0, places=6)
+        # The adopter's own value lies between the two techniques it runs
+        # (152.5 and 305). Since docs/21 the order book tilts toward the
+        # cheaper producer, so the mix is no longer the 228.75 midpoint —
+        # it sits below it, and moves further as the cost gap widens.
+        self.assertLess(152.5, dust)
+        self.assertLess(dust, 228.75)
 
     def test_the_rate_of_surplus_value_rises_in_both_regions(self):
         base = self.before.rate_of_surplus_value()

@@ -1258,15 +1258,9 @@ class Economy:
                     desired[id(producer)] * units
                 )
 
-            revised: Dict[int, float] = {}
-            for producer in active:
-                name = producer.commodity
-                available_output = desired_output[name]
-                if available_output <= EPSILON:
-                    factor = 0.0
-                else:
-                    factor = min(1.0, requested_output[name] / available_output)
-                revised[id(producer)] = desired[id(producer)] * factor
+            revised = self._allocate_orders(
+                region, active, desired, desired_output, requested_output
+            )
             if all(
                 abs(revised[key] - planned[key]) <= EPSILON
                 for key in revised
@@ -1274,6 +1268,96 @@ class Economy:
                 return revised
             planned = revised
         raise RuntimeError("production-order plan did not converge")
+
+    def _allocate_orders(
+        self,
+        region: Region,
+        active: List[Producer],
+        desired: Dict[int, float],
+        desired_output: Dict[str, float],
+        requested_output: Dict[str, float],
+    ) -> Dict[int, float]:
+        """Share a commodity's order book among its producers by cost.
+
+        Weights are `desired_output * (cost / cheapest)^-epsilon`, so a
+        cheaper producer wins more custom, continuously: a small cost
+        advantage wins a small amount of extra business rather than the
+        whole book (docs/21).  Each producer is still capped by its own
+        price-and-capacity-limited output, and what a capped producer
+        cannot take is redistributed among the rest.
+
+        With `epsilon = 0` every weight collapses to `desired_output`, the
+        shares become proportional to desired output, and this reduces
+        exactly to the uniform factor it replaces — bit-for-bit.
+        """
+        epsilon_share = self.competitive_share_elasticity
+        by_commodity: Dict[str, List[Producer]] = {}
+        for producer in active:
+            by_commodity.setdefault(producer.commodity, []).append(producer)
+
+        revised: Dict[int, float] = {}
+        for name, producers in sorted(by_commodity.items()):
+            available_output = desired_output[name]
+            if available_output <= EPSILON:
+                for producer in producers:
+                    revised[id(producer)] = 0.0
+                continue
+            wanted = min(requested_output[name], available_output)
+            if wanted <= EPSILON:
+                for producer in producers:
+                    revised[id(producer)] = 0.0
+                continue
+
+            # Sorted so the arithmetic cannot depend on producer list order.
+            producers = sorted(producers, key=lambda p: (p.name, p.commodity))
+            ceilings = {
+                id(p): desired[id(p)] * p.process.outputs[p.commodity]
+                for p in producers
+            }
+            if epsilon_share <= 0.0:
+                weights = {id(p): ceilings[id(p)] for p in producers}
+            else:
+                costs = {
+                    id(p): max(p.effective_unit_cost(region.prices), EPSILON)
+                    for p in producers
+                }
+                cheapest = min(costs.values())
+                weights = {
+                    id(p): ceilings[id(p)]
+                    * (costs[id(p)] / cheapest) ** -epsilon_share
+                    for p in producers
+                }
+
+            allotted = {id(p): 0.0 for p in producers}
+            remaining = wanted
+            open_ids = [id(p) for p in producers if ceilings[id(p)] > EPSILON]
+            # Water-filling: place what is left among producers still below
+            # their own ceiling, until nothing remains or everyone is full.
+            for _ in range(len(producers) + 1):
+                if remaining <= EPSILON or not open_ids:
+                    break
+                total_weight = sum(weights[key] for key in open_ids)
+                if total_weight <= EPSILON:
+                    break
+                capped: List[int] = []
+                placed = 0.0
+                for key in open_ids:
+                    share = remaining * weights[key] / total_weight
+                    room = ceilings[key] - allotted[key]
+                    take = min(share, room)
+                    allotted[key] += take
+                    placed += take
+                    if room - take <= EPSILON:
+                        capped.append(key)
+                remaining -= placed
+                if not capped:
+                    break
+                open_ids = [key for key in open_ids if key not in capped]
+
+            for producer in producers:
+                units = producer.process.outputs[producer.commodity]
+                revised[id(producer)] = allotted[id(producer)] / units
+        return revised
 
     def _consume(self) -> None:
         for region in self.regions.values():
