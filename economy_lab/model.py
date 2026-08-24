@@ -119,6 +119,12 @@ class Process:
         share = self.share_of_cost(commodity, commodities)
         return self.unit_operating_cost * share / units
 
+    def input_cost_per_run(self, prices: Dict[str, float]) -> float:
+        """Silver cost of one run's inputs at the given regional prices."""
+        return sum(
+            qty * prices.get(name, 0.0) for name, qty in self.inputs.items()
+        )
+
 
 @dataclass
 class Producer:
@@ -146,11 +152,26 @@ class Producer:
                 f"which process {self.process.name!r} does not output"
             )
 
-    def utilization(self, price: float) -> float:
+    def effective_unit_cost(self, prices: Dict[str, float]) -> float:
+        """Operating overhead plus input cost at the given regional prices.
+
+        This is the full per-unit cost used by the utilization curve. When
+        input prices rise, the effective cost rises and the producer curtails
+        earlier — a price-mediated feedback the demand-led control cannot
+        provide on its own.
+        """
+        input_cost = self.process.input_cost_per_run(prices)
+        output_per_run = self.process.outputs.get(self.commodity, 0.0)
+        if output_per_run <= EPSILON:
+            return self.unit_cost
+        return self.unit_cost + input_cost / output_per_run
+
+    def utilization(self, price: float, prices: Optional[Dict[str, float]] = None) -> float:
         """Smoothly curtail production when price falls below cash cost."""
         if not self.active or self.capacity_per_day <= 0:
             return 0.0
-        ratio = price / max(self.unit_cost, EPSILON)
+        cost = self.effective_unit_cost(prices) if prices is not None else self.unit_cost
+        ratio = price / max(cost, EPSILON)
         if ratio <= self.zero_utilization_price_ratio:
             return 0.0
         if ratio >= self.full_utilization_price_ratio:
@@ -158,8 +179,8 @@ class Producer:
         span = self.full_utilization_price_ratio - self.zero_utilization_price_ratio
         return (ratio - self.zero_utilization_price_ratio) / max(span, EPSILON)
 
-    def desired_runs(self, price: float) -> float:
-        return self.process.runs_for(self.capacity_per_day) * self.utilization(price)
+    def desired_runs(self, price: float, prices: Optional[Dict[str, float]] = None) -> float:
+        return self.process.runs_for(self.capacity_per_day) * self.utilization(price, prices)
 
     def input_per_day(self, commodity: str) -> float:
         """Input required per day at full capacity, ignoring price curtailment."""
@@ -262,6 +283,8 @@ class Ledger:
     #: consumption so a unit used up making something else is still a
     #: declared sink rather than a leak.
     intermediate_consumption: Dict[str, float] = field(default_factory=dict)
+    #: Silver spent on capacity investment (construction fund).
+    investment_spending: float = 0.0
     transport_cash: float = 0.0
     initial_cash: float = 0.0
 
@@ -502,7 +525,7 @@ class Economy:
                 key=lambda p: (p.name, p.commodity),
             )
             desired = {
-                id(p): p.desired_runs(region.prices[p.commodity]) for p in active
+                id(p): p.desired_runs(region.prices[p.commodity], region.prices) for p in active
             }
             planned = self._planned_runs(region, opening, active, desired)
 
@@ -783,18 +806,30 @@ class Economy:
                 shortfall = max(0.0, demand - existing - pipeline)
                 if shortfall <= EPSILON:
                     continue
-                active_costs = [
+                # Use effective cost (overhead + inputs) for the margin test,
+                # but store only the operating overhead on the new producer.
+                active_effective = [
+                    p.effective_unit_cost(region.prices)
+                    for p in region.producers
+                    if p.active and p.commodity == name
+                ]
+                active_overhead = [
                     p.unit_cost
                     for p in region.producers
                     if p.active and p.commodity == name
                 ]
-                assumed_cost = (
-                    sum(active_costs) / len(active_costs)
-                    if active_costs
+                assumed_effective = (
+                    sum(active_effective) / len(active_effective)
+                    if active_effective
                     else commodity.reference_price * 0.70
                 )
+                assumed_overhead = (
+                    sum(active_overhead) / len(active_overhead)
+                    if active_overhead
+                    else max(0.0, commodity.reference_price * 0.70)
+                )
                 expected = region.expected_prices[name]
-                margin = (expected - assumed_cost) / max(assumed_cost, EPSILON)
+                margin = (expected - assumed_effective) / max(assumed_effective, EPSILON)
                 inventory_days = region.inventory[name] / max(demand, EPSILON)
                 if (
                     margin < self.investment_margin_threshold
@@ -814,7 +849,7 @@ class Economy:
                     CapacityProject(
                         name,
                         amount,
-                        assumed_cost,
+                        assumed_overhead,
                         self.day + self.investment_lead_days,
                         f"entrant-{region.name}-{name}-{self.day}",
                         process=existing_process,

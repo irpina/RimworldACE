@@ -289,16 +289,19 @@ class InputConstraintTests(unittest.TestCase):
         history = economy.history
         leaves = [h["regions"][local]["inventory"][LEAVES] for h in history]
         yayo_price = [h["regions"][local]["price"][YAYO] for h in history]
-        unmet = [h["regions"][local]["unmet"][LEAVES] for h in history]
+        leaf_price = [h["regions"][local]["price"][LEAVES] for h in history]
 
         # The shortage reaches the input market first...
         self.assertLess(min(leaves[61:]), leaves[60])
-        self.assertGreater(max(unmet[61:]), 0.0)
-        # ...then the output market.
+        # ...and the leaf price rises.
+        self.assertGreater(max(leaf_price[61:]), leaf_price[60] * 1.50)
+        # The cost channel propagates the signal downstream: the drug lab's
+        # effective cost rises with leaf prices, curtailing yayo output and
+        # raising the yayo price.
         self.assertGreater(max(yayo_price[61:]), yayo_price[60] * 1.50)
 
         # Yayo capacity is untouched throughout: the drug lab is constrained
-        # by materials, not by its own capacity.
+        # by input cost (or material), not by its own installed capacity.
         capacity = [h["regions"][local]["capacity"][YAYO] for h in history]
         self.assertEqual(min(capacity), max(capacity))
 
@@ -333,12 +336,15 @@ class InputConstraintTests(unittest.TestCase):
         self.assertGreater(constrained_days, 20)
 
     def test_all_or_nothing_is_available_and_differs(self):
+        # Use a severe input-shortage scenario (90% leaf destruction) so
+        # material actually binds despite the cost channel. The two rationing
+        # modes must then produce different yayo inventories.
         proportional = seeded_two_region_economy()
         cliff = seeded_two_region_economy(input_rationing=ALL_OR_NOTHING)
         for economy in (proportional, cliff):
             economy.step(60)
-            economy.destroy_capacity("Dust Basin", LEAVES, 0.70)
-            economy.step(60)
+            economy.destroy_capacity("Dust Basin", LEAVES, 0.90)
+            economy.step(90)
         self.assertNotEqual(
             round(proportional.regions["Dust Basin"].inventory[YAYO], 6),
             round(cliff.regions["Dust Basin"].inventory[YAYO], 6),
@@ -388,19 +394,60 @@ class InputConstraintTests(unittest.TestCase):
         # in relative terms; that is what makes the split order-independent.
         self.assertAlmostEqual(region.unmet_demand[CHEMFUEL], 2.0, places=9)
 
-    def test_scarcity_of_an_input_registers_as_unmet_demand_for_that_input(self):
+    def test_scarcity_of_an_input_registers_as_price_signal_not_false_chemfuel_shortage(self):
         economy = input_shortage()
-        # Leaves ran short; chemfuel never did. The drug lab was throttled by
-        # the leaf shortage and so drew less chemfuel than it was allocated,
-        # and that slack must not be booked as a chemfuel shortage.
-        unmet_leaves = max(
-            h["regions"]["Dust Basin"]["unmet"][LEAVES] for h in economy.history
-        )
+        # Destroying psychoid fields causes leaf scarcity. The cost channel
+        # may pre-empt the material channel (the drug lab curtails on cost
+        # before running out of leaves), but either way the chemfuel market
+        # must not register a false shortage: only leaves were attacked.
         unmet_chemfuel = max(
             h["regions"]["Dust Basin"]["unmet"][CHEMFUEL] for h in economy.history
         )
-        self.assertGreater(unmet_leaves, 0.0)
         self.assertAlmostEqual(unmet_chemfuel, 0.0, places=9)
+        # The leaf price must rise significantly — the signal propagates
+        # whether through material rationing or cost-driven curtailment.
+        leaf_prices = economy.series("Dust Basin", LEAVES)
+        self.assertGreater(max(leaf_prices[61:]), 1.9 * 2.0)
+
+
+class CostFloorTests(unittest.TestCase):
+    """The cost floor: input prices drive the utilization curve."""
+
+    def test_effective_cost_includes_input_prices(self):
+        """A producer's effective cost rises when its input price rises."""
+        processes = circuit_processes()
+        p = Producer(
+            "lab", YAYO, 10.0, 0.0,
+            process=processes[YAYO],
+        )
+        ref_prices = {YAYO: 21.0, LEAVES: 1.9, CHEMFUEL: 2.3}
+        high_prices = {YAYO: 21.0, LEAVES: 5.0, CHEMFUEL: 2.3}
+        self.assertGreater(
+            p.effective_unit_cost(high_prices),
+            p.effective_unit_cost(ref_prices),
+        )
+
+    def test_cost_floor_curtails_before_material_runs_out(self):
+        """When input prices rise, utilization drops even with ample stock."""
+        processes = circuit_processes()
+        p = Producer(
+            "lab", YAYO, 10.0, 0.0,
+            process=processes[YAYO],
+        )
+        ref_prices = {YAYO: 21.0, LEAVES: 1.9, CHEMFUEL: 2.3}
+        # Leaf price 3.0 gives effective_cost ~24.46, ratio ~0.86 — partial.
+        squeezed = {YAYO: 21.0, LEAVES: 3.0, CHEMFUEL: 2.3}
+        full = p.utilization(21.0, ref_prices)
+        curtailed = p.utilization(21.0, squeezed)
+        self.assertAlmostEqual(full, 1.0, places=6)
+        self.assertLess(curtailed, full)
+        self.assertGreater(curtailed, 0.0)
+
+    def test_silver_balances_with_cost_floor(self):
+        for economy in (equilibrium(), regional_glut(), producer_loss(),
+                        arbitrage(), input_shortage()):
+            with self.subTest(day=economy.day):
+                self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
 
 
 if __name__ == "__main__":

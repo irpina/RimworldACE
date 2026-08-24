@@ -98,15 +98,39 @@ class ScenarioParameters:
             + self.producer_capacity_per_day * self.chemfuel_per_yayo
         )
 
-    def unit_cost(self, reference_price: float, region_cost: float) -> float:
-        """Scale a producer's cash cost to the yayo producer's own margin.
+    def total_unit_cost(self, reference_price: float, region_cost: float) -> float:
+        """Full unit cost (operating overhead + inputs) at reference prices.
 
-        Every producer then runs at full utilization at reference prices and
-        starts curtailing at the same *relative* price, which is what keeps the
+        Every producer runs at full utilization at reference prices and starts
+        curtailing at the same *relative* price, which is what keeps the
         seeded circuit exactly stationary and the frozen yayo baseline
         comparable.
         """
         return reference_price * region_cost / self.reference_price
+
+    def operating_overhead(
+        self, commodity: str, region_cost: float
+    ) -> float:
+        """Operating overhead: the total unit cost minus input costs at ref.
+
+        With input costs now explicit, the old ``unit_cost`` (which assumed
+        free inputs) has to be split. The operating overhead is what remains
+        after input prices at reference are subtracted.  For the drug lab this
+        goes to zero because the entire prior margin was consumed by the
+        implicit input cost.
+        """
+        ref_prices = {
+            YAYO: self.reference_price,
+            LEAVES: self.leaves_reference_price,
+            CHEMFUEL: self.chemfuel_reference_price,
+        }
+        processes = circuit_processes(self)
+        process = processes[commodity]
+        input_cost_per_run = process.input_cost_per_run(ref_prices)
+        output_per_run = process.outputs.get(commodity, 1.0)
+        input_cost_per_unit = input_cost_per_run / max(output_per_run, 1e-9)
+        total = self.total_unit_cost(ref_prices[commodity], region_cost)
+        return max(0.0, total - input_cost_per_unit)
 
 
 def drug_commodity(parameters: ScenarioParameters | None = None) -> Commodity:
@@ -215,7 +239,7 @@ def _region(
             producer_names[key],
             key,
             capacity[key],
-            parameters.unit_cost(commodities[key].reference_price, yayo_cost),
+            parameters.operating_overhead(key, yayo_cost),
             parameters.zero_utilization_price_ratio,
             parameters.full_utilization_price_ratio,
             process=processes[key],
