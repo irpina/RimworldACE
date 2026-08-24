@@ -45,7 +45,13 @@ circuit rather than beside it. It supports:
   value;
 - explicit material and silver ledgers separating final from productive
   consumption, with investment spending and reserve depletion tracked;
-- fixed Labor Content value beside the market price.
+- endogenous labor values solved from the process graph: transferred
+  labor plus living labor per unit of output, iterated to a fixed point
+  so a cyclic graph is answerable and a non-productive one fails loudly.
+  The social (output-weighted) value and each region's individual value
+  are reported separately, which is where the average/marginal
+  distinction shows. The authored `FINDINGS.md` figure stays untouched
+  on the commodity for comparison.
 
 Per-unit ratios and reference prices are read from RimWorld's own defs. The
 modelling choices — mass apportionment for joint products, proportional input
@@ -55,7 +61,9 @@ are in `docs/13-cost-floor-and-investment-design.md`. The resource reserve and
 rent decisions are in `docs/15-resource-reserves-design.md`. The wage
 relation, subsistence basket, and surplus ledger decisions — including the
 floating-point engineering that keeps the equilibrium exactly stationary —
-are in `docs/17-labor-power-and-surplus-design.md`. Read all four before
+are in `docs/17-labor-power-and-surplus-design.md`. The value equation,
+its social scope, and the technique-change scenario are in
+`docs/19-endogenous-labor-values-design.md`. Read all five before
 changing them; each was chosen deliberately and several have defensible
 alternatives.
 
@@ -82,6 +90,15 @@ upward):
 
 ```text
 python -m economy_lab subsistence-shock
+```
+
+Run the technique change: a provisioning technique with half the living
+labor enters one region, so the social value of the wage good falls and
+the rate of surplus value rises in *both* regions with the working day
+and the basket held fixed — relative surplus value:
+
+```text
+python -m economy_lab technique-change
 ```
 
 Compare current behavior with the deliberately frozen reference. This is a
@@ -134,22 +151,29 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 65 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 75 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
-the glut and producer-loss shocks, and twelve labor/subsistence observations
+the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
-the employment and meal-price paths through both shocks). The reporter
-remains observational; the invariant tests protect correctness.
+the employment and meal-price paths through both shocks), and ten labor
+value observations (the four endogenous values, and the technique-change
+scenario's social, adopter, and laggard values with both regions' rate of
+surplus value). The reporter remains observational; the invariant tests
+protect correctness.
 
-The current reference describes the model with the wage relation. Its design
-and results are in `docs/17-labor-power-and-surplus-design.md` and
-`docs/18-labor-power-and-surplus-results.md`; the cost floor and reserve
-layers beneath it are in docs/13–16.
+The current reference describes the model with endogenous labor values. Its
+design and results are in `docs/19-endogenous-labor-values-design.md` and
+`docs/20-endogenous-labor-values-results.md`; the wage relation, cost floor,
+and reserve layers beneath it are in docs/13–18. Adding endogenous values
+moved none of the existing 65 metrics.
 
 ## Intentionally absent from this slice
 
-- endogenous labor values propagated through processes (the rate of surplus
-  value is therefore still closed-form, not emergent — docs/18);
+- competitive transmission from cost to price: a cheaper technique cannot
+  undercut, take share, or drive anyone out, so a productivity gain shows
+  up fully in labor value and not at all in price (docs/20);
+- labor content of resource grades, so depletion moves value as well as
+  cost and rent;
 - absolute (monopoly) rent;
 - wage deviations from value: bargaining, the reserve army, mobility;
 - credit and bankruptcy;
@@ -158,6 +182,7 @@ layers beneath it are in docs/13–16.
 - more than four commodities or two regions;
 - RimWorld runtime integration.
 
-The next slice should propagate labor values endogenously through the
-process graph, turning the frozen `FINDINGS.md` figures into model
-quantities.
+The next slice should add competitive transmission from cost to price.
+Until a cheaper producer can undercut, take share, or drive a dearer one
+out, a productivity gain moves labor value and leaves price untouched,
+which is half of a real mechanism.

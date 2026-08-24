@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `27af376` (wage relation + surplus ledger)
-**Behavioral baseline:** `1b74e6d` (65 metrics: 53 refreshed for wages + 12 labor observations)
+**Latest Stage 0 model commit:** `9426caf` (endogenous labor values)
+**Behavioral baseline:** `36ac2a3` (75 metrics: 65 unchanged + 10 value observations)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -23,6 +23,9 @@
 **Wage-relation design:** `13ec465`
 **Wage-relation implementation:** `27af376`
 **Wage-relation results:** `5985878`
+**Endogenous value design:** `0c5bbf6`
+**Endogenous value implementation:** `9426caf`
+**Endogenous value results:** `c3db687`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -250,6 +253,11 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/19-endogenous-labor-values-design.md` — the value equation, the
+  iterative solve, output-weighted social scope, and the technique-change
+  scenario decided in advance;
+- `docs/20-endogenous-labor-values-results.md` — validation against the
+  closed analysis, relative surplus value, and the value/price divergence;
 - `docs/18-labor-power-and-surplus-results.md` — s/v and its determination,
   prediction scorecard, the glut-as-layoff finding, wage-push non-propagation.
 
@@ -287,6 +295,11 @@ Commits:
 - `5985878` — Record labor-power results: nine of fifty-three metrics moved, s/v is 38.344
 - `ecf757c` — Refresh baseline for the wage relation
 - `1b74e6d` — Freeze newly observed labor and subsistence quantities
+- `0c5bbf6` — Record endogenous labor value design decisions
+- `9426caf` — Solve labor values endogenously from the process graph
+- `fc4e06d` — Add technique-change scenario and endogenous value tests
+- `36ac2a3` — Freeze ten newly observed labor value quantities
+- `c3db687` — Record endogenous labor value results
 
 ### Current vertical slice
 
@@ -339,7 +352,13 @@ It supports:
   work-ticks per region, observational, with the silver wage bill and
   basket shortfall recorded beside them — money profit is not surplus
   value, and the money wage is not necessary labor;
-- fixed labor value beside dynamic market price;
+- **endogenous labor values**: transferred labor plus living labor per unit
+  of output, solved from the process graph by iteration (so a cyclic graph
+  is answerable and a non-productive one fails loudly), aggregated as total
+  labor over total output across active producers. Per-region individual
+  values sit beside the social value, which is where the average/marginal
+  distinction becomes visible. `Commodity.labor_value` keeps the authored
+  `FINDINGS.md` figure, untouched, for comparison;
 - explicit commodity and silver balance checks, with productive consumption
   booked separately from final consumption, investment spending and reserve
   depletion tracked.
@@ -455,7 +474,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 51 tests pass;
+- all 68 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -521,6 +540,7 @@ python -m economy_lab all
 python -m economy_lab input-shortage
 python -m economy_lab depletion
 python -m economy_lab subsistence-shock
+python -m economy_lab technique-change
 python -m economy_lab.baseline
 python -m economy_lab.sensitivity
 ```
@@ -687,7 +707,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–7 are **done**.
+Steps 1–8 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -709,14 +729,30 @@ Steps 1–7 are **done**.
    wage bill, and the silver circuit closes. Hired-worker *contracts* (the
    player colony hiring outside workers) remain a Stage 1 gameplay concern.
 
-8. **Next economic feature:** propagate labor values endogenously through
-   the process graph — the Stage 0 embodied-labor solve. This is what turns
-   `Commodity.labor_value` from a frozen `FINDINGS.md` figure into a model
-   quantity, and with it the rate of surplus value from a closed-form
-   parameter into an emergent one (docs/18). Alternatives if that is judged
-   premature: wage deviations from value (bargaining and the reserve army),
-   or capacity depreciation to retire the idle surplus that buffer
-   investment leaves behind.
+8. ~~Propagate labor values endogenously through the process graph.~~ Done:
+   values are solved by iteration, validated against the closed analysis
+   (exact for the two input-free commodities, high by exactly the stylized
+   chemfuel link for the two downstream ones), and the rate of surplus
+   value is now an outcome. A technique change in the wage-goods sector
+   moves it from 38.344 to 43.944 with the working day and the basket held
+   fixed — relative surplus value, emergent (docs/20).
+
+9. **Next economic feature — competitive transmission from cost to price.**
+   `docs/20` records the sharpest gap the model now has: a technique that
+   halves the labor in a wage good lowers its value by 12.46% and its price
+   by exactly nothing. Price formation is anchored to a static reference
+   and driven by inventory coverage, and there is no undercutting, no
+   share-shifting toward the cheaper producer, and no exit. Until that
+   exists, every productivity result is half a mechanism. Capacity
+   depreciation and mothballing are the natural companion, since exit needs
+   somewhere to go.
+
+   Other candidates, in rough order of thesis value: labor content of
+   resource grades (so depletion moves value, not only cost and rent —
+   deliberately deferred in docs/19 §9 because it touches living-labor
+   accounting, the wage bill, the labor pool, and the value solve at once);
+   wage deviations from the value of labor-power; absolute rent; credit and
+   bankruptcy.
 
 The sensitivity sweep has not been re-run since the cost floor landed;
 `sensitivity_results.csv` describes the free-production model. Re-run it once
@@ -750,9 +786,15 @@ it is not intended for per-commit testing.
 
 - ~~capital-goods costs for capacity investment~~ — done;
 - ~~producers paying cash for their inputs~~ — done via effective unit cost;
-- labor value propagated endogenously through processes; `Process.direct_labor`
-  is recorded but `Commodity.labor_value` remains the static `FINDINGS.md`
-  figure;
+- ~~labor value propagated endogenously through processes~~ — done;
+  `Commodity.labor_value` deliberately keeps the authored `FINDINGS.md`
+  figure and the solved values live on the `Economy` beside it, so the two
+  can be compared rather than conflated;
+- competitive transmission from cost to price: a cheaper technique does not
+  undercut, take share, or drive anyone out, so a productivity gain appears
+  fully in labor value and not at all in price (`docs/20`);
+- labor content of resource grades: a poorer deposit costs more silver but
+  no more labor, so depletion moves cost and rent but not value;
 - joint products in an actual scenario — the mass apportionment rule is
   implemented and unit-tested, but every current process has one output;
 - ~~resource reserves, grades, and differential rent~~ — done for chemfuel;
@@ -778,8 +820,14 @@ includes wages. Capacity investment consumes silver. Extraction draws from
 finite reserves with grade depletion and differential rent. Workers are paid
 the reproduction cost of labor-power and buy real meals; surplus labor is
 measured, not asserted. All material and silver ledgers close, with silver
-now cycling rather than flowing one way. The reproduction circuit is closed
-except that labor values themselves are still exogenous.
+now cycling rather than flowing one way. labor values are solved from the
+process graph and reproduce the closed analysis exactly, save for the one
+link `docs/08` declared stylized.
+
+The reproduction circuit is now closed in both directions: goods are made
+from goods and labor, and labor is reproduced by goods. What it still lacks
+is competition — the mechanism that would carry a cost advantage into a
+price.
 
 ---
 
