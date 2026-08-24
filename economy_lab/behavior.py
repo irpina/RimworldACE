@@ -8,6 +8,7 @@ from .model import Economy
 
 from .scenarios import (
     DAYS_PER_QUADRUM,
+    MEALS,
     ScenarioParameters,
     arbitrage,
     CHEMFUEL,
@@ -173,4 +174,66 @@ def collect_behavioral_metrics(
             terminal_label="terminal",
         )
     )
+    metrics.update(_labor_metrics(stable=stable, glut=glut, loss=loss))
     return metrics
+
+
+def _employment_series(economy: Economy, region: str) -> list:
+    return [h["regions"][region]["employment"] for h in economy.history]
+
+
+def _labor_metrics(
+    *, stable: Economy, glut: Economy, loss: Economy
+) -> Dict[str, Dict[str, object]]:
+    """Observe the wage relation (docs/17, docs/18).
+
+    Frozen as newly observed quantities, not changed behavior.  The rate of
+    surplus value is the labor-time ratio; the wage rate is the money form
+    of variable capital — kept as separate observations, never combined.
+    """
+    stable_region = stable.regions[LOCAL_REGION]
+    glut_employment = _employment_series(glut, LOCAL_REGION)[SHOCK_DAY + 1 :]
+    glut_meal_prices = glut.series(LOCAL_REGION, MEALS)[SHOCK_DAY + 1 :]
+    loss_employment = _employment_series(loss, LOCAL_REGION)[SHOCK_DAY + 1 :]
+    loss_meal_prices = loss.series(LOCAL_REGION, MEALS)[SHOCK_DAY + 1 :]
+    employment_trough = min(glut_employment)
+    loss_employment_trough = min(loss_employment)
+    return {
+        "equilibrium.local.employment_worker_days": _metric(
+            stable_region.worker_days_earned, "worker-days"
+        ),
+        "equilibrium.local.wage_rate": _metric(
+            stable_region.wage_rate(), "silver"
+        ),
+        "equilibrium.rate_of_surplus_value": _metric(
+            stable.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "equilibrium.local.meals.settled_price": _metric(
+            stable_region.prices[MEALS], "silver"
+        ),
+        "equilibrium.local.meals.settled_inventory": _metric(
+            stable_region.inventory[MEALS], "units"
+        ),
+        "glut.local.employment_trough": _metric(
+            employment_trough, "worker-days"
+        ),
+        "glut.local.employment_trough_day": _metric(
+            SHOCK_DAY + 1 + glut_employment.index(employment_trough), "day"
+        ),
+        "glut.local.meals.price_range": _metric(
+            max(glut_meal_prices) - min(glut_meal_prices), "silver"
+        ),
+        "producer_loss.local.employment_trough": _metric(
+            loss_employment_trough, "worker-days"
+        ),
+        "producer_loss.local.employment_trough_day": _metric(
+            SHOCK_DAY + 1 + loss_employment.index(loss_employment_trough),
+            "day",
+        ),
+        "producer_loss.local.meals.price_trough": _metric(
+            min(loss_meal_prices), "silver"
+        ),
+        "producer_loss.local.meals.price_peak": _metric(
+            max(loss_meal_prices), "silver"
+        ),
+    }

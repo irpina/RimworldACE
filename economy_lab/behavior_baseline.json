@@ -10,9 +10,29 @@
       "unit": "silver",
       "value": 0.0
     },
+    "equilibrium.local.employment_worker_days": {
+      "unit": "worker-days",
+      "value": 0.314065
+    },
+    "equilibrium.local.meals.settled_inventory": {
+      "unit": "units",
+      "value": 12.751667
+    },
+    "equilibrium.local.meals.settled_price": {
+      "unit": "silver",
+      "value": 15.0
+    },
+    "equilibrium.local.wage_rate": {
+      "unit": "silver",
+      "value": 30.0
+    },
     "equilibrium.local_price_range": {
       "unit": "silver",
       "value": 0.0
+    },
+    "equilibrium.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 38.344367
     },
     "glut.distant_trough_day": {
       "unit": "day",
@@ -61,6 +81,18 @@
     "glut.local.chemfuel.settled_price": {
       "unit": "silver",
       "value": 2.3
+    },
+    "glut.local.employment_trough": {
+      "unit": "worker-days",
+      "value": 0.000202
+    },
+    "glut.local.employment_trough_day": {
+      "unit": "day",
+      "value": 62
+    },
+    "glut.local.meals.price_range": {
+      "unit": "silver",
+      "value": 0.0
     },
     "glut.local.psychoid_leaves.inventory_peak": {
       "unit": "units",
@@ -165,6 +197,22 @@
     "producer_loss.local.chemfuel.terminal_price": {
       "unit": "silver",
       "value": 2.917596
+    },
+    "producer_loss.local.employment_trough": {
+      "unit": "worker-days",
+      "value": 0.058332
+    },
+    "producer_loss.local.employment_trough_day": {
+      "unit": "day",
+      "value": 62
+    },
+    "producer_loss.local.meals.price_peak": {
+      "unit": "silver",
+      "value": 16.398671
+    },
+    "producer_loss.local.meals.price_trough": {
+      "unit": "silver",
+      "value": 11.69763
     },
     "producer_loss.local.psychoid_leaves.inventory_peak": {
       "unit": "units",
