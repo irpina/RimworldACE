@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `6eed091` (resource reserves + differential rent)
-**Behavioral baseline:** `faa554b` (53 metrics, unchanged by reserves)
+**Latest Stage 0 model commit:** `27af376` (wage relation + surplus ledger)
+**Behavioral baseline:** `1b74e6d` (65 metrics: 53 refreshed for wages + 12 labor observations)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -20,6 +20,9 @@
 **Reserve design:** `34bf3ba`
 **Reserve implementation:** `6eed091`
 **Reserve results:** `d640485`
+**Wage-relation design:** `13ec465`
+**Wage-relation implementation:** `27af376`
+**Wage-relation results:** `5985878`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -243,7 +246,12 @@ Locations:
 - `docs/15-resource-reserves-design.md` — finite reserves, grade depletion,
   marginal extraction cost, and differential rent decisions;
 - `docs/16-resource-reserves-results.md` — prediction scorecard, depletion
-  scenario timeline, permanently displaced inventory explanation.
+  scenario timeline, permanently displaced inventory explanation;
+- `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
+  basket, labor supply, surplus ledger, treatment of the old unit cost, and
+  the exact-stationarity floating-point engineering;
+- `docs/18-labor-power-and-surplus-results.md` — s/v and its determination,
+  prediction scorecard, the glut-as-layoff finding, wage-push non-propagation.
 
 Commits:
 
@@ -273,16 +281,27 @@ Commits:
 - `6eed091` — Add finite resource reserves with grade depletion and differential rent
 - `aa22edd` — Add depletion scenario and reserve tests
 - `d640485` — Record resource reserve results
+- `13ec465` — Record labor-power and surplus ledger design decisions
+- `4e923fd` — Add wage-relation machinery: worker cash, basket, labor pool, surplus ledger
+- `27af376` — Wire the wage relation into the circuit: meals, wages, and the surplus ledger
+- `5985878` — Record labor-power results: nine of fifty-three metrics moved, s/v is 38.344
+- `ecf757c` — Refresh baseline for the wage relation
+- `1b74e6d` — Freeze newly observed labor and subsistence quantities
 
 ### Current vertical slice
 
-The model has a three-commodity circuit that forks, two regional markets, and
-one expensive planetary route:
+The model has a four-commodity circuit, two regional markets, and one
+expensive planetary route:
 
 ```
 chemfuel ──┬──> psychoid farm ──> psychoid leaves ──> drug lab ──> yayo
            └────────────────────────────────────────────^
+provisioners ──> meals ──> workers ──> labor-power ──> every producer
 ```
+
+Meals are the subsistence commodity (MealSimple: reference 15, 305 embodied
+ticks); the provisioners' raw-food feedstock sits outside the boundary like
+chemfuel's organic inputs.
 
 It supports:
 
@@ -310,6 +329,16 @@ It supports:
 - **differential rent**: the cost advantage of infra-marginal regions over
   the most expensive active extractor, tracked as a separate quantity in the
   ledger (not collapsed into labor value or profit);
+- **the wage relation**: workers are paid the subsistence basket (2 meals)
+  at current regional prices; the wage enters effective unit cost through
+  the cost-floor machinery; silver cycles producer → wage → worker → basket
+  purchase → producer revenue and conserves exactly;
+- **a fixed regional labor pool** with pro-rata rationing when planned
+  labor exceeds it (never binding in the seeded scenarios);
+- **the surplus ledger**: living, necessary, and surplus labor in
+  work-ticks per region, observational, with the silver wage bill and
+  basket shortfall recorded beside them — money profit is not surplus
+  value, and the money wage is not necessary labor;
 - fixed labor value beside dynamic market price;
 - explicit commodity and silver balance checks, with productive consumption
   booked separately from final consumption, investment spending and reserve
@@ -379,22 +408,56 @@ than one producer, and contention is where accounting bugs hide.
 - **reserve depletion tracking**: `Ledger.reserve_depletion` equals production
   for extraction commodities (a testable accounting identity).
 
+**Wage-relation decisions** are in `docs/17-labor-power-and-surplus-design.md`.
+The load-bearing additions:
+
+- **labor vs labor-power**: labor is the activity (a cost coefficient);
+  labor-power is the commodity a wage buys, valued at its reproduction cost.
+  Surplus value is only computable because the two are separate;
+- **the wage is additive to effective cost**: the old operating overheads are
+  reinterpreted as non-labor overhead. Splitting a wage out of them is
+  numerically impossible (the drug lab's overhead is zero against 350 ticks
+  of labor); the fat pre-wage margins implicitly contained the unpaid wage
+  fund, and making labor-power a paid commodity moves that portion from
+  measured profit into cost. The loud check is at seeding: any producer
+  pushed below full utilization at reference prices raises;
+- **wages today, bread tomorrow**: worker basket demand lags employment by
+  one day, keeping the planning fixed point unchanged;
+- **exact-stationarity engineering**: employment quantized to a 2^-20
+  worker-day grid, power-of-two basket (2 meals) and provisioning capacity
+  (1.0/day), and seeding at the exactly-repeating quantized fixed point.
+  This is why the four-commodity equilibrium reports a price range of
+  exactly zero rather than 1e-13;
+- **s/v is closed-form at this stage**: (24000 − 610)/610 = 38.344, set by
+  the working day and basket parameters plus the meal's embodied labor.
+  It becomes emergent only with endogenous labor values, wage bargaining,
+  or an endogenous basket — all deliberately later.
+
 ### Current calibrated behavior
 
-- equilibrium remains exactly stable for four in-game years;
+- equilibrium remains exactly stable for four in-game years, now for four
+  commodities including meals, with the wage circuit running daily;
+- the equilibrium wage is **30 silver per worker-day**, employment is
+  **0.314 worker-days/day** per region, and the rate of surplus value is
+  **38.344** (labor-time ratio, constant through every shock);
 - a glut equal to 25% of annual regional yayo consumption lowers the local
-  price from 21 to **14.356** (shallower than previously — the drug lab now
-  curtails on cost during the glut);
+  price from 21 to **14.368** (shallower again — the wage raised the drug
+  lab's curtailment threshold);
 - the distant region only falls to **20.464**;
 - arbitrage exports **11 units** before the spread closes;
 - destroying 60% of regional capacity raises the price to **38.630**;
 - replacement capacity restores at least 80% of baseline supply within the
   four-to-eight-quadrum target;
 - post-shock upstream buffers refill to target rather than persisting as
-  scar tissue (converges by day 400);
-- all 38 tests pass;
-- commodity and silver residuals close to floating-point zero for all three
-  commodities, including investment spending;
+  scar tissue (converges by day 400, identical endpoint to the pre-wage
+  model);
+- destroying 70% of one region's provisioning triples the meal price and
+  the wage, records a 9-meal basket shortfall and forced worker savings,
+  and rebuilds through ordinary investment — without moving yayo or leaf
+  prices at all (wage share of cost is too small to curtail);
+- all 51 tests pass;
+- commodity and silver residuals close to floating-point zero for all four
+  commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
 
 These are provisional gameplay targets, not empirical claims about real-world
@@ -432,6 +495,19 @@ input share is too small (0.2/yayo, 0.05/leaf) for a 44% chemfuel price
 increase to push downstream margins into curtailment. Green River earns
 1,816 silver in differential rent over 300 days. All ledgers close.
 
+**The wage relation** (`docs/18`): moved nine of 53 metrics, all through the
+one designed channel (the wage in effective unit cost). The glut trough
+shallowed (14.356 → 14.368) and half-recovery quickened (9 → 8 days);
+producer-loss day-210 transients drifted 1–2% while the converged day-400
+endpoint is identical. Equilibrium, the producer-loss peak, arbitrage, and
+every upstream extremum are exactly unchanged. New findings: the glut is a
+mass layoff (employment collapses to 0.0002 worker-days on day 62) that
+subsistence production absorbs with a perfectly flat meal price; the
+producer-loss cycle produces the first real-wage dynamics (wage 23.40 →
+32.80); and wage-push does not propagate at this calibration because the
+wage is ~2.7% of the drug lab's cost — the labor-side counterpart of the
+chemfuel input-share finding in docs/16.
+
 The `input-shortage` scenario exercises the material constraint: 70% of Dust
 Basin's psychoid fields destroyed, leaf price up 2.6× and yayo up 1.66×.
 With the cost floor, the drug lab curtails smoothly through cost rather than
@@ -444,6 +520,7 @@ python -m unittest discover -s tests -v
 python -m economy_lab all
 python -m economy_lab input-shortage
 python -m economy_lab depletion
+python -m economy_lab subsistence-shock
 python -m economy_lab.baseline
 python -m economy_lab.sensitivity
 ```
@@ -457,24 +534,24 @@ run will include 32.
 
 ### Behavioral observation checkpoint
 
-`economy_lab/behavior_baseline.json` freezes 53 current behavioral metrics: the
-original thirteen final-good observations plus forty upstream observations.
-`python -m economy_lab.baseline` re-runs the scenarios and prints reference,
-current value, absolute delta, and percentage delta. It is deliberately a
-report rather than a pass/fail test; the 25-test suite remains the
-authoritative invariant checks. Replace the reference only with
-`--write-reference` after an understood behavioral change, and say why the
-numbers moved in the commit message.
+`economy_lab/behavior_baseline.json` freezes 65 current behavioral metrics:
+thirteen final-good observations, forty upstream observations, and twelve
+labor/subsistence observations. `python -m economy_lab.baseline` re-runs the
+scenarios and prints reference, current value, absolute delta, and percentage
+delta. It is deliberately a report rather than a pass/fail test; the 51-test
+suite remains the authoritative invariant checks. Replace the reference only
+with `--write-reference` after an understood behavioral change, and say why
+the numbers moved in the commit message.
 
 Current frozen headline metrics include:
 
-- local glut trough: **14.356472** on day 66;
+- local glut trough: **14.367961** on day 66;
 - distant glut trough: **20.464413** on day 80;
-- local half-gap recovery: **9 days / 0.6 quadrums**;
+- local half-gap recovery: **8 days / 0.533 quadrums**;
 - arbitrage exports: **11 units**;
 - producer-loss peak: **38.630290** on day 119;
 - 80% capacity recovery: **75 days / 5 quadrums**;
-- equilibrium price range: **0** in both regions.
+- equilibrium price range: **0** in both regions, all four commodities.
 
 Current upstream headline observations include:
 
@@ -482,10 +559,19 @@ Current upstream headline observations include:
 - glut chemfuel settlement: **2.300000 / 120 units**;
 - producer-loss leaf trough: **0.693449** on day 70;
 - producer-loss chemfuel trough: **1.918998** on day 69;
-- producer-loss leaf terminal: **2.507273 / 1,425.509** (day 210, still in
+- producer-loss leaf terminal: **2.467308 / 1,454.371** (day 210, still in
   buffer-rebuild transit; converges to 1.900 / 1,891 by day 400);
-- producer-loss chemfuel terminal: **2.934490 / 103.895** (same — converges
+- producer-loss chemfuel terminal: **2.917596 / 104.624** (same — converges
   to 2.300 / 151 by day 400).
+
+Labor and subsistence observations (frozen at `1b74e6d`):
+
+- equilibrium employment: **0.314065 worker-days/day**; wage **30 silver**;
+- rate of surplus value: **38.344367** (labor-time ratio);
+- meal settlement: **15.000000 / 12.751667**;
+- glut employment trough: **0.000202** on day 62, meal price range **0**;
+- producer-loss employment trough: **0.058332** on day 62; meal price
+  cycles **11.697630 – 16.398671**.
 
 The former glut hysteresis was a **control-law bug**, not a capacity reallocation
 or ledger leak. It is resolved by the design in `docs/11`: planned output follows
@@ -601,7 +687,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–6 are **done**.
+Steps 1–7 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -617,14 +703,32 @@ Steps 1–6 are **done**.
    and differential rent.~~ Done: chemfuel synthesis draws from a regional
    reserve with ordered grades; differential rent tracked in the ledger.
 
-7. **Next economic feature:** add the local subsistence basket and
-   hired-worker contracts.
+7. ~~Add the local subsistence basket and wage labor.~~ Done: meals are the
+   fourth commodity, workers are paid the basket at current prices, the
+   surplus ledger separates living/necessary/surplus labor from the money
+   wage bill, and the silver circuit closes. Hired-worker *contracts* (the
+   player colony hiring outside workers) remain a Stage 1 gameplay concern.
+
+8. **Next economic feature:** propagate labor values endogenously through
+   the process graph — the Stage 0 embodied-labor solve. This is what turns
+   `Commodity.labor_value` from a frozen `FINDINGS.md` figure into a model
+   quantity, and with it the rate of surplus value from a closed-form
+   parameter into an emergent one (docs/18). Alternatives if that is judged
+   premature: wage deviations from value (bargaining and the reserve army),
+   or capacity depreciation to retire the idle surplus that buffer
+   investment leaves behind.
 
 The sensitivity sweep has not been re-run since the cost floor landed;
 `sensitivity_results.csv` describes the free-production model. Re-run it once
 the model stabilizes. New parameters to include: `construction_cost_multiplier`,
 `min_investment_capacity`, `buffer_refill_horizon_days`,
-`chemfuel_reserve_per_region`, `chemfuel_expensive_cost_multiplier`.
+`chemfuel_reserve_per_region`, `chemfuel_expensive_cost_multiplier`,
+`meal_capacity_per_day`, `meals_per_worker_day`, `ticks_per_worker_day`,
+`labor_pool_worker_days`, `worker_initial_cash_days`. Note that
+`meals_per_worker_day` and `meal_capacity_per_day` are part of the
+exact-stationarity engineering (docs/17 §7): a ±10% perturbation will break
+the exact zero equilibrium range by design, which the sweep should report,
+not "fix".
 
 Two safe tracks can now proceed independently:
 
@@ -653,20 +757,29 @@ it is not intended for per-commit testing.
   implemented and unit-tested, but every current process has one output;
 - ~~resource reserves, grades, and differential rent~~ — done for chemfuel;
   absolute (monopoly) rent is still absent;
-- labor supply and wages;
-- the poverty/subsistence basket;
-- credit, bankruptcy, and liquidity-constrained consumption;
+- ~~labor supply and wages~~ — done: fixed regional pool, wage at the value
+  of labor-power, surplus ledger;
+- ~~the subsistence basket~~ — done as the meals commodity; the basket is
+  deliberately minimal (meals only), so the value of labor-power is
+  understated and s/v overstated (docs/17 §5);
+- wage deviations from value: bargaining, the reserve army, worker mobility;
+- credit, bankruptcy, and liquidity-constrained consumption (workers are
+  cash-constrained on the basket, but nothing else is);
 - capacity depreciation or mothballing (idle surplus from buffer investment
   persists indefinitely);
-- individual producer cash accounts and transfer pricing;
-- more than three commodities or two regions;
+- individual producer cash accounts and transfer pricing (wages are paid
+  from the regional pool; producer-level exploitation accounts need
+  producer-level cash);
+- more than four commodities or two regions;
 - RimWorld save/UI/runtime integration.
 
-Production consumes accounted inventory and pays a cost floor. Capacity
-investment consumes silver. Extraction draws from finite reserves with grade
-depletion and differential rent. All material and silver ledgers close. The
-model is closer to a closed reproduction model but still lacks wages and
-the subsistence basket.
+Production consumes accounted inventory and pays a cost floor that now
+includes wages. Capacity investment consumes silver. Extraction draws from
+finite reserves with grade depletion and differential rent. Workers are paid
+the reproduction cost of labor-power and buy real meals; surplus labor is
+measured, not asserted. All material and silver ledgers close, with silver
+now cycling rather than flowing one way. The reproduction circuit is closed
+except that labor values themselves are still exogenous.
 
 ---
 

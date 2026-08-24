@@ -4,16 +4,18 @@ This is the dependency-free, deterministic prototype for the economy mod. It
 exists to make the economic rules falsifiable before UI, pawn AI, saves, or
 Harmony complicate debugging.
 
-The model is a three-commodity circuit in two regional markets:
+The model is a four-commodity circuit in two regional markets:
 
 ```
 chemfuel ──┬──> psychoid farm ──> psychoid leaves ──> drug lab ──> yayo
            └────────────────────────────────────────────^
+provisioners ──> meals ──> workers ──> labor-power ──> every producer
 ```
 
 Chemfuel is consumed by two producers, so contention for a scarce shared input
-is exercised; leaves sit between two stages, so a shortage has to travel. It
-supports:
+is exercised; leaves sit between two stages, so a shortage has to travel;
+meals reproduce labor-power, so the wage relation lives inside the material
+circuit rather than beside it. It supports:
 
 - accounted input-output production: a producer must source real inventory,
   and one that cannot is rationed rather than subsidised;
@@ -34,6 +36,13 @@ supports:
   are extracted first, and the marginal cost rises when they exhaust;
 - differential rent tracked as a separate quantity: the cost advantage of
   infra-marginal regions over the most expensive active extractor;
+- the wage relation: workers are paid the subsistence basket (meals) at
+  current regional prices, wages enter effective unit cost, and silver
+  cycles producer → wage → worker → basket purchase → producer revenue;
+- a fixed regional labor pool with pro-rata rationing when it binds;
+- a surplus ledger separating living, necessary, and surplus labor
+  (work-ticks) from the silver wage bill — money profit is not surplus
+  value;
 - explicit material and silver ledgers separating final from productive
   consumption, with investment spending and reserve depletion tracked;
 - fixed Labor Content value beside the market price.
@@ -43,8 +52,11 @@ modelling choices — mass apportionment for joint products, proportional input
 rationing, simultaneous production, derived demand — are recorded in
 `docs/08-accounted-input-design.md`. The cost floor and investment decisions
 are in `docs/13-cost-floor-and-investment-design.md`. The resource reserve and
-rent decisions are in `docs/15-resource-reserves-design.md`. Read all three
-before changing them; each was chosen deliberately and several have defensible
+rent decisions are in `docs/15-resource-reserves-design.md`. The wage
+relation, subsistence basket, and surplus ledger decisions — including the
+floating-point engineering that keeps the equilibrium exactly stationary —
+are in `docs/17-labor-power-and-surplus-design.md`. Read all four before
+changing them; each was chosen deliberately and several have defensible
 alternatives.
 
 Run all example scenarios:
@@ -63,6 +75,13 @@ Run the depletion scenario (one region's cheap chemfuel grade exhausts):
 
 ```text
 python -m economy_lab depletion
+```
+
+Run the subsistence shock (meal scarcity drags the wage, and every cost,
+upward):
+
+```text
+python -m economy_lab subsistence-shock
 ```
 
 Compare current behavior with the deliberately frozen reference. This is a
@@ -115,30 +134,30 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` retains the original thirteen yayo metrics and also
-observes upstream chemfuel and psychoid leaves during the glut and producer-loss
-shocks. For each upstream commodity it freezes post-shock price and inventory
-extrema (including their days). The genuinely stationary glut path also records
-its settled price and stock; the still-moving producer-loss path labels its last
-observation as terminal rather than implying equilibrium. The reporter remains
-observational; the invariant tests protect correctness.
+`behavior_baseline.json` freezes 65 metrics: the original thirteen yayo
+metrics, forty upstream observations of chemfuel and psychoid leaves during
+the glut and producer-loss shocks, and twelve labor/subsistence observations
+(equilibrium employment, wage, rate of surplus value, meal settlement, and
+the employment and meal-price paths through both shocks). The reporter
+remains observational; the invariant tests protect correctness.
 
-The current reference describes the cost floor and buffer-aware investment
-model. Its design and results are in `docs/13-cost-floor-and-investment-design.md`
-and `docs/14-cost-floor-and-investment-results.md`. The resource reserve addition
-did not change any existing metric; its design and results are in
-`docs/15-resource-reserves-design.md` and `docs/16-resource-reserves-results.md`.
+The current reference describes the model with the wage relation. Its design
+and results are in `docs/17-labor-power-and-surplus-design.md` and
+`docs/18-labor-power-and-surplus-results.md`; the cost floor and reserve
+layers beneath it are in docs/13–16.
 
 ## Intentionally absent from this slice
 
-- endogenous labor values propagated through processes;
+- endogenous labor values propagated through processes (the rate of surplus
+  value is therefore still closed-form, not emergent — docs/18);
 - absolute (monopoly) rent;
-- labor supply, wages, and the subsistence basket;
+- wage deviations from value: bargaining, the reserve army, mobility;
 - credit and bankruptcy;
 - capacity depreciation or mothballing;
 - individual producer cash accounts and transfer pricing;
-- more than three commodities or two regions;
+- more than four commodities or two regions;
 - RimWorld runtime integration.
 
-The next slice should add the local subsistence basket and hired-worker
-contracts.
+The next slice should propagate labor values endogenously through the
+process graph, turning the frozen `FINDINGS.md` figures into model
+quantities.
