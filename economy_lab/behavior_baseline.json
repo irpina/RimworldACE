@@ -20,7 +20,7 @@
     },
     "cost_competition.local.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 38.344348
+      "value": 38.298118
     },
     "cost_competition.local.wage_rate": {
       "unit": "silver",
@@ -28,7 +28,7 @@
     },
     "cost_competition.value.meals_ticks": {
       "unit": "ticks",
-      "value": 305.0
+      "value": 305.358799
     },
     "depletion.local.chemfuel.inventory_fraction_of_target": {
       "unit": "fraction",
@@ -68,23 +68,23 @@
     },
     "equilibrium.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 38.344367
+      "value": 38.298137
     },
     "equilibrium.value.chemfuel_ticks": {
       "unit": "ticks",
-      "value": 25.0
+      "value": 25.044852
     },
     "equilibrium.value.meals_ticks": {
       "unit": "ticks",
-      "value": 305.0
+      "value": 305.358799
     },
     "equilibrium.value.psychoid_leaves_ticks": {
       "unit": "ticks",
-      "value": 47.45
+      "value": 47.494336
     },
     "equilibrium.value.yayo_ticks": {
       "unit": "ticks",
-      "value": 734.6
+      "value": 735.974952
     },
     "glut.distant_trough_day": {
       "unit": "day",
@@ -316,7 +316,7 @@
     },
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.462276
+      "value": 42.411207
     },
     "technique_change.local.meals.price": {
       "unit": "silver",
@@ -324,7 +324,7 @@
     },
     "technique_change.local.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.454726
+      "value": 42.403666
     },
     "technique_change.local.wage_rate": {
       "unit": "silver",
@@ -332,15 +332,15 @@
     },
     "technique_change.value.meals_adopter_ticks": {
       "unit": "ticks",
-      "value": 227.343523
+      "value": 227.610968
     },
     "technique_change.value.meals_laggard_ticks": {
       "unit": "ticks",
-      "value": 305.0
+      "value": 305.358799
     },
     "technique_change.value.meals_social_ticks": {
       "unit": "ticks",
-      "value": 266.300229
+      "value": 266.613502
     }
   }
 }
