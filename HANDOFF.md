@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `9f9825b` (cost floor + buffer investment)
-**Behavioral baseline:** `faa554b` (53 metrics after cost floor)
+**Latest Stage 0 model commit:** `6eed091` (resource reserves + differential rent)
+**Behavioral baseline:** `faa554b` (53 metrics, unchanged by reserves)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -17,6 +17,9 @@
 **Production-control results:** `3f9c20b`
 **Cost-floor design:** `a3fcfe7`
 **Cost-floor results:** `9867014`
+**Reserve design:** `34bf3ba`
+**Reserve implementation:** `6eed091`
+**Reserve results:** `d640485`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -236,7 +239,11 @@ Locations:
 - `docs/13-cost-floor-and-investment-design.md` — cost floor, construction-fund
   investment, and buffer-deficit investment decisions;
 - `docs/14-cost-floor-and-investment-results.md` — 53-metric comparison,
-  prediction scorecard, convergence verification.
+  prediction scorecard, convergence verification;
+- `docs/15-resource-reserves-design.md` — finite reserves, grade depletion,
+  marginal extraction cost, and differential rent decisions;
+- `docs/16-resource-reserves-results.md` — prediction scorecard, depletion
+  scenario timeline, permanently displaced inventory explanation.
 
 Commits:
 
@@ -262,6 +269,10 @@ Commits:
 - `9f9825b` — Add buffer-deficit investment motive
 - `9867014` — Record cost-floor and investment results
 - `faa554b` — Refresh baseline for cost floor and buffer investment
+- `34bf3ba` — Record resource reserve and differential rent design decisions
+- `6eed091` — Add finite resource reserves with grade depletion and differential rent
+- `aa22edd` — Add depletion scenario and reserve tests
+- `d640485` — Record resource reserve results
 
 ### Current vertical slice
 
@@ -293,9 +304,16 @@ It supports:
 - **buffer-aware investment**: when a commodity's stock is persistently below
   target and surplus capacity cannot close the gap within
   `buffer_refill_horizon_days`, additional capacity is built;
+- **finite resource reserves**: extraction producers draw from a bounded
+  regional endowment with ordered grades; when the cheapest grade exhausts,
+  the marginal cost rises and the utilization curve responds;
+- **differential rent**: the cost advantage of infra-marginal regions over
+  the most expensive active extractor, tracked as a separate quantity in the
+  ledger (not collapsed into labor value or profit);
 - fixed labor value beside dynamic market price;
 - explicit commodity and silver balance checks, with productive consumption
-  booked separately from final consumption and investment spending tracked.
+  booked separately from final consumption, investment spending and reserve
+  depletion tracked.
 
 ### Process-model decisions — read before changing
 
@@ -344,6 +362,23 @@ than one producer, and contention is where accounting bugs hide.
   effect comes through the utilization curve seeing a higher cost, not through
   a silver movement between entities.
 
+**Resource reserve and rent decisions** are in
+`docs/15-resource-reserves-design.md`. The load-bearing additions:
+
+- **regional reserves with ordered grades**: each region has a
+  `ResourceReserve` per extraction commodity with grade tranches ordered
+  cheapest first. All extraction producers in a region share the same reserve;
+- **dynamic marginal cost**: each day, extraction producers' `unit_cost` is
+  updated to the marginal grade's cost before the utilization curve is
+  evaluated. The cost floor machinery picks this up with no API change;
+- **reserve rationing**: when total wanted extraction exceeds remaining
+  reserve, all extraction producers are scaled down pro-rata;
+- **differential rent**: the cost advantage of infra-marginal regions over
+  the most expensive active extractor, accumulated in the ledger per commodity.
+  Rent is observed, not transferred;
+- **reserve depletion tracking**: `Ledger.reserve_depletion` equals production
+  for extraction commodities (a testable accounting identity).
+
 ### Current calibrated behavior
 
 - equilibrium remains exactly stable for four in-game years;
@@ -357,7 +392,7 @@ than one producer, and contention is where accounting bugs hide.
   four-to-eight-quadrum target;
 - post-shock upstream buffers refill to target rather than persisting as
   scar tissue (converges by day 400);
-- all 30 tests pass;
+- all 38 tests pass;
 - commodity and silver residuals close to floating-point zero for all three
   commodities, including investment spending;
 - identical inputs reproduce identical histories.
@@ -387,6 +422,16 @@ curtails on cost before running out of leaves. Buffer-aware investment
 resolves the post-shock upstream scar — prices return to reference by day 400
 with stocks at their enlarged targets.
 
+**Resource reserves and differential rent** (`docs/16`): moved zero of 53
+metrics. The reserve infrastructure is invisible to existing scenarios (default
+100,000-unit reserves at current operating overhead). The new depletion
+scenario exercises grade transition: Dust Basin's cheap chemfuel grade (600
+units) exhausts at day 100, marginal cost doubles, chemfuel price rises from
+2.30 to 3.33. Downstream prices (leaves, yayo) are unaffected — the chemfuel
+input share is too small (0.2/yayo, 0.05/leaf) for a 44% chemfuel price
+increase to push downstream margins into curtailment. Green River earns
+1,816 silver in differential rent over 300 days. All ledgers close.
+
 The `input-shortage` scenario exercises the material constraint: 70% of Dust
 Basin's psychoid fields destroyed, leaf price up 2.6× and yayo up 1.66×.
 With the cost floor, the drug lab curtails smoothly through cost rather than
@@ -398,6 +443,7 @@ Run:
 python -m unittest discover -s tests -v
 python -m economy_lab all
 python -m economy_lab input-shortage
+python -m economy_lab depletion
 python -m economy_lab.baseline
 python -m economy_lab.sensitivity
 ```
@@ -555,7 +601,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–5 are **done**.
+Steps 1–6 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -567,18 +613,18 @@ Steps 1–5 are **done**.
 5. ~~Make investment consume a construction fund; add cost floor and buffer
    investment.~~ Done: producers' effective cost includes input prices,
    investment costs silver, buffer deficits trigger proportional investment.
+6. ~~Add finite resource reserves, grade depletion, marginal extraction cost,
+   and differential rent.~~ Done: chemfuel synthesis draws from a regional
+   reserve with ordered grades; differential rent tracked in the ledger.
 
-6. **Next economic feature:** add finite resource reserves, grade depletion,
-   marginal extraction cost, and differential rent. Chemfuel synthesis is
-   currently the only extraction process; it has no inputs and no reserve.
-   Making it draw from a finite reserve is the minimal change.
-7. After the market/resource laboratory is credible, add the local subsistence
-   basket and hired-worker contracts.
+7. **Next economic feature:** add the local subsistence basket and
+   hired-worker contracts.
 
 The sensitivity sweep has not been re-run since the cost floor landed;
 `sensitivity_results.csv` describes the free-production model. Re-run it once
 the model stabilizes. New parameters to include: `construction_cost_multiplier`,
-`min_investment_capacity`, `buffer_refill_horizon_days`.
+`min_investment_capacity`, `buffer_refill_horizon_days`,
+`chemfuel_reserve_per_region`, `chemfuel_expensive_cost_multiplier`.
 
 Two safe tracks can now proceed independently:
 
@@ -605,7 +651,8 @@ it is not intended for per-commit testing.
   figure;
 - joint products in an actual scenario — the mass apportionment rule is
   implemented and unit-tested, but every current process has one output;
-- resource reserves, grades, and rent;
+- ~~resource reserves, grades, and differential rent~~ — done for chemfuel;
+  absolute (monopoly) rent is still absent;
 - labor supply and wages;
 - the poverty/subsistence basket;
 - credit, bankruptcy, and liquidity-constrained consumption;
@@ -616,9 +663,10 @@ it is not intended for per-commit testing.
 - RimWorld save/UI/runtime integration.
 
 Production consumes accounted inventory and pays a cost floor. Capacity
-investment consumes silver. Both material and silver ledgers close. The model
-is closer to a closed reproduction model but still lacks resource reserves,
-rent, and wages.
+investment consumes silver. Extraction draws from finite reserves with grade
+depletion and differential rent. All material and silver ledgers close. The
+model is closer to a closed reproduction model but still lacks wages and
+the subsistence basket.
 
 ---
 

@@ -30,16 +30,22 @@ supports:
   effective unit cost, drawn when commissioned;
 - buffer-aware investment: stock deficits that surplus capacity cannot refill
   within a planning horizon trigger proportional additional capacity;
+- finite resource reserves with ordered grade depletion: cheapest deposits
+  are extracted first, and the marginal cost rises when they exhaust;
+- differential rent tracked as a separate quantity: the cost advantage of
+  infra-marginal regions over the most expensive active extractor;
 - explicit material and silver ledgers separating final from productive
-  consumption, with investment spending tracked;
+  consumption, with investment spending and reserve depletion tracked;
 - fixed Labor Content value beside the market price.
 
 Per-unit ratios and reference prices are read from RimWorld's own defs. The
 modelling choices — mass apportionment for joint products, proportional input
 rationing, simultaneous production, derived demand — are recorded in
 `docs/08-accounted-input-design.md`. The cost floor and investment decisions
-are in `docs/13-cost-floor-and-investment-design.md`. Read both before changing
-them; each was chosen deliberately and several have defensible alternatives.
+are in `docs/13-cost-floor-and-investment-design.md`. The resource reserve and
+rent decisions are in `docs/15-resource-reserves-design.md`. Read all three
+before changing them; each was chosen deliberately and several have defensible
+alternatives.
 
 Run all example scenarios:
 
@@ -51,6 +57,12 @@ Run only the scenario that actually exhausts an input buffer:
 
 ```text
 python -m economy_lab input-shortage
+```
+
+Run the depletion scenario (one region's cheap chemfuel grade exhausts):
+
+```text
+python -m economy_lab depletion
 ```
 
 Compare current behavior with the deliberately frozen reference. This is a
@@ -113,12 +125,14 @@ observational; the invariant tests protect correctness.
 
 The current reference describes the cost floor and buffer-aware investment
 model. Its design and results are in `docs/13-cost-floor-and-investment-design.md`
-and `docs/14-cost-floor-and-investment-results.md`.
+and `docs/14-cost-floor-and-investment-results.md`. The resource reserve addition
+did not change any existing metric; its design and results are in
+`docs/15-resource-reserves-design.md` and `docs/16-resource-reserves-results.md`.
 
 ## Intentionally absent from this slice
 
 - endogenous labor values propagated through processes;
-- resource reserves, grades, and rent;
+- absolute (monopoly) rent;
 - labor supply, wages, and the subsistence basket;
 - credit and bankruptcy;
 - capacity depreciation or mothballing;
@@ -126,6 +140,5 @@ and `docs/14-cost-floor-and-investment-results.md`.
 - more than three commodities or two regions;
 - RimWorld runtime integration.
 
-The next slice should add finite extraction reserves (starting with chemfuel
-synthesis, the model's only extraction process) and differential rent before
-claiming a fully closed material economy.
+The next slice should add the local subsistence basket and hired-worker
+contracts.
