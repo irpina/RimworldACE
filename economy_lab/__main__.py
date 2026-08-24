@@ -11,6 +11,7 @@ from .scenarios import (
     input_shortage,
     producer_loss,
     regional_glut,
+    reserve_depletion,
     summary,
 )
 
@@ -21,6 +22,7 @@ SCENARIOS = {
     "producer-loss": producer_loss,
     "arbitrage": arbitrage,
     "input-shortage": input_shortage,
+    "depletion": reserve_depletion,
 }
 
 

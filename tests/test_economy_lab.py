@@ -1,6 +1,13 @@
 import unittest
 
-from economy_lab.model import ALL_OR_NOTHING, Commodity, Process, Producer
+from economy_lab.model import (
+    ALL_OR_NOTHING,
+    Commodity,
+    Process,
+    Producer,
+    ResourceGrade,
+    ResourceReserve,
+)
 from economy_lab.scenarios import (
     CHEMFUEL,
     DAYS_PER_YEAR,
@@ -12,6 +19,7 @@ from economy_lab.scenarios import (
     input_shortage,
     producer_loss,
     regional_glut,
+    reserve_depletion,
     seeded_two_region_economy,
     summary,
 )
@@ -474,6 +482,95 @@ class CostFloorTests(unittest.TestCase):
                 local.inventory[name], target, places=2,
                 msg=f"{name} stock should match its target",
             )
+
+
+class ResourceReserveTests(unittest.TestCase):
+    """Finite reserves, grade depletion, marginal cost, and differential rent."""
+
+    def test_reserve_depletes_and_tracks_in_ledger(self):
+        """Extraction draws from the reserve; depletion equals production."""
+        economy = equilibrium(days=120)
+        depletion = economy.ledger.reserve_depletion.get(CHEMFUEL, 0.0)
+        production = economy.ledger.production.get(CHEMFUEL, 0.0)
+        self.assertGreater(depletion, 0.0)
+        self.assertAlmostEqual(depletion, production, places=7)
+
+    def test_grade_transition_raises_marginal_cost(self):
+        """When the cheap grade exhausts, marginal cost jumps to the next."""
+        economy = reserve_depletion(days=200)
+        dust = economy.regions["Dust Basin"]
+        reserve = dust.reserves[CHEMFUEL]
+        # Grade 0 should be exhausted, grade 1 active.
+        self.assertAlmostEqual(reserve.grades[0].quantity, 0.0, places=6)
+        self.assertGreater(reserve.grades[1].quantity, 0.0)
+        # Marginal cost is grade 1's cost (2× the original).
+        self.assertGreater(
+            reserve.marginal_cost(),
+            reserve.grades[1].extraction_cost - 1e-6,
+        )
+
+    def test_grade_transition_raises_chemfuel_price(self):
+        """Depletion of the cheap grade raises the market price."""
+        economy = reserve_depletion(days=200)
+        dust = economy.regions["Dust Basin"]
+        chemfuel_ref = economy.commodities[CHEMFUEL].reference_price
+        # Chemfuel price must be above the original reference.
+        self.assertGreater(dust.prices[CHEMFUEL], chemfuel_ref * 1.3)
+
+    def test_differential_rent_appears_after_grade_divergence(self):
+        """Green River earns rent when Dust Basin moves to an expensive grade."""
+        economy = reserve_depletion(days=200)
+        rent = economy.ledger.differential_rent.get(CHEMFUEL, 0.0)
+        # Before day 100, rent is minimal (small cost diff between regions).
+        # After day 100, the cost gap widens to ~1.48/unit and rent grows.
+        self.assertGreater(rent, 100.0)
+
+    def test_depletion_scenario_closes_all_ledgers(self):
+        """Material and silver balance after grade transition."""
+        economy = reserve_depletion(days=300)
+        for name, residual in economy.commodity_balances().items():
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(residual, 0.0, places=7)
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+
+    def test_reserve_limits_production_when_exhausted(self):
+        """A fully exhausted reserve stops extraction entirely."""
+        reserve = ResourceReserve(
+            CHEMFUEL, [ResourceGrade(10.0, 1.0)]
+        )
+        taken = reserve.extract(10.0)
+        self.assertAlmostEqual(taken, 10.0, places=9)
+        self.assertAlmostEqual(reserve.remaining, 0.0, places=9)
+        # Marginal cost is infinite when exhausted.
+        self.assertEqual(reserve.marginal_cost(), float("inf"))
+        # Further extraction yields nothing.
+        taken2 = reserve.extract(5.0)
+        self.assertAlmostEqual(taken2, 0.0, places=9)
+
+    def test_extract_spans_grades(self):
+        """Extraction that crosses a grade boundary draws from both."""
+        reserve = ResourceReserve(
+            CHEMFUEL,
+            [ResourceGrade(3.0, 1.0), ResourceGrade(100.0, 2.0)],
+        )
+        taken = reserve.extract(5.0)
+        self.assertAlmostEqual(taken, 5.0, places=9)
+        self.assertAlmostEqual(reserve.grades[0].quantity, 0.0, places=9)
+        self.assertAlmostEqual(reserve.grades[1].quantity, 98.0, places=9)
+        self.assertAlmostEqual(reserve.marginal_cost(), 2.0, places=9)
+
+    def test_existing_scenarios_unaffected_by_large_reserves(self):
+        """The 100,000-unit default reserve must not change any existing metric."""
+        for economy in (equilibrium(), regional_glut(), producer_loss(),
+                        arbitrage(), input_shortage()):
+            with self.subTest(day=economy.day):
+                for name, residual in economy.commodity_balances().items():
+                    self.assertAlmostEqual(residual, 0.0, places=7)
+                self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+                # Reserve remaining should be large (barely touched).
+                for region in economy.regions.values():
+                    for cname, reserve in region.reserves.items():
+                        self.assertGreater(reserve.remaining, 90_000)
 
 
 if __name__ == "__main__":

@@ -475,6 +475,42 @@ def input_shortage(
     return economy
 
 
+def reserve_depletion(
+    days: int = 300,
+    *,
+    dust_cheap_reserve: float = 600.0,
+    dust_expensive_reserve: float = 100_000.0,
+    expensive_cost_multiplier: float = 2.0,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """One region's cheap chemfuel grade exhausts mid-run.
+
+    Dust Basin starts with only 600 units in its cheap grade (≈100 days at
+    6/day).  A second expensive grade at 2× cost takes over.  Green River
+    keeps the default large single-grade reserve, so the two regions end up
+    on different grades — the minimal setup that produces differential rent.
+    """
+    parameters = parameters or ScenarioParameters()
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    # Replace Dust Basin's reserve with a small two-grade deposit.
+    dust = economy.regions["Dust Basin"]
+    cheap_cost = dust.reserves[CHEMFUEL].grades[0].extraction_cost
+    dust.reserves[CHEMFUEL] = ResourceReserve(
+        CHEMFUEL,
+        [
+            ResourceGrade(dust_cheap_reserve, cheap_cost),
+            ResourceGrade(dust_expensive_reserve, cheap_cost * expensive_cost_multiplier),
+        ],
+    )
+    economy.step(days)
+    return economy
+
+
 def summary(economy: Economy) -> Dict[str, object]:
     commodity = economy.commodities["yayo"]
     regions: Dict[str, object] = {}
