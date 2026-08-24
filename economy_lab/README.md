@@ -45,6 +45,14 @@ circuit rather than beside it. It supports:
   value;
 - explicit material and silver ledgers separating final from productive
   consumption, with investment spending and reserve depletion tracked;
+- a cost-aware price anchor: the anchor moves with the sector's
+  output-weighted average cost relative to its seeded cost, so upstream
+  cost propagates downstream and a price no longer needs a starved
+  inventory to stay above a risen cost;
+- cost-weighted order allocation: a commodity's order book is shared
+  among its producers by a constant elasticity on relative cost, capped
+  by each producer's own limit — the cheaper producer wins more custom,
+  continuously rather than all at once;
 - endogenous labor values solved from the process graph: transferred
   labor plus living labor per unit of output, iterated to a fixed point
   so a cyclic graph is answerable and a non-productive one fails loudly.
@@ -63,7 +71,9 @@ relation, subsistence basket, and surplus ledger decisions — including the
 floating-point engineering that keeps the equilibrium exactly stationary —
 are in `docs/17-labor-power-and-surplus-design.md`. The value equation,
 its social scope, and the technique-change scenario are in
-`docs/19-endogenous-labor-values-design.md`. Read all five before
+`docs/19-endogenous-labor-values-design.md`. The cost-aware anchor and
+cost-weighted allocation are in
+`docs/21-competitive-transmission-design.md`. Read all six before
 changing them; each was chosen deliberately and several have defensible
 alternatives.
 
@@ -99,6 +109,14 @@ and the basket held fixed — relative surplus value:
 
 ```text
 python -m economy_lab technique-change
+```
+
+Run the cost competition — its deliberate opposite, where the entrant
+saves overhead rather than labor, so the meal *price* falls 14% while its
+labor *value* does not move at all:
+
+```text
+python -m economy_lab cost-competition
 ```
 
 Compare current behavior with the deliberately frozen reference. This is a
@@ -151,27 +169,32 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 75 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 85 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
 the employment and meal-price paths through both shocks), and ten labor
 value observations (the four endogenous values, and the technique-change
 scenario's social, adopter, and laggard values with both regions' rate of
-surplus value). The reporter remains observational; the invariant tests
-protect correctness.
+surplus value), and ten competitive-transmission observations (the two
+contrasting scenarios' prices, the share won by the cheapest producer, and
+the depletion buffer as a fraction of target). The reporter remains
+observational; the invariant tests protect correctness.
 
-The current reference describes the model with endogenous labor values. Its
-design and results are in `docs/19-endogenous-labor-values-design.md` and
-`docs/20-endogenous-labor-values-results.md`; the wage relation, cost floor,
-and reserve layers beneath it are in docs/13–18. Adding endogenous values
-moved none of the existing 65 metrics.
+The current reference describes the model with competitive transmission. Its
+design and results are in `docs/21-competitive-transmission-design.md` and
+`docs/22-competitive-transmission-results.md`; the layers beneath it are in
+docs/13–20. Twenty of the previous 75 metrics moved, all in producer loss
+and technique change.
 
 ## Intentionally absent from this slice
 
-- competitive transmission from cost to price: a cheaper technique cannot
-  undercut, take share, or drive anyone out, so a productivity gain shows
-  up fully in labor value and not at all in price (docs/20);
+- competitive *exit*: a producer that loses the order book keeps its
+  capacity indefinitely, so competition is for orders, not survival;
+- an economic interpretation for the operating overhead, which is a
+  calibration residual and over 95% of cost for meals and chemfuel — the
+  reason transmission is weak for labor-saving change (docs/22);
+- equalization of profit rates across sectors;
 - labor content of resource grades, so depletion moves value as well as
   cost and rent;
 - absolute (monopoly) rent;
@@ -182,7 +205,7 @@ moved none of the existing 65 metrics.
 - more than four commodities or two regions;
 - RimWorld runtime integration.
 
-The next slice should add competitive transmission from cost to price.
-Until a cheaper producer can undercut, take share, or drive a dearer one
-out, a productivity gain moves labor value and leaves price untouched,
-which is half of a real mechanism.
+The next slice should add capacity depreciation and mothballing, so that
+competition is for survival and not only for orders; or give the operating
+overhead an economic interpretation, since an economy whose money costs are
+mostly unexplained residual can only say so much about labor.

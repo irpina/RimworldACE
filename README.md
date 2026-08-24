@@ -246,8 +246,10 @@ on margin before material runs out; damped demand-led replenishment; costly,
 delayed, capacity-limited arbitrage; capacity investment that consumes a
 construction fund; finite resource reserves with ordered grade depletion and
 differential rent; the wage relation, with silver cycling producer → wage →
-worker → basket purchase → producer; a surplus ledger in work-ticks; and
-labor values solved endogenously from the process graph.
+worker → basket purchase → producer; a surplus ledger in work-ticks; labor
+values solved endogenously from the process graph; and competitive
+transmission, where the price anchor reads cost and the order book goes to
+the cheaper producer.
 
 Four quantities are kept strictly distinct and are never collapsed into one
 number: **labor value, market price, surplus value, and rent.** Money profit
@@ -277,12 +279,16 @@ rather than from a parameter. The magnitude carries a stated caveat: the
 basket is meals-only, so the value of labor-power is understated and s/v
 correspondingly overstated.
 
-**3. Value falls; price does not.** The same technique change lowers meal
-value by 12.46% and moves the meal price by exactly nothing. Price formation
-is anchored to a static reference and driven by inventory coverage, and no
-mechanism lets a cheaper producer undercut, take share, or drive a dearer one
-out. A productivity gain therefore appears fully in value and not at all in
-price — half of a real mechanism, and the named next piece of work.
+**3. Value and price answer to different things.** Two deliberately opposite
+scenarios, once cost reaches price and the order book goes to the cheaper
+producer. A *labor-saving* technique moves the labor value of a meal by
+−12.7% and its price by −0.47%. A *capital-saving* one moves the price by
+−14.3% and the value by exactly nothing. The rate of surplus value follows
+value, not money: it rises in the first case and does not budge in the
+second, even though the money wage there falls 14%. Transmission is weak for
+labor-saving change for a measured reason — wages are 2–4% of money cost, and
+the operating overhead that dominates it is a calibration residual with no
+economic interpretation. That is the named next piece of work.
 
 ### Design and results documents
 
@@ -298,17 +304,19 @@ results document scoring the predictions afterward.
 | [15](docs/15-resource-reserves-design.md) · [16](docs/16-resource-reserves-results.md) | Finite reserves, grade depletion, differential rent |
 | [17](docs/17-labor-power-and-surplus-design.md) · [18](docs/18-labor-power-and-surplus-results.md) | Labor-power, the subsistence basket, the wage circuit, the surplus ledger |
 | [19](docs/19-endogenous-labor-values-design.md) · [20](docs/20-endogenous-labor-values-results.md) | Endogenous labor values and relative surplus value |
+| [21](docs/21-competitive-transmission-design.md) · [22](docs/22-competitive-transmission-results.md) | Competitive transmission: the cost-aware price anchor and the cost-weighted order book |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 68 acceptance and invariant tests
+python -m unittest discover -s tests      # 83 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
-python -m economy_lab.baseline            # 75 frozen metrics vs current
+python -m economy_lab cost-competition    # undercutting, and its price effect
+python -m economy_lab.baseline            # 85 frozen metrics vs current
 ```
 
-`behavior_baseline.json` freezes 75 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 85 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `9426caf` (endogenous labor values)
-**Behavioral baseline:** `36ac2a3` (75 metrics: 65 unchanged + 10 value observations)
+**Latest Stage 0 model commit:** `9826489` (competitive transmission)
+**Behavioral baseline:** `213d1cd` (85 metrics: 20 refreshed + 10 new observations)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -26,6 +26,9 @@
 **Endogenous value design:** `0c5bbf6`
 **Endogenous value implementation:** `9426caf`
 **Endogenous value results:** `c3db687`
+**Competitive transmission design:** `a475152`
+**Competitive transmission implementation:** `a9c3016`, `9826489`
+**Competitive transmission results:** `77c3078`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -253,6 +256,12 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/21-competitive-transmission-design.md` — the cost-aware price
+  anchor, cost-weighted order allocation, and the cost-competition
+  scenario decided in advance;
+- `docs/22-competitive-transmission-results.md` — the value/price contrast,
+  transmission strength, and the overhead residual named as the next
+  structural problem;
 - `docs/19-endogenous-labor-values-design.md` — the value equation, the
   iterative solve, output-weighted social scope, and the technique-change
   scenario decided in advance;
@@ -300,6 +309,12 @@ Commits:
 - `fc4e06d` — Add technique-change scenario and endogenous value tests
 - `36ac2a3` — Freeze ten newly observed labor value quantities
 - `c3db687` — Record endogenous labor value results
+- `a475152` — Record competitive transmission design decisions
+- `a9c3016` — Part A: the price anchor reads cost
+- `9826489` — Part B: the order book goes to the cheaper producer
+- `577c869` — Refresh baseline for competitive transmission
+- `213d1cd` — Freeze ten newly observed competitive transmission quantities
+- `77c3078` — Record competitive transmission results
 
 ### Current vertical slice
 
@@ -352,6 +367,15 @@ It supports:
   work-ticks per region, observational, with the silver wage bill and
   basket shortfall recorded beside them — money profit is not surplus
   value, and the money wage is not necessary labor;
+- **a cost-aware price anchor**: the anchor moves with the sector's
+  output-weighted average cost relative to its seeded cost, blended by
+  `competitive_price_intensity` (default 0.5, and 0 restores the
+  authored-reference anchor exactly). Upstream cost now propagates to
+  downstream prices, which `docs/16` recorded as impossible;
+- **cost-weighted order allocation**: a commodity's order book is shared
+  among its producers by `(cost/cheapest)^-epsilon`, capped by each
+  producer's own limit, with the residual redistributed by water-filling.
+  `competitive_share_elasticity = 0` is a bit-exact no-op;
 - **endogenous labor values**: transferred labor plus living labor per unit
   of output, solved from the process graph by iteration (so a cyclic graph
   is answerable and a non-productive one fails loudly), aggregated as total
@@ -474,7 +498,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 68 tests pass;
+- all 83 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -541,6 +565,7 @@ python -m economy_lab input-shortage
 python -m economy_lab depletion
 python -m economy_lab subsistence-shock
 python -m economy_lab technique-change
+python -m economy_lab cost-competition
 python -m economy_lab.baseline
 python -m economy_lab.sensitivity
 ```
@@ -707,7 +732,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–8 are **done**.
+Steps 1–9 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -737,22 +762,39 @@ Steps 1–8 are **done**.
    moves it from 38.344 to 43.944 with the working day and the basket held
    fixed — relative surplus value, emergent (docs/20).
 
-9. **Next economic feature — competitive transmission from cost to price.**
-   `docs/20` records the sharpest gap the model now has: a technique that
-   halves the labor in a wage good lowers its value by 12.46% and its price
-   by exactly nothing. Price formation is anchored to a static reference
-   and driven by inventory coverage, and there is no undercutting, no
-   share-shifting toward the cheaper producer, and no exit. Until that
-   exists, every productivity result is half a mechanism. Capacity
-   depreciation and mothballing are the natural companion, since exit needs
-   somewhere to go.
+9. ~~Add competitive transmission from cost to price.~~ Done: the price
+   anchor reads the sector's cost and the order book goes to the cheaper
+   producer. The `docs/16` displaced-inventory artifact is resolved (the
+   depletion buffer returns from 63.8% of target to 100%) and downstream
+   cost-push exists for the first time. Two contrasting scenarios now
+   separate value from price numerically: labor-saving moves value 12.7%
+   and price 0.47%; capital-saving moves price 14.3% and value not at all
+   (docs/22).
 
-   Other candidates, in rough order of thesis value: labor content of
-   resource grades (so depletion moves value, not only cost and rent —
-   deliberately deferred in docs/19 §9 because it touches living-labor
-   accounting, the wage bill, the labor pool, and the value solve at once);
-   wage deviations from the value of labor-power; absolute rent; credit and
-   bankruptcy.
+10. **Next economic feature — the two candidates are close, and both are
+    named in `docs/22` as what this session could not finish.**
+
+    *Capacity depreciation and mothballing*, so that competition is for
+    survival and not only for orders. Today a producer that loses the
+    order book keeps its capacity forever, keeps inflating throughput
+    demand and inventory targets through the full-capacity convention,
+    and would take its share straight back. Exit is also what would let
+    the social labor value migrate to a superseded technique rather than
+    resting at the mix average.
+
+    *Giving the operating overhead an economic interpretation.* `docs/22`
+    measured transmission strength and found it small for labor-saving
+    change, because wages are 2-4% of money cost and `unit_cost` — a
+    residual `docs/13` derived as whatever makes producers run at full
+    utilization at reference prices — is over 95% of it for meals and
+    chemfuel. An economy whose money costs are mostly unexplained residual
+    can only say so much about labor. This one would move every metric and
+    needs its own session.
+
+    Other candidates: equalization of profit rates across sectors through
+    capital mobility (a genuine price of production, and a large change);
+    labor content of resource grades; wage deviations from the value of
+    labor-power; absolute rent; credit and bankruptcy.
 
 The sensitivity sweep has not been re-run since the cost floor landed;
 `sensitivity_results.csv` describes the free-production model. Re-run it once
@@ -790,9 +832,15 @@ it is not intended for per-commit testing.
   `Commodity.labor_value` deliberately keeps the authored `FINDINGS.md`
   figure and the solved values live on the `Economy` beside it, so the two
   can be compared rather than conflated;
-- competitive transmission from cost to price: a cheaper technique does not
-  undercut, take share, or drive anyone out, so a productivity gain appears
-  fully in labor value and not at all in price (`docs/20`);
+- ~~competitive transmission from cost to price~~ — done (`docs/22`);
+  transmission strength is now a measured quantity, and it is small for
+  labor-saving change because wages are 2-4% of money cost;
+- competitive *exit*: a producer that loses the order book keeps its
+  capacity indefinitely, so competition is for orders and not survival;
+- an economic interpretation for the `unit_cost` operating overhead, which
+  is a calibration residual and over 95% of cost for meals and chemfuel;
+- equalization of profit rates across sectors: the cost anchor freezes each
+  sector's calibrated rate of profit rather than equalizing it;
 - labor content of resource grades: a poorer deposit costs more silver but
   no more labor, so depletion moves cost and rent but not value;
 - joint products in an actual scenario — the mass apportionment rule is
@@ -824,10 +872,11 @@ now cycling rather than flowing one way. labor values are solved from the
 process graph and reproduce the closed analysis exactly, save for the one
 link `docs/08` declared stylized.
 
-The reproduction circuit is now closed in both directions: goods are made
-from goods and labor, and labor is reproduced by goods. What it still lacks
-is competition — the mechanism that would carry a cost advantage into a
-price.
+The reproduction circuit is closed in both directions: goods are made from
+goods and labor, and labor is reproduced by goods. Cost reaches price, and
+the cheaper producer wins custom. What it still lacks is exit — competition
+here is for orders, not for survival — and an economic account of the
+operating overhead that dominates money cost.
 
 ---
 
