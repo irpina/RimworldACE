@@ -3,8 +3,16 @@
 Labor-time accounting against RimWorld 1.6.4871 rev590 (Core + Royalty,
 Ideology, Biotech, Anomaly, Odyssey — all installed).
 
-A research spike, plus the smallest mod that puts its result in front of a
-player. No gameplay change, no Harmony, no compiled code anywhere.
+Three things, in the order they were built:
+
+1. **A research spike** into RimWorld's two unreconciled value systems.
+   Closed; see the headline findings below.
+2. **Labor Content** — the smallest mod that puts that result in front of a
+   player. Two read-only info-card stats. No gameplay change, no Harmony,
+   no compiled code.
+3. **An economy laboratory** — a dependency-free deterministic simulation
+   where economic rules are made falsifiable before any game-runtime work.
+   This is where the project is currently active.
 
 ## What happened to the original plan
 
@@ -207,3 +215,111 @@ Then copy `mod/` into `RimWorld/Mods/` and enable it.
 Known limits: meat defs are generated at load and cannot be patched from XML —
 showing those needs a real `StatWorker`, which needs C#. Values are static, so
 they do not respond to mods that change recipes.
+
+## The economy laboratory
+
+`economy_lab/` — a dependency-free, deterministic stock-flow model of a small
+economy. It exists so that economic rules can be made falsifiable before UI,
+pawn AI, saves, or Harmony complicate debugging. Nothing here touches a
+running game.
+
+Two properties are held above everything else: **determinism** (identical
+inputs give bit-identical histories) and **ledgers that close to
+floating-point zero — material and silver alike**. Every feature below was
+designed in a committed document before it was implemented, measured against
+a frozen behavioral reference afterward, and the predictions were scored
+honestly whether or not they held.
+
+The circuit is four commodities across two regional markets — three goods in
+a forking production chain, plus the subsistence good that reproduces the
+workers who make them:
+
+```
+chemfuel ──┬──> psychoid farm ──> psychoid leaves ──> drug lab ──> yayo
+           └────────────────────────────────────────────^
+
+provisioning ──> meals ──> the workers who staff all of the above
+```
+
+What it models: accounted input-output production; a cost floor that curtails
+on margin before material runs out; damped demand-led replenishment; costly,
+delayed, capacity-limited arbitrage; capacity investment that consumes a
+construction fund; finite resource reserves with ordered grade depletion and
+differential rent; the wage relation, with silver cycling producer → wage →
+worker → basket purchase → producer; a surplus ledger in work-ticks; and
+labor values solved endogenously from the process graph.
+
+Four quantities are kept strictly distinct and are never collapsed into one
+number: **labor value, market price, surplus value, and rent.** Money profit
+is not surplus value — a commodity can contain surplus labor and fail to
+realize it in a glut.
+
+### Three results worth reading
+
+**1. The endogenous value solve reproduces the closed analysis.** Values
+solved from the lab's own process graph agree with `solver.py`'s independent
+653-def result exactly for the two commodities with no modelled inputs
+(chemfuel 25 ticks, meals 305), and are high on the two downstream ones by
+*precisely* the one link the design documents flagged as stylized — 1.25
+ticks on psychoid leaves, 15.00 on yayo. No other discrepancy. That is the
+propagation machinery validated against an independent solve rather than
+against itself.
+
+**2. The rate of surplus value is now an outcome, not a coefficient.** At
+equilibrium **s/v = 38.344**. It does not move when prices do: a subsistence
+shock that doubles the meal price and the money wage leaves the labor value
+of a meal at exactly 305 and s/v unchanged. It moves when *technique* does: a
+provisioning technique with half the living labor lowers the social value of
+the wage good, and **s/v rises to 43.944 in both regions — including the one
+that adopted nothing** — with the working day and the basket held fixed and
+asserted in tests. That is relative surplus value, emerging from the graph
+rather than from a parameter. The magnitude carries a stated caveat: the
+basket is meals-only, so the value of labor-power is understated and s/v
+correspondingly overstated.
+
+**3. Value falls; price does not.** The same technique change lowers meal
+value by 12.46% and moves the meal price by exactly nothing. Price formation
+is anchored to a static reference and driven by inventory coverage, and no
+mechanism lets a cheaper producer undercut, take share, or drive a dearer one
+out. A productivity gain therefore appears fully in value and not at all in
+price — half of a real mechanism, and the named next piece of work.
+
+### Design and results documents
+
+Each feature has a decision document written *before* implementation and a
+results document scoring the predictions afterward.
+
+| doc | |
+|---|---|
+| [06-stage0-economy-lab.md](docs/06-stage0-economy-lab.md) | The laboratory's purpose and shape |
+| [07](docs/07-accounted-input-predictions.md) · [08](docs/08-accounted-input-design.md) · [09](docs/09-accounted-input-results.md) | Accounted input-output production: joint products by mass, proportional rationing, simultaneous production |
+| [10](docs/10-upstream-observation-results.md) · [11](docs/11-upstream-production-control.md) · [12](docs/12-upstream-production-control-results.md) | The upstream hysteresis bug and the damped demand-led control that fixed it |
+| [13](docs/13-cost-floor-and-investment-design.md) · [14](docs/14-cost-floor-and-investment-results.md) | Cost floor, construction-fund investment, buffer-deficit investment |
+| [15](docs/15-resource-reserves-design.md) · [16](docs/16-resource-reserves-results.md) | Finite reserves, grade depletion, differential rent |
+| [17](docs/17-labor-power-and-surplus-design.md) · [18](docs/18-labor-power-and-surplus-results.md) | Labor-power, the subsistence basket, the wage circuit, the surplus ledger |
+| [19](docs/19-endogenous-labor-values-design.md) · [20](docs/20-endogenous-labor-values-results.md) | Endogenous labor values and relative surplus value |
+
+### Running it
+
+```bash
+python -m unittest discover -s tests      # 68 acceptance and invariant tests
+python -m economy_lab all                 # every scenario, as JSON
+python -m economy_lab technique-change    # relative surplus value
+python -m economy_lab.baseline            # 75 frozen metrics vs current
+```
+
+`behavior_baseline.json` freezes 75 behavioral metrics. The baseline reporter
+is deliberately a *report*, not a pass/fail test — the invariant tests protect
+correctness, while the reporter makes every behavioral change visible and
+forces it to be explained before the reference is rewritten.
+
+## The runtime shell
+
+`economy_mod/` — a read-only RimWorld 1.6 mod that is currently a shell, not
+an economy. It persists a world component on a daily tick, observes generated
+settlements, and shows them in a read-only tab that states explicitly that
+vanilla prices are unchanged. No Harmony, no gameplay mutation.
+
+It deliberately does not run the Stage 0 model. Nothing claiming to be a
+production economy goes into a save until the laboratory's material circuit is
+credible.
