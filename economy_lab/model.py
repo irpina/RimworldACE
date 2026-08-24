@@ -11,9 +11,10 @@ calibration before any RimWorld assembly work:
 * every commodity and silver movement is recorded in an invariant ledger.
 
 It is not yet the final economic model. In particular, there are no labor
-markets, credit, resource reserves, capital-goods costs, or dynamic labor
-values. The modelling choices behind input-output production are recorded in
-`docs/08-accounted-input-design.md`; read that before changing them.
+markets, credit, or dynamic labor values. The modelling choices behind
+input-output production are recorded in `docs/08-accounted-input-design.md`;
+the resource reserve and rent decisions are in
+`docs/15-resource-reserves-design.md`; read both before changing them.
 """
 
 from __future__ import annotations
@@ -43,6 +44,56 @@ class Commodity:
     maximum_price_factor: float = 10.0
     #: RimWorld's Mass stat. Only used to apportion joint-product costs.
     mass_per_unit: float = 1.0
+
+
+@dataclass
+class ResourceGrade:
+    """One extractable tranche: a finite quantity at a given cost.
+
+    Grades are ordered cheapest first within a ``ResourceReserve``.  The
+    ``extraction_cost`` is a natural property of the deposit, not a market
+    outcome — it never changes.  ``quantity`` decreases as material is
+    extracted.
+    """
+
+    quantity: float
+    extraction_cost: float
+
+
+@dataclass
+class ResourceReserve:
+    """Ordered grades for a commodity in a region, cheapest first.
+
+    All extraction producers in a region share the same reserve.  When the
+    cheapest grade exhausts, the next grade becomes marginal and extraction
+    cost rises — the classical extensive margin.
+    """
+
+    commodity: str
+    grades: List[ResourceGrade]
+
+    @property
+    def remaining(self) -> float:
+        """Total extractable quantity across all grades."""
+        return sum(g.quantity for g in self.grades)
+
+    def marginal_cost(self) -> float:
+        """Extraction cost of the cheapest non-exhausted grade."""
+        for grade in self.grades:
+            if grade.quantity > EPSILON:
+                return grade.extraction_cost
+        return float("inf")
+
+    def extract(self, amount: float) -> float:
+        """Draw from cheapest grade first; return the amount actually taken."""
+        remaining = amount
+        for grade in self.grades:
+            if remaining <= EPSILON:
+                break
+            take = min(grade.quantity, remaining)
+            grade.quantity -= take
+            remaining -= take
+        return amount - remaining
 
 
 @dataclass(frozen=True)
@@ -214,6 +265,9 @@ class Region:
     imported_total: Dict[str, float] = field(default_factory=dict)
     exported_total: Dict[str, float] = field(default_factory=dict)
     projects: List[CapacityProject] = field(default_factory=list)
+    #: Finite natural endowments keyed by commodity name.  Extraction
+    #: producers draw from these; a missing entry means unlimited.
+    reserves: Dict[str, ResourceReserve] = field(default_factory=dict)
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -285,6 +339,11 @@ class Ledger:
     intermediate_consumption: Dict[str, float] = field(default_factory=dict)
     #: Silver spent on capacity investment (construction fund).
     investment_spending: float = 0.0
+    #: Total commodity extracted from finite reserves.
+    reserve_depletion: Dict[str, float] = field(default_factory=dict)
+    #: Differential rent: the cost advantage of infra-marginal extractors
+    #: over the most expensive active extractor, accumulated per commodity.
+    differential_rent: Dict[str, float] = field(default_factory=dict)
     transport_cash: float = 0.0
     initial_cash: float = 0.0
 
@@ -380,6 +439,7 @@ class Economy:
             self._arrive_shipments()
             self._complete_projects()
             self._produce()
+            self._track_differential_rent()
             self._consume()
             self._update_prices()
             self._dispatch_arbitrage()
@@ -519,11 +579,22 @@ class Economy:
         therefore takes one day per production stage to travel downstream,
         which is a visible property rather than a hidden one.
         """
+        # Per-region daily extraction, keyed by (region_name, commodity).
+        # Read by _track_differential_rent after all regions have produced.
+        self._daily_extraction: Dict[Tuple[str, str], float] = {}
+
         for region in self.regions.values():
             # Unmet demand is rebuilt from scratch each day. Production adds
             # input shortfalls, consumption adds final shortfalls.
             for name in self.commodities:
                 region.unmet_demand[name] = 0.0
+
+            # Update extraction unit costs from current marginal grade.
+            for name, reserve in region.reserves.items():
+                marginal = reserve.marginal_cost()
+                for producer in region.producers:
+                    if producer.active and producer.commodity == name:
+                        producer.unit_cost = marginal
 
             opening = dict(region.inventory)
             active = sorted(
@@ -558,6 +629,25 @@ class Economy:
                 else:
                     ration[name] = min(1.0, opening.get(name, 0.0) / need)
 
+            # Reserve rationing: limit extraction to remaining reserve,
+            # pro-rata across producers sharing the same reserve.
+            for rname, reserve in region.reserves.items():
+                if reserve.remaining <= EPSILON:
+                    for p in active:
+                        if p.commodity == rname:
+                            planned[id(p)] = 0.0
+                    continue
+                total_wanted = 0.0
+                for p in active:
+                    if p.commodity == rname:
+                        out_per_run = p.process.outputs.get(rname, 0.0)
+                        total_wanted += planned[id(p)] * out_per_run
+                if total_wanted > reserve.remaining:
+                    reserve_ration = reserve.remaining / total_wanted
+                    for p in active:
+                        if p.commodity == rname:
+                            planned[id(p)] *= reserve_ration
+
             drawn: Dict[str, float] = {}
             produced: Dict[str, float] = {}
             for producer in active:
@@ -589,6 +679,14 @@ class Economy:
                 region.inventory[name] += amount
                 Ledger.add(self.ledger.production, name, amount)
 
+            # Deduct from reserves and track depletion.
+            for rname, reserve in region.reserves.items():
+                extracted = produced.get(rname, 0.0)
+                if extracted > EPSILON:
+                    reserve.extract(extracted)
+                    Ledger.add(self.ledger.reserve_depletion, rname, extracted)
+                    self._daily_extraction[(region.name, rname)] = extracted
+
             # An input a producer could not source is real unmet demand for
             # that input. Without this an upstream shortage would cut
             # downstream output while never registering in the input's own
@@ -602,6 +700,39 @@ class Economy:
                 shortfall = need * (1.0 - ration[name])
                 if shortfall > EPSILON:
                     region.unmet_demand[name] += shortfall
+
+    def _track_differential_rent(self) -> None:
+        """Compute Ricardian differential rent across regions.
+
+        For each extraction commodity with reserves, the most expensive active
+        extractor sets the reference marginal cost. Every region with a lower
+        marginal cost earns rent on the amount it extracted today.
+
+        Must be called after ``_produce()`` so that ``_daily_extraction`` is
+        populated for the current step.
+        """
+        commodity_marginals: Dict[str, List[Tuple[str, float, float]]] = {}
+        for rname, region in self.regions.items():
+            for cname, reserve in region.reserves.items():
+                mc = reserve.marginal_cost()
+                extracted = self._daily_extraction.get((rname, cname), 0.0)
+                if mc < float("inf") and extracted > EPSILON:
+                    commodity_marginals.setdefault(cname, []).append(
+                        (rname, mc, extracted)
+                    )
+
+        for cname, entries in commodity_marginals.items():
+            if len(entries) < 2:
+                continue
+            global_marginal = max(mc for _, mc, _ in entries)
+            for _rname, local_mc, extracted in entries:
+                advantage = global_marginal - local_mc
+                if advantage > EPSILON:
+                    Ledger.add(
+                        self.ledger.differential_rent,
+                        cname,
+                        advantage * extracted,
+                    )
 
     def _planned_runs(
         self,
@@ -923,6 +1054,13 @@ class Economy:
                             name: region.capacity(name) for name in self.commodities
                         },
                         "cash": region.cash,
+                        "reserves": {
+                            cname: {
+                                "remaining": reserve.remaining,
+                                "marginal_cost": reserve.marginal_cost(),
+                            }
+                            for cname, reserve in region.reserves.items()
+                        },
                     }
                     for region in self.regions.values()
                 },

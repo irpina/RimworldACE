@@ -19,7 +19,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List
 
-from .model import Commodity, Economy, Process, Producer, Region, Route
+from .model import (
+    Commodity,
+    Economy,
+    Process,
+    Producer,
+    Region,
+    ResourceGrade,
+    ResourceReserve,
+    Route,
+)
 
 
 DAYS_PER_YEAR = 60
@@ -89,6 +98,17 @@ class ScenarioParameters:
     # consistent. Propagating labor value through processes is a later slice.
     leaves_labor_value: float = 0.7315
     chemfuel_labor_value: float = 0.395833
+
+    # --- resource reserves ---------------------------------------------------
+    # Default: one large grade at the current operating overhead.  The reserve
+    # is large enough that no existing scenario depletes it.  Override in the
+    # depletion scenario to exercise grade transitions and differential rent.
+    chemfuel_reserve_per_region: float = 100_000.0
+    #: Second (expensive) grade quantity; zero disables it.
+    chemfuel_expensive_reserve: float = 0.0
+    #: Cost multiplier for the expensive grade, relative to the operating
+    #: overhead at reference prices.
+    chemfuel_expensive_cost_multiplier: float = 2.0
 
     @property
     def leaves_capacity_per_day(self) -> float:
@@ -249,6 +269,18 @@ def _region(
         )
         for key in (YAYO, LEAVES, CHEMFUEL)
     ]
+    # Build chemfuel reserve: first grade at the operating overhead, optional
+    # second grade at a higher cost for depletion scenarios.
+    chemfuel_overhead = parameters.operating_overhead(CHEMFUEL, yayo_cost)
+    grades = [ResourceGrade(parameters.chemfuel_reserve_per_region, chemfuel_overhead)]
+    if parameters.chemfuel_expensive_reserve > 0:
+        grades.append(
+            ResourceGrade(
+                parameters.chemfuel_expensive_reserve,
+                chemfuel_overhead * parameters.chemfuel_expensive_cost_multiplier,
+            )
+        )
+
     region = Region(
         name,
         cash=parameters.initial_cash,
@@ -256,6 +288,7 @@ def _region(
         inventory={},
         prices={key: commodities[key].reference_price for key in commodities},
         producers=producers,
+        reserves={CHEMFUEL: ResourceReserve(CHEMFUEL, grades)},
     )
     # Seed every stock at its own target, so the circuit opens stationary
     # rather than working off an arbitrary initial imbalance.
