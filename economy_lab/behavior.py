@@ -14,8 +14,10 @@ from .scenarios import (
     CHEMFUEL,
     equilibrium,
     LEAVES,
+    cost_competition,
     producer_loss,
     regional_glut,
+    reserve_depletion,
     technique_change,
     YAYO,
 )
@@ -100,6 +102,8 @@ def collect_behavioral_metrics(
     loss = producer_loss(parameters=parameters)
     trade = arbitrage(parameters=parameters)
     technique = technique_change(parameters=parameters)
+    competition = cost_competition(parameters=parameters)
+    depletion = reserve_depletion(parameters=parameters)
 
     stable_local = stable.series(LOCAL_REGION, COMMODITY)
     stable_distant = stable.series(DISTANT_REGION, COMMODITY)
@@ -179,7 +183,12 @@ def collect_behavioral_metrics(
     )
     metrics.update(
         _labor_metrics(
-            stable=stable, glut=glut, loss=loss, technique=technique
+            stable=stable,
+            glut=glut,
+            loss=loss,
+            technique=technique,
+            competition=competition,
+            depletion=depletion,
         )
     )
     return metrics
@@ -190,7 +199,13 @@ def _employment_series(economy: Economy, region: str) -> list:
 
 
 def _labor_metrics(
-    *, stable: Economy, glut: Economy, loss: Economy, technique: Economy
+    *,
+    stable: Economy,
+    glut: Economy,
+    loss: Economy,
+    technique: Economy,
+    competition: Economy,
+    depletion: Economy,
 ) -> Dict[str, Dict[str, object]]:
     """Observe the wage relation (docs/17, docs/18).
 
@@ -280,4 +295,69 @@ def _labor_metrics(
         "technique_change.local.wage_rate": _metric(
             technique.regions[LOCAL_REGION].wage_rate(), "silver"
         ),
+        # --- competitive transmission (docs/21) --------------------------
+        # How much of a cost change reaches the price, and how the order
+        # book is shared out. The two scenarios are deliberate opposites:
+        # technique-change saves labor (value moves, money barely does),
+        # cost-competition saves overhead (money moves, value not at all).
+        "technique_change.local.meals.price": _metric(
+            technique.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "cost_competition.local.meals.price": _metric(
+            competition.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "cost_competition.local.meals.cost_ratio": _metric(
+            competition.regions[LOCAL_REGION].cost_ratio[MEALS], "ratio"
+        ),
+        "cost_competition.local.meals.cheap_producer_share": _metric(
+            _cheapest_share(competition, LOCAL_REGION, MEALS), "fraction"
+        ),
+        "cost_competition.local.wage_rate": _metric(
+            competition.regions[LOCAL_REGION].wage_rate(), "silver"
+        ),
+        "cost_competition.local.rate_of_surplus_value": _metric(
+            competition.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "cost_competition.value.meals_ticks": _metric(
+            competition.labor_values[MEALS], "ticks"
+        ),
+        # The docs/16 artifact: a reference-anchored price could only sit
+        # above a doubled cost by starving the buffer.
+        "depletion.local.chemfuel.inventory_fraction_of_target": _metric(
+            _inventory_fraction_of_target(depletion, LOCAL_REGION, CHEMFUEL),
+            "fraction",
+        ),
+        "depletion.local.chemfuel.settled_price": _metric(
+            depletion.regions[LOCAL_REGION].prices[CHEMFUEL], "silver"
+        ),
+        # Downstream cost-push, which docs/16 recorded as exactly absent.
+        "depletion.local.yayo.settled_price": _metric(
+            depletion.regions[LOCAL_REGION].prices[YAYO], "silver"
+        ),
     }
+
+
+def _cheapest_share(economy: Economy, region_name: str, commodity: str) -> float:
+    """Realized output share of the lowest-cost producer of a commodity."""
+    region = economy.regions[region_name]
+    producers = [p for p in region.producers if p.commodity == commodity]
+    total = sum(p.last_runs for p in producers)
+    if total <= 0.0:
+        return 0.0
+    cheapest = min(
+        producers, key=lambda p: p.effective_unit_cost(region.prices)
+    )
+    return cheapest.last_runs / total
+
+
+def _inventory_fraction_of_target(
+    economy: Economy, region_name: str, commodity: str
+) -> float:
+    region = economy.regions[region_name]
+    target = (
+        region.throughput_demand(commodity)
+        * economy.commodities[commodity].target_inventory_days
+    )
+    if target <= 0.0:
+        return 0.0
+    return region.inventory[commodity] / target

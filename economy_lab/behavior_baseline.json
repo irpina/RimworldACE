@@ -6,6 +6,42 @@
       "unit": "units",
       "value": 11.0
     },
+    "cost_competition.local.meals.cheap_producer_share": {
+      "unit": "fraction",
+      "value": 0.727086
+    },
+    "cost_competition.local.meals.cost_ratio": {
+      "unit": "ratio",
+      "value": 0.714606
+    },
+    "cost_competition.local.meals.price": {
+      "unit": "silver",
+      "value": 12.859543
+    },
+    "cost_competition.local.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 38.344348
+    },
+    "cost_competition.local.wage_rate": {
+      "unit": "silver",
+      "value": 25.719087
+    },
+    "cost_competition.value.meals_ticks": {
+      "unit": "ticks",
+      "value": 305.0
+    },
+    "depletion.local.chemfuel.inventory_fraction_of_target": {
+      "unit": "fraction",
+      "value": 1.0
+    },
+    "depletion.local.chemfuel.settled_price": {
+      "unit": "silver",
+      "value": 3.427031
+    },
+    "depletion.local.yayo.settled_price": {
+      "unit": "silver",
+      "value": 21.357951
+    },
     "equilibrium.distant_price_range": {
       "unit": "silver",
       "value": 0.0
@@ -281,6 +317,10 @@
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",
       "value": 42.462276
+    },
+    "technique_change.local.meals.price": {
+      "unit": "silver",
+      "value": 14.928898
     },
     "technique_change.local.rate_of_surplus_value": {
       "unit": "ratio",
