@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from economy_lab.model import (
     ALL_OR_NOTHING,
@@ -17,6 +18,7 @@ from economy_lab.scenarios import (
     ScenarioParameters,
     arbitrage,
     circuit_processes,
+    cost_competition,
     equilibrium,
     input_shortage,
     producer_loss,
@@ -1014,6 +1016,201 @@ class RelativeSurplusValueTests(unittest.TestCase):
         self.assertEqual(repeat.labor_values, self.economy.labor_values)
         self.assertEqual(
             repeat.rate_of_surplus_value(), self.economy.rate_of_surplus_value()
+        )
+
+
+class CompetitiveTransmissionTests(unittest.TestCase):
+    """Cost reaches price, and the cheaper producer wins custom.
+
+    Two mechanisms, deliberately measurable one at a time: the price
+    anchor reads the sector's cost (`competitive_price_intensity`), and the
+    order book is shared out by cost (`competitive_share_elasticity`).
+    Each has a setting that reproduces the previous model exactly.
+    """
+
+    def test_zero_intensity_leaves_the_anchor_on_the_reference_price(self):
+        # kappa = 0 is the pre-docs/21 model: the anchor is the authored
+        # reference price and no cost change can reach it.
+        parameters = replace(
+            ScenarioParameters(), competitive_price_intensity=0.0
+        )
+        economy = reserve_depletion(300, parameters=parameters)
+        region = economy.regions["Dust Basin"]
+        producer = next(
+            p for p in region.producers if p.commodity == CHEMFUEL
+        )
+        # Cost has doubled, and the price sits above it only because the
+        # buffer is starved — the artifact docs/16 recorded.
+        self.assertGreater(producer.effective_unit_cost(region.prices), 3.0)
+        target = region.throughput_demand(CHEMFUEL) * 20.0
+        self.assertLess(region.inventory[CHEMFUEL] / target, 0.70)
+
+    def test_cost_aware_anchor_refills_the_starved_buffer(self):
+        # With the anchor reading cost, the price rises because cost rose,
+        # so the inventory no longer has to stay depleted to hold it up.
+        economy = reserve_depletion(300)
+        region = economy.regions["Dust Basin"]
+        target = region.throughput_demand(CHEMFUEL) * 20.0
+        self.assertAlmostEqual(region.inventory[CHEMFUEL] / target, 1.0, places=3)
+        producer = next(
+            p for p in region.producers if p.commodity == CHEMFUEL
+        )
+        # And the price still covers the higher cost.
+        self.assertGreater(
+            region.prices[CHEMFUEL],
+            producer.effective_unit_cost(region.prices),
+        )
+
+    def test_upstream_cost_now_reaches_the_downstream_price(self):
+        # docs/16 recorded exactly zero downstream movement when chemfuel
+        # doubled: the anchor could not see cost at all. It can now.
+        economy = reserve_depletion(300)
+        local = economy.regions["Dust Basin"]
+        distant = economy.regions["Green River"]
+        self.assertGreater(local.prices[YAYO], 21.0)
+        # Only the region whose deposits ran out is affected.
+        self.assertAlmostEqual(distant.prices[YAYO], 21.0, places=6)
+
+    def test_zero_elasticity_is_a_bit_exact_no_op(self):
+        parameters = replace(
+            ScenarioParameters(), competitive_share_elasticity=0.0
+        )
+        flat = producer_loss(150, parameters=parameters)
+        weighted = producer_loss(150)
+        # Every producer of a commodity currently shares a cost, so cost
+        # weighting changes nothing at all here — and with the elasticity
+        # off it must be identical to the bit regardless.
+        self.assertEqual(
+            [h["regions"]["Dust Basin"]["price"][YAYO] for h in flat.history],
+            [h["regions"]["Dust Basin"]["price"][YAYO] for h in weighted.history],
+        )
+
+    def test_allocation_respects_each_producer_capacity_ceiling(self):
+        economy = cost_competition(180)
+        region = economy.regions["Dust Basin"]
+        for producer in region.producers:
+            ceiling = producer.process.runs_for(producer.capacity_per_day)
+            self.assertLessEqual(producer.last_runs, ceiling + 1e-9)
+
+    def test_equilibrium_is_still_exactly_stationary(self):
+        economy = equilibrium(240)
+        for name in economy.commodities:
+            for region in economy.regions:
+                series = economy.series(region, name)
+                self.assertEqual(min(series), max(series))
+
+    def test_prices_stay_within_the_clamps_in_every_scenario(self):
+        # The anchor now depends on input prices, which are themselves
+        # prices. The loop is damped (docs/21 section 2), but that is a
+        # property to check rather than assert.
+        for build in (
+            equilibrium,
+            regional_glut,
+            producer_loss,
+            reserve_depletion,
+            subsistence_shock,
+            technique_change,
+            cost_competition,
+        ):
+            economy = build()
+            for snapshot in economy.history:
+                for region in snapshot["regions"].values():
+                    for name, price in region["price"].items():
+                        commodity = economy.commodities[name]
+                        self.assertGreater(price, 0.0)
+                        self.assertLessEqual(
+                            price,
+                            commodity.reference_price
+                            * commodity.maximum_price_factor
+                            + 1e-9,
+                        )
+
+
+class CostCompetitionTests(unittest.TestCase):
+    """A cheaper producer enters and undercuts the incumbent.
+
+    The entrant saves overhead, not labor, so the labor value of a meal
+    does not move. That makes this the clean contrast to
+    `technique_change`, where value moves and money barely does.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = cost_competition(180)
+        cls.region = cls.economy.regions["Dust Basin"]
+
+    def test_the_cheaper_producer_takes_the_larger_share(self):
+        meals = sorted(
+            (p for p in self.region.producers if p.commodity == MEALS),
+            key=lambda p: p.effective_unit_cost(self.region.prices),
+        )
+        self.assertEqual(len(meals), 2)
+        cheap, dear = meals
+        self.assertLess(
+            cheap.effective_unit_cost(self.region.prices),
+            dear.effective_unit_cost(self.region.prices),
+        )
+        self.assertGreater(cheap.last_runs, dear.last_runs)
+        share = cheap.last_runs / (cheap.last_runs + dear.last_runs)
+        self.assertGreater(share, 0.5)
+
+    def test_the_price_falls_with_the_sector_cost(self):
+        self.assertLess(self.region.cost_ratio[MEALS], 1.0)
+        self.assertLess(self.region.prices[MEALS], 15.0)
+
+    def test_the_labor_value_of_the_wage_good_does_not_move(self):
+        # No technique changed how much labor a meal takes.
+        self.assertEqual(self.economy.labor_values[MEALS], 305.0)
+
+    def test_money_wages_fall_while_the_value_of_labor_power_does_not(self):
+        # The distinction the four ledgers exist to keep: the money form
+        # of variable capital falls, its value does not.
+        self.assertLess(self.region.wage_rate(), 30.0)
+        self.assertAlmostEqual(
+            self.economy.basket_labor_value(self.region), 610.0, places=6
+        )
+
+    def test_the_rate_of_surplus_value_is_unchanged(self):
+        # Cheapening a wage good by saving *overhead* does not cheapen
+        # labor-power in value terms, so s/v must not move. Contrast
+        # technique_change, where saving labor does move it.
+        stable = equilibrium(240)
+        self.assertAlmostEqual(
+            self.economy.rate_of_surplus_value(),
+            stable.rate_of_surplus_value(),
+            places=4,
+        )
+
+    def test_value_and_price_respond_to_different_things(self):
+        # The headline contrast, asserted directly.
+        labor_saving = technique_change(180)
+        capital_saving = self.economy
+
+        value_move_labor = abs(labor_saving.labor_values[MEALS] - 305.0) / 305.0
+        price_move_labor = abs(
+            labor_saving.regions["Dust Basin"].prices[MEALS] - 15.0
+        ) / 15.0
+        value_move_capital = (
+            abs(capital_saving.labor_values[MEALS] - 305.0) / 305.0
+        )
+        price_move_capital = abs(self.region.prices[MEALS] - 15.0) / 15.0
+
+        # Labor-saving: value moves a lot, price barely.
+        self.assertGreater(value_move_labor, 10.0 * price_move_labor)
+        # Capital-saving: price moves, value not at all.
+        self.assertEqual(value_move_capital, 0.0)
+        self.assertGreater(price_move_capital, 0.05)
+
+    def test_the_scenario_closes_every_ledger(self):
+        for residual in self.economy.commodity_balances().values():
+            self.assertAlmostEqual(residual, 0.0, places=9)
+        self.assertAlmostEqual(self.economy.cash_balance(), 0.0, places=9)
+
+    def test_the_scenario_is_reproducible(self):
+        repeat = cost_competition(180)
+        self.assertEqual(
+            repeat.regions["Dust Basin"].prices[MEALS],
+            self.region.prices[MEALS],
         )
 
 
