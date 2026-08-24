@@ -762,6 +762,56 @@ def technique_change(
     return economy
 
 
+def cost_competition(
+    days_after_entry: int = 180,
+    *,
+    overhead_fraction: float | None = None,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """A cheaper provisioner enters, and undercuts the incumbent.
+
+    The companion to `technique_change`, and its deliberate contrast. The
+    entrant here saves *overhead*, not labor: same process, same living
+    labor per meal, 60% of the incumbent's operating cost. Read it as
+    better equipment or a better site — a capital-saving technique.
+
+    Because the living labor per meal is untouched, the labor value of
+    meals does not move at all, which makes this a clean instrument for
+    the money-side mechanism: the order book tilts toward the cheaper
+    producer, the sector's average cost falls, the anchor falls with it,
+    and the meal price follows. The labor-time rate of surplus value
+    should not budge (docs/21 section 4).
+    """
+    parameters = parameters or ScenarioParameters()
+    fraction = (
+        parameters.cheap_provisioner_overhead_fraction
+        if overhead_fraction is None
+        else overhead_fraction
+    )
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    economy.step(parameters.cost_competition_day)
+    dust = economy.regions["Dust Basin"]
+    incumbent = next(p for p in dust.producers if p.commodity == MEALS)
+    dust.producers.append(
+        Producer(
+            "Dust provisioners (low overhead)",
+            MEALS,
+            parameters.meal_capacity_per_day,
+            incumbent.unit_cost * fraction,
+            parameters.zero_utilization_price_ratio,
+            parameters.full_utilization_price_ratio,
+            process=incumbent.process,
+        )
+    )
+    economy.step(days_after_entry)
+    return economy
+
+
 def summary(economy: Economy) -> Dict[str, object]:
     commodity = economy.commodities["yayo"]
     regions: Dict[str, object] = {}

@@ -176,11 +176,11 @@
     },
     "producer_loss.local.chemfuel.inventory_peak": {
       "unit": "units",
-      "value": 119.2
+      "value": 125.364398
     },
     "producer_loss.local.chemfuel.inventory_peak_day": {
       "unit": "day",
-      "value": 61
+      "value": 210
     },
     "producer_loss.local.chemfuel.inventory_trough": {
       "unit": "units",
@@ -192,11 +192,11 @@
     },
     "producer_loss.local.chemfuel.price_peak": {
       "unit": "silver",
-      "value": 2.917596
+      "value": 2.621071
     },
     "producer_loss.local.chemfuel.price_peak_day": {
       "unit": "day",
-      "value": 210
+      "value": 154
     },
     "producer_loss.local.chemfuel.price_trough": {
       "unit": "silver",
@@ -208,11 +208,11 @@
     },
     "producer_loss.local.chemfuel.terminal_inventory": {
       "unit": "units",
-      "value": 104.624007
+      "value": 125.364398
     },
     "producer_loss.local.chemfuel.terminal_price": {
       "unit": "silver",
-      "value": 2.917596
+      "value": 2.583318
     },
     "producer_loss.local.employment_trough": {
       "unit": "worker-days",
@@ -224,7 +224,7 @@
     },
     "producer_loss.local.meals.price_peak": {
       "unit": "silver",
-      "value": 16.398671
+      "value": 16.499139
     },
     "producer_loss.local.meals.price_trough": {
       "unit": "silver",
@@ -232,11 +232,11 @@
     },
     "producer_loss.local.psychoid_leaves.inventory_peak": {
       "unit": "units",
-      "value": 1568.0
+      "value": 1878.373967
     },
     "producer_loss.local.psychoid_leaves.inventory_peak_day": {
       "unit": "day",
-      "value": 61
+      "value": 210
     },
     "producer_loss.local.psychoid_leaves.inventory_trough": {
       "unit": "units",
@@ -248,11 +248,11 @@
     },
     "producer_loss.local.psychoid_leaves.price_peak": {
       "unit": "silver",
-      "value": 2.787132
+      "value": 2.795978
     },
     "producer_loss.local.psychoid_leaves.price_peak_day": {
       "unit": "day",
-      "value": 168
+      "value": 153
     },
     "producer_loss.local.psychoid_leaves.price_trough": {
       "unit": "silver",
@@ -264,35 +264,35 @@
     },
     "producer_loss.local.psychoid_leaves.terminal_inventory": {
       "unit": "units",
-      "value": 1454.37131
+      "value": 1878.373967
     },
     "producer_loss.local.psychoid_leaves.terminal_price": {
       "unit": "silver",
-      "value": 2.467308
+      "value": 1.956306
     },
     "producer_loss.local_peak_day": {
       "unit": "day",
-      "value": 119
+      "value": 126
     },
     "producer_loss.local_peak_price": {
       "unit": "silver",
-      "value": 38.63029
+      "value": 45.253086
     },
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.380244
+      "value": 42.462276
     },
     "technique_change.local.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.373009
+      "value": 42.454726
     },
     "technique_change.local.wage_rate": {
       "unit": "silver",
-      "value": 30.0
+      "value": 29.857795
     },
     "technique_change.value.meals_adopter_ticks": {
       "unit": "ticks",
-      "value": 228.75
+      "value": 227.343523
     },
     "technique_change.value.meals_laggard_ticks": {
       "unit": "ticks",
@@ -300,7 +300,7 @@
     },
     "technique_change.value.meals_social_ticks": {
       "unit": "ticks",
-      "value": 266.998868
+      "value": 266.300229
     }
   }
 }

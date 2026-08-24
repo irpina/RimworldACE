@@ -7,6 +7,7 @@ import json
 
 from .scenarios import (
     arbitrage,
+    cost_competition,
     equilibrium,
     input_shortage,
     producer_loss,
@@ -27,6 +28,7 @@ SCENARIOS = {
     "depletion": reserve_depletion,
     "subsistence-shock": subsistence_shock,
     "technique-change": technique_change,
+    "cost-competition": cost_competition,
 }
 
 
