@@ -17,6 +17,7 @@ stylized link (chemfuel as an operating input) is flagged in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import floor
 from typing import Dict, List
 
 from .model import (
@@ -37,6 +38,7 @@ DAYS_PER_QUADRUM = 15
 YAYO = "yayo"
 LEAVES = "psychoid_leaves"
 CHEMFUEL = "chemfuel"
+MEALS = "meals"
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,26 @@ class ScenarioParameters:
     leaves_labor_value: float = 0.7315
     chemfuel_labor_value: float = 0.395833
 
+    # --- labor-power and the subsistence basket (docs/17) --------------------
+    # The wage relation: meals are the real subsistence commodity, workers
+    # are paid the basket's cost at current prices, and employment follows
+    # labor actually performed.  Reference price and embodied labor come
+    # from MealSimple in RimWorld's defs / the closed analysis; the basket
+    # quantity, working day, and capacities are calibration choices whose
+    # power-of-two values are part of the exact-equilibrium engineering.
+    meal_reference_price: float = 15.0
+    meal_direct_labor: float = 305.0
+    meal_labor_value: float = 305.0 * 11.4 / 720.0
+    meal_mass: float = 0.44
+    meal_capacity_per_day: float = 1.0
+    meals_per_worker_day: float = 2.0
+    ticks_per_worker_day: float = 24000.0
+    labor_pool_worker_days: float = 1.0
+    worker_initial_cash_days: float = 30.0
+    labor_value_per_tick: float = 11.4 / 720.0
+    employment_quantum: float = 2.0 ** -20
+    subsistence_loss_fraction: float = 0.70
+
     # --- resource reserves ---------------------------------------------------
     # Default: one large grade at the current operating overhead.  The reserve
     # is large enough that no existing scenario depletes it.  Override in the
@@ -146,6 +168,7 @@ class ScenarioParameters:
             YAYO: self.reference_price,
             LEAVES: self.leaves_reference_price,
             CHEMFUEL: self.chemfuel_reference_price,
+            MEALS: self.meal_reference_price,
         }
         processes = circuit_processes(self)
         process = processes[commodity]
@@ -208,6 +231,13 @@ def circuit_commodities(
             parameters.chemfuel_labor_value,
             parameters.chemfuel_mass,
         ),
+        _commodity(
+            parameters,
+            MEALS,
+            parameters.meal_reference_price,
+            parameters.meal_labor_value,
+            parameters.meal_mass,
+        ),
     ]
 
 
@@ -241,6 +271,16 @@ def circuit_processes(
             },
             direct_labor=parameters.yayo_direct_labor,
         ),
+        MEALS: Process(
+            "provisioning",
+            outputs={MEALS: 1.0},
+            # Aggregated farming plus cooking.  The raw-food feedstock sits
+            # outside the modelled boundary like chemfuel's organic inputs;
+            # the excluded stages' labor is already inside the 305 embodied
+            # ticks the closed analysis measured for MealSimple.
+            inputs={},
+            direct_labor=parameters.meal_direct_labor,
+        ),
     }
 
 
@@ -256,6 +296,7 @@ def _region(
         YAYO: parameters.producer_capacity_per_day,
         LEAVES: parameters.leaves_capacity_per_day,
         CHEMFUEL: parameters.chemfuel_capacity_per_day,
+        MEALS: parameters.meal_capacity_per_day,
     }
     producers = [
         Producer(
@@ -267,7 +308,7 @@ def _region(
             parameters.full_utilization_price_ratio,
             process=processes[key],
         )
-        for key in (YAYO, LEAVES, CHEMFUEL)
+        for key in (YAYO, LEAVES, CHEMFUEL, MEALS)
     ]
     # Build chemfuel reserve: first grade at the operating overhead, optional
     # second grade at a higher cost for depletion scenarios.
@@ -289,7 +330,20 @@ def _region(
         prices={key: commodities[key].reference_price for key in commodities},
         producers=producers,
         reserves={CHEMFUEL: ResourceReserve(CHEMFUEL, grades)},
+        subsistence_basket={MEALS: parameters.meals_per_worker_day},
+        ticks_per_worker_day=parameters.ticks_per_worker_day,
+        labor_pool=parameters.labor_pool_worker_days,
+        worker_cash=(
+            parameters.worker_initial_cash_days
+            * parameters.meals_per_worker_day
+            * parameters.meal_reference_price
+        ),
     )
+    # Seed employment at the quantized fixed point of the daily map, so the
+    # wage circuit opens stationary to the bit (docs/17 section 7).
+    equilibrium_days = _equilibrium_worker_days(region, parameters)
+    region.worker_days_due = equilibrium_days
+    region.worker_days_earned = equilibrium_days
     # Seed every stock at its own target, so the circuit opens stationary
     # rather than working off an arbitrary initial imbalance.
     for key in commodities:
@@ -297,6 +351,50 @@ def _region(
             region.throughput_demand(key) * parameters.target_inventory_days
         )
     return region
+
+
+def _equilibrium_worker_days(
+    region: Region, parameters: ScenarioParameters
+) -> float:
+    """Solve the quantized employment fixed point the runtime will repeat.
+
+    The daily map is: legacy producers run at capacity, the provisioners run
+    at the basket demand earned yesterday, and the resulting labor is
+    quantized to the employment grid.  The float operations and the
+    producer summation order replicate the runtime exactly, so the seeded
+    value reproduces itself from day one.  Refuses loudly rather than
+    seeding an inexact equilibrium.
+    """
+    ordered = sorted(region.producers, key=lambda p: (p.name, p.commodity))
+    quantum = parameters.employment_quantum
+    basket_quantity = parameters.meals_per_worker_day
+    worker_days = 0.0
+    for _ in range(256):
+        labor = 0.0
+        for producer in ordered:
+            if producer.commodity == MEALS:
+                runs = basket_quantity * worker_days
+            else:
+                runs = producer.process.runs_for(producer.capacity_per_day)
+            labor += runs * producer.process.direct_labor
+        raw = labor / parameters.ticks_per_worker_day
+        if quantum > 0.0:
+            revised = floor(raw / quantum) * quantum
+        else:
+            revised = raw
+        if revised == worker_days:
+            meal_demand = basket_quantity * worker_days
+            if meal_demand >= parameters.meal_capacity_per_day:
+                raise ValueError(
+                    "equilibrium meal demand exceeds provisioning capacity; "
+                    "the seeded circuit would not be stationary"
+                )
+            return worker_days
+        worker_days = revised
+    raise ValueError(
+        "employment fixed point did not converge exactly; the wage circuit "
+        "cannot be seeded stationary with these parameters"
+    )
 
 
 def seeded_two_region_economy(
@@ -317,6 +415,7 @@ def seeded_two_region_economy(
                 YAYO: "Dust cooperative",
                 LEAVES: "Dust psychoid fields",
                 CHEMFUEL: "Dust refinery",
+                MEALS: "Dust provisioners",
             },
         ),
         _region(
@@ -327,10 +426,11 @@ def seeded_two_region_economy(
                 YAYO: "River works",
                 LEAVES: "River psychoid fields",
                 CHEMFUEL: "River refinery",
+                MEALS: "River provisioners",
             },
         ),
     ]
-    return Economy(
+    economy = Economy(
         circuit_commodities(parameters),
         regions,
         [
@@ -359,7 +459,45 @@ def seeded_two_region_economy(
         construction_cost_multiplier=parameters.construction_cost_multiplier,
         min_investment_capacity=parameters.min_investment_capacity,
         buffer_refill_horizon_days=parameters.buffer_refill_horizon_days,
+        labor_value_per_tick=parameters.labor_value_per_tick,
+        employment_quantum=parameters.employment_quantum,
     )
+    _assert_reference_full_utilization(economy)
+    return economy
+
+
+def _assert_reference_full_utilization(economy: Economy) -> None:
+    """Refuse loudly if the wage pushes any producer below full utilization.
+
+    The hazard of an additive wage (docs/17 section 4) is a producer quietly
+    dropped below its full-utilization ratio at reference prices, which
+    would silently break the stationary equilibrium.  Checked at seeding,
+    raised at seeding.
+    """
+    for region in economy.regions.values():
+        wage_per_tick = region.wage_rate() / max(
+            region.ticks_per_worker_day, 1e-9
+        )
+        for producer in region.producers:
+            wage_cost = (
+                producer.process.labor_per_unit(
+                    producer.commodity, economy.commodities
+                )
+                * wage_per_tick
+            )
+            effective = (
+                producer.effective_unit_cost(region.prices) + wage_cost
+            )
+            price = region.prices[producer.commodity]
+            ratio = price / max(effective, 1e-9)
+            if ratio < producer.full_utilization_price_ratio:
+                raise ValueError(
+                    f"producer {producer.name!r} falls below full "
+                    f"utilization at reference prices once wages are paid "
+                    f"(price {price:.4f} / effective cost {effective:.4f} "
+                    f"= {ratio:.4f}); the seeded equilibrium would not be "
+                    "stationary"
+                )
 
 
 def equilibrium(
@@ -511,6 +649,39 @@ def reserve_depletion(
     return economy
 
 
+def subsistence_shock(
+    days_after_loss: int = 150,
+    *,
+    loss_fraction: float | None = None,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """Destroy most of one region's provisioning capacity.
+
+    The wage-push channel, exercised: meal scarcity raises the meal price,
+    the wage is the basket at current prices so it rises with it, and every
+    producer's effective unit cost climbs through the cost-floor machinery.
+    Workers who cannot obtain the basket register as unmet demand and a
+    ledger shortfall — labor-power paid below its reproduction cost.
+    """
+    parameters = parameters or ScenarioParameters()
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    economy.step(60)
+    economy.destroy_capacity(
+        "Dust Basin",
+        MEALS,
+        parameters.subsistence_loss_fraction
+        if loss_fraction is None
+        else loss_fraction,
+    )
+    economy.step(days_after_loss)
+    return economy
+
+
 def summary(economy: Economy) -> Dict[str, object]:
     commodity = economy.commodities["yayo"]
     regions: Dict[str, object] = {}
@@ -532,6 +703,20 @@ def summary(economy: Economy) -> Dict[str, object]:
             "capacity_per_day": round(region.capacity("yayo"), 3),
             "imports": round(region.imported_total["yayo"], 3),
             "exports": round(region.exported_total["yayo"], 3),
+            "employment_worker_days": round(region.worker_days_earned, 6),
+            "wage_rate": round(region.wage_rate(), 3),
+            "worker_cash": round(region.worker_cash, 3),
+            "wages_paid": round(
+                economy.ledger.wages_paid.get(name, 0.0), 3
+            ),
+            "basket_shortfall": round(
+                economy.ledger.basket_shortfall.get(name, 0.0), 3
+            ),
+            "rate_of_surplus_value": (
+                None
+                if economy.rate_of_surplus_value(name) is None
+                else round(economy.rate_of_surplus_value(name), 3)
+            ),
             "commodities": {
                 key: {
                     "price": round(region.prices[key], 3),

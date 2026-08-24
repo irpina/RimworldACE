@@ -12,7 +12,9 @@ from economy_lab.scenarios import (
     CHEMFUEL,
     DAYS_PER_YEAR,
     LEAVES,
+    MEALS,
     YAYO,
+    ScenarioParameters,
     arbitrage,
     circuit_processes,
     equilibrium,
@@ -21,6 +23,7 @@ from economy_lab.scenarios import (
     regional_glut,
     reserve_depletion,
     seeded_two_region_economy,
+    subsistence_shock,
     summary,
 )
 
@@ -571,6 +574,174 @@ class ResourceReserveTests(unittest.TestCase):
                 for region in economy.regions.values():
                     for cname, reserve in region.reserves.items():
                         self.assertGreater(reserve.remaining, 90_000)
+
+
+class LaborPowerTests(unittest.TestCase):
+    """The wage relation: labor-power, the subsistence basket, and surplus.
+
+    Labor value, market price, surplus value, and rent stay distinct; money
+    profit is not surplus value.  The wage circuit is the first place silver
+    cycles rather than flows one way, so leaks are asserted against hard.
+    """
+
+    def test_equilibrium_is_exactly_stationary_with_wages(self):
+        """Four commodities, both regions, four years, price range exactly 0."""
+        economy = equilibrium(days=4 * DAYS_PER_YEAR)
+        for rname in economy.regions:
+            for cname in economy.commodities:
+                series = economy.series(rname, cname)
+                self.assertEqual(
+                    max(series) - min(series),
+                    0.0,
+                    f"{rname}/{cname} price moved at equilibrium",
+                )
+
+    def test_wage_circuit_closes_the_silver_ledger(self):
+        """producer -> wage -> worker -> basket purchase -> producer revenue."""
+        for economy in (equilibrium(days=240), subsistence_shock()):
+            with self.subTest(day=economy.day):
+                self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertAlmostEqual(residual, 0.0, places=7)
+
+    def test_wages_flow_to_workers_and_return_through_the_basket(self):
+        economy = equilibrium(days=240)
+        for rname, region in economy.regions.items():
+            paid = economy.ledger.wages_paid.get(rname, 0.0)
+            spent = economy.ledger.worker_spending.get(rname, 0.0)
+            self.assertGreater(paid, 0.0)
+            # At equilibrium workers spend exactly what they earn (the seeded
+            # day-zero basket demand equals the daily wage), so the worker
+            # cash pool ends where it started.
+            self.assertAlmostEqual(paid, spent, places=6)
+            self.assertAlmostEqual(region.worker_cash, 900.0, places=9)
+
+    def test_workers_consume_real_meals(self):
+        economy = equilibrium(days=120)
+        consumed = economy.ledger.consumption.get(MEALS, 0.0)
+        produced = economy.ledger.production.get(MEALS, 0.0)
+        self.assertGreater(consumed, 0.0)
+        self.assertAlmostEqual(consumed, produced, places=6)
+
+    def test_rate_of_surplus_value_matches_the_closed_form(self):
+        """s/v = (working day - basket labor) / basket labor, per docs/17."""
+        parameters = ScenarioParameters()
+        basket_ticks = (
+            parameters.meals_per_worker_day * parameters.meal_direct_labor
+        )
+        expected = (
+            parameters.ticks_per_worker_day - basket_ticks
+        ) / basket_ticks
+        economy = equilibrium(days=240)
+        for rname in economy.regions:
+            actual = economy.rate_of_surplus_value(rname)
+            self.assertIsNotNone(actual)
+            self.assertAlmostEqual(actual, expected, delta=expected * 1e-3)
+
+    def test_surplus_ledger_identity_holds(self):
+        economy = equilibrium(days=240)
+        for rname in economy.regions:
+            living = economy.ledger.living_labor[rname]
+            necessary = economy.ledger.necessary_labor[rname]
+            surplus = economy.ledger.surplus_labor(rname)
+            self.assertGreater(necessary, 0.0)
+            self.assertGreater(surplus, 0.0)
+            self.assertAlmostEqual(living, necessary + surplus, places=6)
+
+    def test_labor_pool_rations_production_pro_rata(self):
+        """A binding pool scales every producer, proportionally, not to zero."""
+        constrained = equilibrium(
+            days=60,
+            parameters=ScenarioParameters(labor_pool_worker_days=0.125),
+        )
+        free = equilibrium(days=60)
+        for rname, region in constrained.regions.items():
+            self.assertLessEqual(region.worker_days_earned, 0.125 + 1e-9)
+            # Compare the seeded producers; the constrained run may also
+            # contain investment entrants responding to the shortage.
+            for unconstrained in free.regions[rname].producers:
+                producer = next(
+                    p for p in region.producers if p.name == unconstrained.name
+                )
+                self.assertGreater(producer.output_total, 0.0)
+                self.assertLess(producer.output_total, unconstrained.output_total)
+        for name, residual in constrained.commodity_balances().items():
+            self.assertAlmostEqual(residual, 0.0, places=7)
+        self.assertAlmostEqual(constrained.cash_balance(), 0.0, places=7)
+
+    def test_subsistence_shock_raises_meal_price_and_the_wage(self):
+        """The wage-push channel: meal scarcity raises every producer's cost."""
+        economy = subsistence_shock()
+        dust = economy.regions["Dust Basin"]
+        self.assertGreater(dust.prices[MEALS], 15.0 * 1.15)
+        self.assertGreater(dust.wage_rate(), 30.0 * 1.15)
+        lab = next(p for p in dust.producers if p.commodity == YAYO)
+        self.assertGreater(lab.wage_cost_per_unit, 350.0 * (30.0 / 24000.0) / 1.0)
+        # Workers who could not obtain the basket are visible, both as a
+        # ledger shortfall and as unmet demand at some point in the history.
+        self.assertGreater(
+            economy.ledger.basket_shortfall.get("Dust Basin", 0.0), 0.0
+        )
+        shocked_days = [
+            snapshot["regions"]["Dust Basin"]["unmet"][MEALS]
+            for snapshot in economy.history
+        ]
+        self.assertGreater(max(shocked_days), 0.0)
+        # The distant region's meal market stays quiet: the spread never
+        # covers freight in this calibration.
+        self.assertEqual(
+            economy.regions["Green River"].imported_total[MEALS], 0.0
+        )
+
+    def test_subsistence_shock_is_reproducible(self):
+        first = subsistence_shock()
+        second = subsistence_shock()
+        self.assertEqual(first.history, second.history)
+
+    def test_unpayable_wage_bill_refuses_loudly(self):
+        economy = equilibrium(days=1)
+        economy.regions["Dust Basin"].cash = 0.0
+        with self.assertRaises(RuntimeError):
+            economy.step(1)
+
+    def test_wage_that_breaks_full_utilization_refuses_loudly(self):
+        """A basket so dear the drug lab cannot run at reference must raise."""
+        with self.assertRaises(ValueError):
+            equilibrium(
+                days=1,
+                parameters=ScenarioParameters(meal_reference_price=150.0),
+            )
+
+    def test_undersized_provisioning_capacity_refuses_loudly(self):
+        with self.assertRaises(ValueError):
+            equilibrium(
+                days=1,
+                parameters=ScenarioParameters(meal_capacity_per_day=0.5),
+            )
+
+    def test_bare_regions_without_a_basket_pay_no_wages(self):
+        """The wage machinery must be inert when no basket is configured."""
+        chemfuel = Commodity(CHEMFUEL, 2.3, 0.4)
+        processes = circuit_processes()
+        from economy_lab.model import Economy, Region
+
+        region = Region(
+            "Plain",
+            cash=1000.0,
+            base_daily_demand={CHEMFUEL: 1.0},
+            inventory={CHEMFUEL: 30.0},
+            prices={CHEMFUEL: 2.3},
+            producers=[
+                Producer("plain refinery", CHEMFUEL, 2.0, 1.5,
+                         process=processes[CHEMFUEL]),
+            ],
+        )
+        economy = Economy([chemfuel], [region], [])
+        economy.step(30)
+        self.assertEqual(economy.ledger.wages_paid, {})
+        self.assertEqual(region.worker_cash, 0.0)
+        self.assertEqual(region.cash, 1000.0)
+        self.assertIsNone(economy.rate_of_surplus_value())
 
 
 if __name__ == "__main__":
