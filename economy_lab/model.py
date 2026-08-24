@@ -10,17 +10,19 @@ calibration before any RimWorld assembly work:
 * persistent excess profit induces delayed capacity investment;
 * every commodity and silver movement is recorded in an invariant ledger.
 
-It is not yet the final economic model. In particular, there are no labor
-markets, credit, or dynamic labor values. The modelling choices behind
-input-output production are recorded in `docs/08-accounted-input-design.md`;
-the resource reserve and rent decisions are in
-`docs/15-resource-reserves-design.md`; read both before changing them.
+It is not yet the final economic model. In particular, there is no credit
+and labor values remain static. The modelling choices behind input-output
+production are recorded in `docs/08-accounted-input-design.md`; the resource
+reserve and rent decisions are in `docs/15-resource-reserves-design.md`; the
+wage relation, subsistence basket, and surplus ledger decisions are in
+`docs/17-labor-power-and-surplus-design.md`; read them before changing any
+of it.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import exp
+from math import exp, floor
 from typing import Dict, Iterable, List, Optional, Tuple
 
 
@@ -190,6 +192,10 @@ class Producer:
     cash: float = 0.0
     #: Required. Production is no longer a free ledger source.
     process: Optional[Process] = None
+    #: Wage cost per unit of output, updated daily by the economy from the
+    #: current regional basket cost (see docs/17).  Zero when the region has
+    #: no subsistence basket, which keeps bare-model tests bit-identical.
+    wage_cost_per_unit: float = 0.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -214,8 +220,8 @@ class Producer:
         input_cost = self.process.input_cost_per_run(prices)
         output_per_run = self.process.outputs.get(self.commodity, 0.0)
         if output_per_run <= EPSILON:
-            return self.unit_cost
-        return self.unit_cost + input_cost / output_per_run
+            return self.unit_cost + self.wage_cost_per_unit
+        return self.unit_cost + input_cost / output_per_run + self.wage_cost_per_unit
 
     def utilization(self, price: float, prices: Optional[Dict[str, float]] = None) -> float:
         """Smoothly curtail production when price falls below cash cost."""
@@ -268,6 +274,21 @@ class Region:
     #: Finite natural endowments keyed by commodity name.  Extraction
     #: producers draw from these; a missing entry means unlimited.
     reserves: Dict[str, ResourceReserve] = field(default_factory=dict)
+    #: The wage relation (docs/17).  ``subsistence_basket`` maps commodity ->
+    #: units per worker-day; the wage equals the basket at current regional
+    #: prices.  An empty basket disables the whole wage circuit, which keeps
+    #: bare-model tests bit-identical.
+    subsistence_basket: Dict[str, float] = field(default_factory=dict)
+    ticks_per_worker_day: float = 24000.0
+    #: Fixed daily labor supply in worker-days; infinite means never binding.
+    labor_pool: float = float("inf")
+    #: Workers' silver.  Wages flow in, basket purchases flow out.
+    worker_cash: float = 0.0
+    #: Worker-days earned yesterday, whose basket demand is due today
+    #: (wages today, bread tomorrow — docs/17 section 6).
+    worker_days_due: float = 0.0
+    #: Worker-days earned today, stored for tomorrow's basket demand.
+    worker_days_earned: float = 0.0
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -286,7 +307,31 @@ class Region:
         demand and behaves exactly as before.
         """
         derived = sum(p.input_per_day(commodity) for p in self.producers if p.active)
-        return self.base_daily_demand.get(commodity, 0.0) + derived
+        total = self.base_daily_demand.get(commodity, 0.0) + derived
+        basket_quantity = self.subsistence_basket.get(commodity, 0.0)
+        if basket_quantity > 0.0:
+            # Worker demand for a basket good, at full-capacity employment —
+            # the same full-capacity convention the derived-input component
+            # uses, so targets do not collapse when a shock idles labor.
+            total += basket_quantity * (
+                self.full_capacity_labor_ticks() / max(self.ticks_per_worker_day, EPSILON)
+            )
+        return total
+
+    def full_capacity_labor_ticks(self) -> float:
+        """Work-ticks demanded per day if every producer ran at capacity."""
+        return sum(
+            p.process.runs_for(p.capacity_per_day) * p.process.direct_labor
+            for p in self.producers
+            if p.active
+        )
+
+    def wage_rate(self) -> float:
+        """Silver per worker-day: the subsistence basket at current prices."""
+        return sum(
+            quantity * self.prices.get(name, 0.0)
+            for name, quantity in sorted(self.subsistence_basket.items())
+        )
 
     def daily_demand(self, commodity: Commodity) -> float:
         base = self.base_daily_demand.get(commodity.name, 0.0)
@@ -344,8 +389,27 @@ class Ledger:
     #: Differential rent: the cost advantage of infra-marginal extractors
     #: over the most expensive active extractor, accumulated per commodity.
     differential_rent: Dict[str, float] = field(default_factory=dict)
+    #: The surplus ledger (docs/17), keyed by region, denominated in
+    #: work-ticks.  Observational: nothing reads these back.  Money profit
+    #: is *not* surplus value; the wage bill in silver sits beside the
+    #: labor-time quantities, never mixed into them.
+    living_labor: Dict[str, float] = field(default_factory=dict)
+    necessary_labor: Dict[str, float] = field(default_factory=dict)
+    #: Silver actually paid as wages (money form of variable capital).
+    wages_paid: Dict[str, float] = field(default_factory=dict)
+    #: Silver workers spent on the basket.
+    worker_spending: Dict[str, float] = field(default_factory=dict)
+    #: Basket units workers could not obtain — labor-power paid below its
+    #: reproduction cost, made visible even though nothing yet acts on it.
+    basket_shortfall: Dict[str, float] = field(default_factory=dict)
     transport_cash: float = 0.0
     initial_cash: float = 0.0
+
+    def surplus_labor(self, region: str) -> float:
+        """Living labor performed beyond the reproduction cost of labor-power."""
+        return self.living_labor.get(region, 0.0) - self.necessary_labor.get(
+            region, 0.0
+        )
 
     @staticmethod
     def add(bucket: Dict[str, float], commodity: str, amount: float) -> None:
@@ -373,6 +437,8 @@ class Economy:
         construction_cost_multiplier: float = 60.0,
         min_investment_capacity: float = 0.1,
         buffer_refill_horizon_days: float = 60.0,
+        labor_value_per_tick: float = 11.4 / 720.0,
+        employment_quantum: float = 2.0 ** -20,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -397,7 +463,13 @@ class Economy:
         self.buffer_refill_horizon_days = buffer_refill_horizon_days
         self.zero_utilization_price_ratio = zero_utilization_price_ratio
         self.full_utilization_price_ratio = full_utilization_price_ratio
-        self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
+        self.labor_value_per_tick = labor_value_per_tick
+        self.employment_quantum = employment_quantum
+        self.ledger = Ledger(
+            initial_cash=sum(
+                r.cash + r.worker_cash for r in self.regions.values()
+            )
+        )
         self.history: List[dict] = []
 
         # Remembered so replacement capacity can be built for a commodity
@@ -441,6 +513,7 @@ class Economy:
             self._produce()
             self._track_differential_rent()
             self._consume()
+            self._workers_consume()
             self._update_prices()
             self._dispatch_arbitrage()
             self._update_expectations()
@@ -521,10 +594,25 @@ class Economy:
         """
         return (
             sum(r.cash for r in self.regions.values())
+            + sum(r.worker_cash for r in self.regions.values())
             + self.ledger.transport_cash
             + self.ledger.investment_spending
             - self.ledger.initial_cash
         )
+
+    def rate_of_surplus_value(self, region: Optional[str] = None) -> Optional[float]:
+        """Cumulative s/v in labor time; ``None`` before any waged labor.
+
+        This is the labor-time ratio (surplus over necessary work-ticks),
+        not the money ratio of profit to wages — the two must never be
+        presented as one number (docs/17).
+        """
+        names = [region] if region is not None else list(self.regions)
+        necessary = sum(self.ledger.necessary_labor.get(n, 0.0) for n in names)
+        if necessary <= EPSILON:
+            return None
+        living = sum(self.ledger.living_labor.get(n, 0.0) for n in names)
+        return (living - necessary) / necessary
 
     def system_inventory(self, commodity: str) -> float:
         held = sum(r.inventory.get(commodity, 0.0) for r in self.regions.values())
@@ -596,6 +684,22 @@ class Economy:
                     if producer.active and producer.commodity == name:
                         producer.unit_cost = marginal
 
+            # Update wage costs from the current basket cost, mirroring the
+            # marginal-grade update above.  With no basket the rate is zero
+            # and every wage cost stays 0.0 — bare models are unaffected.
+            wage_per_tick = region.wage_rate() / max(
+                region.ticks_per_worker_day, EPSILON
+            )
+            if region.subsistence_basket:
+                for producer in region.producers:
+                    if producer.active:
+                        producer.wage_cost_per_unit = (
+                            producer.process.labor_per_unit(
+                                producer.commodity, self.commodities
+                            )
+                            * wage_per_tick
+                        )
+
             opening = dict(region.inventory)
             active = sorted(
                 (
@@ -648,8 +752,24 @@ class Economy:
                         if p.commodity == rname:
                             planned[id(p)] *= reserve_ration
 
+            # Labor-pool rationing: when planned labor exceeds the regional
+            # pool, all producers scale by the same factor — pro-rata and
+            # proportional, the same pattern as reserve rationing.  When the
+            # pool does not bind this is an exact no-op (skipped, not
+            # multiplied by 1.0).
+            if region.labor_pool != float("inf"):
+                available_ticks = region.labor_pool * region.ticks_per_worker_day
+                planned_ticks = sum(
+                    planned[id(p)] * p.process.direct_labor for p in active
+                )
+                if planned_ticks > available_ticks:
+                    labor_ration = available_ticks / planned_ticks
+                    for p in active:
+                        planned[id(p)] *= labor_ration
+
             drawn: Dict[str, float] = {}
             produced: Dict[str, float] = {}
+            labor_performed = 0.0
             for producer in active:
                 runs = planned[id(producer)]
                 if runs <= EPSILON:
@@ -662,6 +782,7 @@ class Economy:
                 runs *= available
                 if runs <= EPSILON:
                     continue
+                labor_performed += runs * producer.process.direct_labor
                 for name, per_run in inputs.items():
                     drawn[name] = drawn.get(name, 0.0) + runs * per_run
                 for name, per_run in producer.process.outputs.items():
@@ -700,6 +821,113 @@ class Economy:
                 shortfall = need * (1.0 - ration[name])
                 if shortfall > EPSILON:
                     region.unmet_demand[name] += shortfall
+
+            # The wage relation (docs/17).  Employment is quantized to an
+            # exact binary grid so that the daily basket flow adds to and
+            # subtracts from inventory without rounding — the equilibrium
+            # must stay exact to the bit.  Wages are paid on labor actually
+            # performed, at the basket's cost at current prices.
+            if self.employment_quantum > 0.0:
+                worker_days = (
+                    floor(
+                        (labor_performed / region.ticks_per_worker_day)
+                        / self.employment_quantum
+                    )
+                    * self.employment_quantum
+                )
+            else:
+                worker_days = labor_performed / region.ticks_per_worker_day
+            region.worker_days_earned = worker_days
+            if region.subsistence_basket:
+                wage_bill = worker_days * region.wage_rate()
+                if wage_bill > region.cash:
+                    # Credit and bankruptcy are deliberately absent.  A
+                    # scenario that bankrupts a region must fail loudly,
+                    # not silently stop paying workers.
+                    raise RuntimeError(
+                        f"region {region.name!r} cannot cover its wage bill "
+                        f"({wage_bill:.3f} silver against {region.cash:.3f})"
+                    )
+                region.cash -= wage_bill
+                region.worker_cash += wage_bill
+                Ledger.add(self.ledger.wages_paid, region.name, wage_bill)
+                Ledger.add(
+                    self.ledger.living_labor, region.name, labor_performed
+                )
+                necessary_per_day = sum(
+                    quantity
+                    * self.commodities[name].labor_value
+                    / self.labor_value_per_tick
+                    for name, quantity in sorted(
+                        region.subsistence_basket.items()
+                    )
+                    if name in self.commodities
+                )
+                Ledger.add(
+                    self.ledger.necessary_labor,
+                    region.name,
+                    worker_days * necessary_per_day,
+                )
+
+    def _workers_consume(self) -> None:
+        """Workers spend yesterday's wages on the subsistence basket.
+
+        Purchases are capped by inventory per good and jointly by worker
+        cash, scaled proportionally when either binds.  A shortfall is real
+        unmet demand for the basket good — labor-power paid below its
+        reproduction cost must register as a price signal — and is also
+        accumulated in the ledger so tests can see it directly.  The silver
+        leg returns worker cash to the regional pool, closing the circuit
+        producer -> wage -> worker -> basket purchase -> producer revenue.
+        """
+        for region in self.regions.values():
+            if region.subsistence_basket:
+                worker_days = region.worker_days_due
+                purchases: List[Tuple[str, float, float]] = []
+                total_cost = 0.0
+                for name, quantity in sorted(region.subsistence_basket.items()):
+                    if name not in self.commodities:
+                        continue
+                    desired = quantity * worker_days
+                    if desired <= 0.0:
+                        continue
+                    bought = min(desired, region.inventory.get(name, 0.0))
+                    inventory_shortfall = desired - bought
+                    if inventory_shortfall > EPSILON:
+                        region.unmet_demand[name] += inventory_shortfall
+                        Ledger.add(
+                            self.ledger.basket_shortfall,
+                            region.name,
+                            inventory_shortfall,
+                        )
+                    if bought <= 0.0:
+                        continue
+                    purchases.append((name, bought, region.prices[name]))
+                    total_cost += bought * region.prices[name]
+                cash_factor = 1.0
+                if total_cost > region.worker_cash:
+                    cash_factor = region.worker_cash / total_cost
+                for name, bought, price in purchases:
+                    if cash_factor < 1.0:
+                        affordable = bought * cash_factor
+                        denied = bought - affordable
+                        region.unmet_demand[name] += denied
+                        Ledger.add(
+                            self.ledger.basket_shortfall, region.name, denied
+                        )
+                        bought = affordable
+                    if bought <= 0.0:
+                        continue
+                    spend = bought * price
+                    region.inventory[name] -= bought
+                    region.consumed_total[name] += bought
+                    Ledger.add(self.ledger.consumption, name, bought)
+                    region.worker_cash -= spend
+                    region.cash += spend
+                    Ledger.add(
+                        self.ledger.worker_spending, region.name, spend
+                    )
+            region.worker_days_due = region.worker_days_earned
 
     def _track_differential_rent(self) -> None:
         """Compute Ricardian differential rent across regions.
@@ -758,6 +986,12 @@ class Economy:
                 runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     intended_outflow[name] += runs * per_run
+            # Worker basket demand due today is a known constant within the
+            # plan (wages today, bread tomorrow — docs/17), so it adds no
+            # new coupling to the fixed point.
+            for name, quantity in sorted(region.subsistence_basket.items()):
+                if name in intended_outflow:
+                    intended_outflow[name] += quantity * region.worker_days_due
 
             requested_output: Dict[str, float] = {}
             for name, commodity in self.commodities.items():
@@ -1054,6 +1288,9 @@ class Economy:
                             name: region.capacity(name) for name in self.commodities
                         },
                         "cash": region.cash,
+                        "worker_cash": region.worker_cash,
+                        "employment": region.worker_days_earned,
+                        "wage_rate": region.wage_rate(),
                         "reserves": {
                             cname: {
                                 "remaining": reserve.remaining,
