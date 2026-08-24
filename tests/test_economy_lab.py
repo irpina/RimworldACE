@@ -1291,5 +1291,206 @@ class CostCompetitionTests(unittest.TestCase):
         )
 
 
+class ValueLedgerTests(unittest.TestCase):
+    """c, v, s in work-ticks, and what the price cannot account for.
+
+    The classical magnitudes the project has been assembling toward. All
+    in labor time: the value rate of profit is not money profitability and
+    the two are never combined.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = equilibrium(240)
+        cls.region = "Dust Basin"
+
+    def test_the_value_ledger_closes_to_floating_point_zero(self):
+        # A third closing ledger beside material and silver: the value of
+        # everything produced equals what was transferred into it plus the
+        # living labor added. Three independently accumulated paths.
+        for economy in (
+            self.economy,
+            regional_glut(),
+            producer_loss(),
+            input_shortage(),
+            cost_competition(),
+        ):
+            with self.subTest(day=economy.day):
+                produced = sum(
+                    economy.ledger.value_produced.get(name, 0.0)
+                    for name in economy.regions
+                )
+                self.assertGreater(produced, 0.0)
+                self.assertLess(
+                    abs(economy.value_balance()) / produced, 1e-12
+                )
+
+    def test_a_moving_technique_mix_leaves_a_small_transient_residual(self):
+        """The identity closes exactly only while the technique mix holds.
+
+        Values are solved from the *previous* day's output weights
+        (docs/19), so on days when the mix is shifting, output valued at
+        the social value does not quite equal the individual costs behind
+        it. The gap is a transient of the one-day lag, not a leak: it is
+        bounded and it does not accumulate.
+        """
+        economy = technique_change()
+        produced = sum(
+            economy.ledger.value_produced.get(name, 0.0)
+            for name in economy.regions
+        )
+        relative = abs(economy.value_balance()) / produced
+        self.assertLess(relative, 1e-4)
+        self.assertGreater(relative, 0.0)
+
+    def test_constant_capital_splits_into_circulating_and_fixed(self):
+        ledger = self.economy.ledger
+        for name in self.economy.regions:
+            self.assertAlmostEqual(
+                ledger.constant_capital(name),
+                ledger.circulating_capital[name]
+                + ledger.fixed_capital_consumed[name],
+                places=6,
+            )
+
+    def test_fixed_capital_is_a_negligible_part_of_constant_capital(self):
+        # The measured answer to whether vanilla's omission matters.
+        ledger = self.economy.ledger
+        for name in self.economy.regions:
+            share = ledger.fixed_capital_consumed[name] / ledger.constant_capital(
+                name
+            )
+            self.assertGreater(share, 0.0)
+            self.assertLess(share, 0.005)
+
+    def test_the_classical_ratios_are_defined_and_consistent(self):
+        economy = self.economy
+        ledger = economy.ledger
+        for name in economy.regions:
+            c = ledger.constant_capital(name)
+            v = ledger.necessary_labor[name]
+            s = ledger.surplus_labor(name)
+            self.assertAlmostEqual(
+                economy.organic_composition(name), c / v, places=9
+            )
+            self.assertAlmostEqual(
+                economy.value_rate_of_profit(name), s / (c + v), places=9
+            )
+            self.assertAlmostEqual(
+                economy.rate_of_surplus_value(name), s / v, places=9
+            )
+
+    def test_a_bare_model_has_no_value_ledger_to_report(self):
+        from economy_lab.model import Economy, Region
+
+        processes = circuit_processes()
+        chemfuel = Commodity(CHEMFUEL, reference_price=2.3, labor_value=0.4)
+        region = Region(
+            "Plain",
+            cash=1000.0,
+            base_daily_demand={CHEMFUEL: 1.0},
+            inventory={CHEMFUEL: 30.0},
+            prices={CHEMFUEL: 2.3},
+            producers=[
+                Producer("plain refinery", CHEMFUEL, 2.0, 1.5,
+                         process=processes[CHEMFUEL]),
+            ],
+        )
+        economy = Economy([chemfuel], [region], [])
+        economy.step(30)
+        self.assertIsNone(economy.organic_composition())
+        self.assertIsNone(economy.value_rate_of_profit())
+
+
+class PriceDecompositionTests(unittest.TestCase):
+    """What a unit's price is made of, and what the model cannot explain.
+
+    The wedge between RimWorld's authored price level and inputs plus
+    wages plus capital consumption is reported under its own name. The
+    laboratory cannot tell whether it is surplus or a cost it does not
+    represent, so surplus is reported as a band and never as a number.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = equilibrium(240)
+        cls.region = "Dust Basin"
+
+    def decomposition(self, commodity):
+        return self.economy.price_decomposition(self.region, commodity)
+
+    def test_the_parts_add_up_to_the_price(self):
+        for commodity in (CHEMFUEL, LEAVES, MEALS, YAYO):
+            with self.subTest(commodity=commodity):
+                d = self.decomposition(commodity)
+                self.assertAlmostEqual(
+                    d["attributable_cost"],
+                    d["inputs"] + d["wages"] + d["capital_consumed"],
+                    places=9,
+                )
+                self.assertAlmostEqual(
+                    d["price"],
+                    d["attributable_cost"] + d["margin"] + d["surplus_if_margin_is_cost"],
+                    places=9,
+                )
+
+    def test_the_surplus_band_brackets_rather_than_asserts(self):
+        for commodity in (CHEMFUEL, LEAVES, MEALS, YAYO):
+            with self.subTest(commodity=commodity):
+                d = self.decomposition(commodity)
+                # The two readings differ by exactly the wedge, signed.
+                # They are deliberately not ordered: a negative wedge means
+                # the authored price does not cover attributable cost, and
+                # treating it as surplus then gives the smaller figure.
+                self.assertAlmostEqual(
+                    d["surplus_if_margin_is_surplus"]
+                    - d["surplus_if_margin_is_cost"],
+                    d["margin"],
+                    places=9,
+                )
+
+    def test_the_wedge_dominates_the_input_free_sectors(self):
+        # The finding that motivated docs/23: for goods the model builds
+        # from labor alone, most of RimWorld's authored price is neither
+        # inputs, nor wages, nor capital consumption.
+        for commodity in (CHEMFUEL, MEALS):
+            with self.subTest(commodity=commodity):
+                d = self.decomposition(commodity)
+                self.assertGreater(d["margin"] / d["price"], 0.55)
+
+    def test_wages_are_a_small_share_of_money_cost(self):
+        # Why labor-saving change moves price so little (docs/22).
+        for commodity in (CHEMFUEL, LEAVES, MEALS, YAYO):
+            with self.subTest(commodity=commodity):
+                d = self.decomposition(commodity)
+                self.assertLess(d["wages"] / d["price"], 0.05)
+
+    def test_capital_consumption_is_smaller_still(self):
+        for commodity in (CHEMFUEL, LEAVES, MEALS, YAYO):
+            with self.subTest(commodity=commodity):
+                d = self.decomposition(commodity)
+                self.assertLess(d["capital_consumed"], d["wages"])
+
+    def test_a_negative_wedge_is_reported_not_clamped(self):
+        # RimWorld's yayo price does not quite cover inputs, wages and
+        # capital consumption at reference. That is a finding about the
+        # authored price, so it must survive into the report.
+        d = self.decomposition(YAYO)
+        self.assertLess(d["margin"], 0.0)
+        self.assertGreater(d["attributable_cost"], 16.0)
+
+    def test_realized_and_produced_surplus_differ_by_sector(self):
+        # Money s/v against the uniform labor-time s/v. They agree for the
+        # wage good by construction and diverge elsewhere: a sector buying
+        # inputs whose prices contain surplus realizes less than it made.
+        labor_rate = self.economy.rate_of_surplus_value(self.region)
+        meals = self.decomposition(MEALS)
+        yayo = self.decomposition(YAYO)
+        meal_money_rate = meals["surplus_if_margin_is_surplus"] / meals["wages"]
+        yayo_money_rate = yayo["surplus_if_margin_is_surplus"] / yayo["wages"]
+        self.assertAlmostEqual(meal_money_rate, labor_rate, delta=0.05)
+        self.assertLess(yayo_money_rate, labor_rate / 2.0)
+
+
 if __name__ == "__main__":
     unittest.main()

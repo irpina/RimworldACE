@@ -475,6 +475,24 @@ class Ledger:
     #: labor-time quantities, never mixed into them.
     living_labor: Dict[str, float] = field(default_factory=dict)
     necessary_labor: Dict[str, float] = field(default_factory=dict)
+    #: Value of output in work-ticks, accumulated as it is produced and at
+    #: the values then prevailing.  A flow, deliberately: revaluing a whole
+    #: run at final values would not close when a technique changes
+    #: mid-run, and the closing identity is the point (docs/23).
+    value_produced: Dict[str, float] = field(default_factory=dict)
+    #: Constant capital in work-ticks (docs/23), split into its circulating
+    #: and fixed parts.  Circulating is inputs consumed at their own social
+    #: labor values; fixed is the capital worn out making the output.
+    circulating_capital: Dict[str, float] = field(default_factory=dict)
+    fixed_capital_consumed: Dict[str, float] = field(default_factory=dict)
+    #: Silver value of the fixed capital consumed, kept beside the labor
+    #: figure and never mixed with it.
+    fixed_capital_money: Dict[str, float] = field(default_factory=dict)
+    #: The unattributed wedge, accumulated in silver.  Either surplus or a
+    #: cost the model does not represent; nothing inside the laboratory
+    #: distinguishes them, so it is carried under its own name and the
+    #: surplus is reported as a band (docs/23).
+    unattributed_margin: Dict[str, float] = field(default_factory=dict)
     #: Silver actually paid as wages (money form of variable capital).
     wages_paid: Dict[str, float] = field(default_factory=dict)
     #: Silver workers spent on the basket.
@@ -490,6 +508,12 @@ class Ledger:
         return self.living_labor.get(region, 0.0) - self.necessary_labor.get(
             region, 0.0
         )
+
+    def constant_capital(self, region: str) -> float:
+        """c in work-ticks: circulating inputs plus fixed capital consumed."""
+        return self.circulating_capital.get(
+            region, 0.0
+        ) + self.fixed_capital_consumed.get(region, 0.0)
 
     @staticmethod
     def add(bucket: Dict[str, float], commodity: str, amount: float) -> None:
@@ -727,6 +751,113 @@ class Economy:
             - self.ledger.initial_cash
         )
 
+    def value_balance(self) -> float:
+        """Residual of the value accounting identity, in work-ticks.
+
+        Every unit of value in the period's output either was transferred
+        from something consumed making it, or was added by living labor:
+
+            value of output  =  c  +  v  +  s
+
+        A third closing ledger beside material and silver (docs/23).  It is
+        a genuine check rather than a tautology: ``c`` is accumulated from
+        the material draw and the capital worn out, ``v`` and ``s`` from
+        employment and the basket, and the output value from the solved
+        labor values — three independent paths that have to agree.
+        """
+        produced = sum(
+            self.ledger.value_produced.get(name, 0.0) for name in self.regions
+        )
+        constant = sum(
+            self.ledger.constant_capital(name) for name in self.regions
+        )
+        living = sum(
+            self.ledger.living_labor.get(name, 0.0) for name in self.regions
+        )
+        return produced - constant - living
+
+    def organic_composition(self, region: Optional[str] = None) -> Optional[float]:
+        """c / v in work-ticks: constant capital over variable capital.
+
+        A value ratio, never a money one.  ``None`` before any waged labor.
+        """
+        names = [region] if region is not None else list(self.regions)
+        variable = sum(self.ledger.necessary_labor.get(n, 0.0) for n in names)
+        if variable <= EPSILON:
+            return None
+        constant = sum(self.ledger.constant_capital(n) for n in names)
+        return constant / variable
+
+    def value_rate_of_profit(self, region: Optional[str] = None) -> Optional[float]:
+        """s / (c + v) in work-ticks.
+
+        The rate of profit in value terms, which is not money profitability
+        and must not be reported as though it were.
+        """
+        names = [region] if region is not None else list(self.regions)
+        variable = sum(self.ledger.necessary_labor.get(n, 0.0) for n in names)
+        # Guarded on v, not on c + v: without a wage relation there is no
+        # split between necessary and surplus labor, so the rate is
+        # undefined rather than zero, even where capital is consumed.
+        if variable <= EPSILON:
+            return None
+        constant = sum(self.ledger.constant_capital(n) for n in names)
+        surplus = sum(self.ledger.surplus_labor(n) for n in names)
+        return surplus / (constant + variable)
+
+    def price_decomposition(
+        self, region_name: str, commodity: str
+    ) -> Dict[str, float]:
+        """Split a unit's price into what the model can and cannot account for.
+
+        The diagnostic that motivated docs/23.  ``margin`` is the wedge
+        between RimWorld's authored price level and inputs + wages +
+        capital consumption; it is reported, not explained, because the
+        model cannot tell whether it is surplus or an unmodelled cost.
+
+        The two surplus readings name their assumption rather than an
+        ordering, because the wedge can be negative — RimWorld's yayo price
+        does not quite cover its inputs, wages, and capital consumption —
+        and a "lower bound" above an "upper bound" would be nonsense. The
+        truth lies between them and the laboratory cannot narrow it.
+        """
+        region = self.regions[region_name]
+        producers = [
+            p
+            for p in region.producers
+            if p.active and p.commodity == commodity
+        ]
+        if not producers:
+            return {}
+        weight = sum(p.last_runs for p in producers)
+        if weight <= EPSILON:
+            weight = float(len(producers))
+            shares = {id(p): 1.0 / weight for p in producers}
+        else:
+            shares = {id(p): p.last_runs / weight for p in producers}
+
+        price = region.prices[commodity]
+        inputs = wages = capital = margin = 0.0
+        for producer in producers:
+            share = shares[id(producer)]
+            per_run = producer.process.input_cost_per_run(region.prices)
+            units = producer.process.outputs.get(commodity, 0.0)
+            inputs += share * (per_run / units if units > EPSILON else 0.0)
+            wages += share * producer.wage_cost_per_unit
+            capital += share * producer.capital_cost_per_unit
+            margin += share * producer.unattributed_margin
+        attributable = inputs + wages + capital
+        return {
+            "price": price,
+            "inputs": inputs,
+            "wages": wages,
+            "capital_consumed": capital,
+            "attributable_cost": attributable,
+            "margin": margin,
+            "surplus_if_margin_is_cost": price - attributable - margin,
+            "surplus_if_margin_is_surplus": price - attributable,
+        }
+
     def rate_of_surplus_value(self, region: Optional[str] = None) -> Optional[float]:
         """Cumulative s/v in labor time; ``None`` before any waged labor.
 
@@ -810,6 +941,13 @@ class Economy:
                 for producer in region.producers:
                     if producer.active and producer.commodity == name:
                         producer.unit_cost = marginal
+
+            # Refreshed daily for every producer, so a producer added by any
+            # path — seeding, an investment project, or a scenario reaching
+            # in directly — always carries the capital its technique implies.
+            for producer in region.producers:
+                if producer.active:
+                    self._set_capital_consumption(producer)
 
             self._update_wage_costs(region)
 
@@ -899,6 +1037,28 @@ class Economy:
                     continue
                 producer.last_runs = runs
                 labor_performed += runs * producer.process.direct_labor
+                # Constant capital, in ticks and in silver (docs/23).  The
+                # circulating part is booked below from the material draw;
+                # the fixed part is the plant worn out making this output.
+                own_output = runs * producer.process.outputs.get(
+                    producer.commodity, 0.0
+                )
+                if own_output > EPSILON:
+                    Ledger.add(
+                        self.ledger.fixed_capital_consumed,
+                        region.name,
+                        own_output * producer.capital_labor_per_unit,
+                    )
+                    Ledger.add(
+                        self.ledger.fixed_capital_money,
+                        region.name,
+                        own_output * producer.capital_cost_per_unit,
+                    )
+                    Ledger.add(
+                        self.ledger.unattributed_margin,
+                        region.name,
+                        own_output * producer.unattributed_margin,
+                    )
                 for name, per_run in inputs.items():
                     drawn[name] = drawn.get(name, 0.0) + runs * per_run
                 for name, per_run in producer.process.outputs.items():
@@ -912,9 +1072,24 @@ class Economy:
             for name, amount in drawn.items():
                 region.inventory[name] -= amount
                 Ledger.add(self.ledger.intermediate_consumption, name, amount)
+                # Circulating constant capital: inputs consumed, valued at
+                # their own social labor values.
+                Ledger.add(
+                    self.ledger.circulating_capital,
+                    region.name,
+                    amount * self.labor_values.get(name, 0.0),
+                )
             for name, amount in produced.items():
                 region.inventory[name] += amount
                 Ledger.add(self.ledger.production, name, amount)
+                # Valued at the labor values the day opened with, the same
+                # prevailing values the inputs above were charged at, so the
+                # two sides of the identity are measured on one basis.
+                Ledger.add(
+                    self.ledger.value_produced,
+                    region.name,
+                    amount * self.labor_values.get(name, 0.0),
+                )
 
             # Deduct from reserves and track depletion.
             for rname, reserve in region.reserves.items():

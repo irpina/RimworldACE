@@ -965,6 +965,64 @@ def summary(economy: Economy) -> Dict[str, object]:
             for key, value in sorted(economy.commodity_balances().items())
         },
         "cash_residual": round(economy.cash_balance(), 9),
+        # The classical magnitudes, in work-ticks (docs/23). Value ratios,
+        # never money ones: the value rate of profit and money
+        # profitability are different quantities.
+        "value_ledger": {
+            "constant_capital": round(
+                sum(economy.ledger.constant_capital(r) for r in economy.regions), 3
+            ),
+            "circulating_capital": round(
+                sum(
+                    economy.ledger.circulating_capital.get(r, 0.0)
+                    for r in economy.regions
+                ),
+                3,
+            ),
+            "fixed_capital_consumed": round(
+                sum(
+                    economy.ledger.fixed_capital_consumed.get(r, 0.0)
+                    for r in economy.regions
+                ),
+                3,
+            ),
+            "variable_capital": round(
+                sum(
+                    economy.ledger.necessary_labor.get(r, 0.0)
+                    for r in economy.regions
+                ),
+                3,
+            ),
+            "surplus_labor": round(
+                sum(economy.ledger.surplus_labor(r) for r in economy.regions), 3
+            ),
+            "organic_composition": (
+                None
+                if economy.organic_composition() is None
+                else round(economy.organic_composition(), 4)
+            ),
+            "value_rate_of_profit": (
+                None
+                if economy.value_rate_of_profit() is None
+                else round(economy.value_rate_of_profit(), 4)
+            ),
+        },
+        "value_residual": round(economy.value_balance(), 6),
+        # What the model can and cannot account for in a unit's price. The
+        # margin is reported, not explained: the laboratory cannot tell
+        # whether it is surplus or a cost it does not represent.
+        "price_decomposition": {
+            region_name: {
+                key: {
+                    part: round(value, 5)
+                    for part, value in economy.price_decomposition(
+                        region_name, key
+                    ).items()
+                }
+                for key in sorted(economy.commodities)
+            }
+            for region_name in sorted(economy.regions)
+        },
         "social_labor_values_ticks": {
             key: round(value, 4)
             for key, value in sorted(economy.labor_values.items())
