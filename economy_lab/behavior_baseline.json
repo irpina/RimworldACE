@@ -4,7 +4,7 @@
   "metrics": {
     "arbitrage.export_volume": {
       "unit": "units",
-      "value": 12.381259
+      "value": 11.0
     },
     "equilibrium.distant_price_range": {
       "unit": "silver",
@@ -16,11 +16,11 @@
     },
     "glut.distant_trough_day": {
       "unit": "day",
-      "value": 81
+      "value": 80
     },
     "glut.distant_trough_price": {
       "unit": "silver",
-      "value": 20.415752
+      "value": 20.464413
     },
     "glut.local.chemfuel.inventory_peak": {
       "unit": "units",
@@ -104,11 +104,11 @@
     },
     "glut.local_half_recovery_days": {
       "unit": "days",
-      "value": 11
+      "value": 9
     },
     "glut.local_half_recovery_quadrums": {
       "unit": "quadrums",
-      "value": 0.733333
+      "value": 0.6
     },
     "glut.local_trough_day": {
       "unit": "day",
@@ -116,7 +116,7 @@
     },
     "glut.local_trough_price": {
       "unit": "silver",
-      "value": 14.340916
+      "value": 14.356472
     },
     "producer_loss.capacity_recovery_days": {
       "unit": "days",
@@ -144,11 +144,11 @@
     },
     "producer_loss.local.chemfuel.price_peak": {
       "unit": "silver",
-      "value": 2.442762
+      "value": 2.93449
     },
     "producer_loss.local.chemfuel.price_peak_day": {
       "unit": "day",
-      "value": 125
+      "value": 210
     },
     "producer_loss.local.chemfuel.price_trough": {
       "unit": "silver",
@@ -160,11 +160,11 @@
     },
     "producer_loss.local.chemfuel.terminal_inventory": {
       "unit": "units",
-      "value": 115.688738
+      "value": 103.89449
     },
     "producer_loss.local.chemfuel.terminal_price": {
       "unit": "silver",
-      "value": 2.378374
+      "value": 2.93449
     },
     "producer_loss.local.psychoid_leaves.inventory_peak": {
       "unit": "units",
@@ -184,11 +184,11 @@
     },
     "producer_loss.local.psychoid_leaves.price_peak": {
       "unit": "silver",
-      "value": 2.429603
+      "value": 2.817404
     },
     "producer_loss.local.psychoid_leaves.price_peak_day": {
       "unit": "day",
-      "value": 125
+      "value": 168
     },
     "producer_loss.local.psychoid_leaves.price_trough": {
       "unit": "silver",
@@ -200,11 +200,11 @@
     },
     "producer_loss.local.psychoid_leaves.terminal_inventory": {
       "unit": "units",
-      "value": 1427.54952
+      "value": 1425.508582
     },
     "producer_loss.local.psychoid_leaves.terminal_price": {
       "unit": "silver",
-      "value": 2.103104
+      "value": 2.507273
     },
     "producer_loss.local_peak_day": {
       "unit": "day",
