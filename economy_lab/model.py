@@ -196,6 +196,10 @@ class Producer:
     #: current regional basket cost (see docs/17).  Zero when the region has
     #: no subsistence basket, which keeps bare-model tests bit-identical.
     wage_cost_per_unit: float = 0.0
+    #: Runs actually completed on the most recent day, after every rationing
+    #: stage.  The output weights for the social labor value solve are these
+    #: realized runs, not capacity (see docs/19).
+    last_runs: float = 0.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -439,6 +443,8 @@ class Economy:
         buffer_refill_horizon_days: float = 60.0,
         labor_value_per_tick: float = 11.4 / 720.0,
         employment_quantum: float = 2.0 ** -20,
+        labor_value_tolerance: float = 1e-12,
+        labor_value_max_iterations: int = 1000,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -465,6 +471,19 @@ class Economy:
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.labor_value_per_tick = labor_value_per_tick
         self.employment_quantum = employment_quantum
+        self.labor_value_tolerance = labor_value_tolerance
+        self.labor_value_max_iterations = labor_value_max_iterations
+        #: Social labor values in work-ticks, solved from the process graph.
+        #: Distinct from ``Commodity.labor_value``, which stays the authored
+        #: FINDINGS.md figure.  See docs/19.
+        self.labor_values: Dict[str, float] = {}
+        #: Individual per-region values: own living labor plus inputs at
+        #: *social* value.  The gap from the social value is where a region
+        #: with better-than-average conditions shows up.
+        self.regional_labor_values: Dict[str, Dict[str, float]] = {}
+        #: Commodities whose value is held over from an earlier day because
+        #: nothing was produced (docs/19 section 4).
+        self.stale_labor_values: set = set()
         self.ledger = Ledger(
             initial_cash=sum(
                 r.cash + r.worker_cash for r in self.regions.values()
@@ -501,6 +520,9 @@ class Economy:
                 region.consumed_total.setdefault(commodity.name, 0.0)
                 region.imported_total.setdefault(commodity.name, 0.0)
                 region.exported_total.setdefault(commodity.name, 0.0)
+        # Nothing has been produced yet, so the first solve weights the
+        # installed structure rather than realized output (docs/19).
+        self._update_labor_values(use_capacity=True)
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -511,6 +533,10 @@ class Economy:
             self._arrive_shipments()
             self._complete_projects()
             self._produce()
+            # Solved from the day's realized runs.  The wage just paid used
+            # the value prevailing when the day opened, which keeps the
+            # model's one-day propagation rhythm (docs/19 section 6).
+            self._update_labor_values()
             self._track_differential_rent()
             self._consume()
             self._workers_consume()
@@ -770,6 +796,8 @@ class Economy:
             drawn: Dict[str, float] = {}
             produced: Dict[str, float] = {}
             labor_performed = 0.0
+            for producer in region.producers:
+                producer.last_runs = 0.0
             for producer in active:
                 runs = planned[id(producer)]
                 if runs <= EPSILON:
@@ -782,6 +810,7 @@ class Economy:
                 runs *= available
                 if runs <= EPSILON:
                     continue
+                producer.last_runs = runs
                 labor_performed += runs * producer.process.direct_labor
                 for name, per_run in inputs.items():
                     drawn[name] = drawn.get(name, 0.0) + runs * per_run
@@ -854,15 +883,11 @@ class Economy:
                 Ledger.add(
                     self.ledger.living_labor, region.name, labor_performed
                 )
-                necessary_per_day = sum(
-                    quantity
-                    * self.commodities[name].labor_value
-                    / self.labor_value_per_tick
-                    for name, quantity in sorted(
-                        region.subsistence_basket.items()
-                    )
-                    if name in self.commodities
-                )
+                # The value of labor-power: the basket at endogenous social
+                # labor values, so it moves when the conditions of producing
+                # wage goods move.  This is what makes s/v an outcome rather
+                # than a coefficient (docs/19 section 6).
+                necessary_per_day = self.basket_labor_value(region)
                 Ledger.add(
                     self.ledger.necessary_labor,
                     region.name,
@@ -961,6 +986,138 @@ class Economy:
                         cname,
                         advantage * extracted,
                     )
+
+    def _update_labor_values(self, *, use_capacity: bool = False) -> None:
+        """Solve labor values from the process graph (docs/19).
+
+        Value in work-ticks is transferred value (inputs at their own social
+        values) plus living labor, per unit of output, aggregated over all
+        active producers in every region: total labor over total output, so
+        a producer's weight is its realized share of supply.
+
+        This is a fixed point in ``v`` and is iterated rather than inverted:
+        iteration converges exactly when the input matrix is productive,
+        which is the same condition under which the economy can reproduce
+        itself, and it survives a cyclic graph that no topological pass
+        could answer at all.  Failure to converge is an explicit error, not
+        a returned number.
+
+        ``use_capacity`` seeds the very first solve, before anything has
+        been produced, from installed capacity instead of realized runs.
+        """
+
+        def weight(producer: Producer) -> float:
+            if use_capacity:
+                return producer.process.runs_for(producer.capacity_per_day)
+            return producer.last_runs
+
+        contributors: List[Producer] = [
+            producer
+            for region in self.regions.values()
+            for producer in region.producers
+            if producer.active and weight(producer) > EPSILON
+        ]
+
+        # Total output per commodity fixes which values this solve can
+        # determine.  Anything else keeps the value it already had: value
+        # describes conditions of production, which do not evaporate because
+        # nobody produced today (docs/19 section 4).
+        output: Dict[str, float] = {}
+        for producer in contributors:
+            runs = weight(producer)
+            for name, per_run in producer.process.outputs.items():
+                if name in self.commodities:
+                    output[name] = output.get(name, 0.0) + runs * per_run
+        solvable = sorted(
+            name for name, total in output.items() if total > EPSILON
+        )
+        self.stale_labor_values = {
+            name for name in self.commodities if name not in solvable
+        }
+
+        values = dict(self.labor_values)
+        for name in self.commodities:
+            values.setdefault(name, 0.0)
+
+        for _ in range(self.labor_value_max_iterations):
+            labor: Dict[str, float] = {name: 0.0 for name in solvable}
+            for producer in contributors:
+                runs = weight(producer)
+                process = producer.process
+                per_run_total = process.direct_labor + sum(
+                    quantity * values.get(name, 0.0)
+                    for name, quantity in sorted(process.inputs.items())
+                )
+                for name in sorted(process.outputs):
+                    if name not in labor:
+                        continue
+                    labor[name] += (
+                        runs
+                        * per_run_total
+                        * process.share_of_cost(name, self.commodities)
+                    )
+            revised = dict(values)
+            for name in solvable:
+                revised[name] = labor[name] / output[name]
+            if all(
+                abs(revised[name] - values[name]) <= self.labor_value_tolerance
+                for name in solvable
+            ):
+                values = revised
+                break
+            values = revised
+        else:
+            raise RuntimeError(
+                "labor value solve did not converge; the input matrix is "
+                "not productive (some commodity consumes more of itself, "
+                "directly or indirectly, than it produces)"
+            )
+
+        self.labor_values = values
+
+        # Individual values: a region's own living labor plus its inputs at
+        # prevailing *social* values.  One pass, no fixed point needed.
+        self.regional_labor_values = {}
+        for region_name, region in sorted(self.regions.items()):
+            region_labor: Dict[str, float] = {}
+            region_output: Dict[str, float] = {}
+            for producer in region.producers:
+                if not producer.active or weight(producer) <= EPSILON:
+                    continue
+                runs = weight(producer)
+                process = producer.process
+                per_run_total = process.direct_labor + sum(
+                    quantity * self.labor_values.get(name, 0.0)
+                    for name, quantity in sorted(process.inputs.items())
+                )
+                for name, per_run in sorted(process.outputs.items()):
+                    if name not in self.commodities:
+                        continue
+                    region_labor[name] = region_labor.get(
+                        name, 0.0
+                    ) + runs * per_run_total * process.share_of_cost(
+                        name, self.commodities
+                    )
+                    region_output[name] = (
+                        region_output.get(name, 0.0) + runs * per_run
+                    )
+            self.regional_labor_values[region_name] = {
+                name: region_labor[name] / total
+                for name, total in sorted(region_output.items())
+                if total > EPSILON
+            }
+
+    def basket_labor_value(self, region: Region) -> float:
+        """Work-ticks needed to reproduce one worker-day of labor-power.
+
+        The subsistence basket at *social* labor values: the value of
+        labor-power is a social magnitude, not a regional one.
+        """
+        return sum(
+            quantity * self.labor_values.get(name, 0.0)
+            for name, quantity in sorted(region.subsistence_basket.items())
+            if name in self.commodities
+        )
 
     def _planned_runs(
         self,
@@ -1278,6 +1435,11 @@ class Economy:
                 "day": self.day,
                 "system_inventory": {
                     name: self.system_inventory(name) for name in self.commodities
+                },
+                "labor_values": dict(self.labor_values),
+                "regional_labor_values": {
+                    name: dict(values)
+                    for name, values in self.regional_labor_values.items()
                 },
                 "regions": {
                     region.name: {
