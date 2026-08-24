@@ -311,6 +311,8 @@ class Economy:
         zero_utilization_price_ratio: float = 0.70,
         full_utilization_price_ratio: float = 1.05,
         input_rationing: str = PROPORTIONAL,
+        construction_cost_multiplier: float = 60.0,
+        min_investment_capacity: float = 0.1,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -330,6 +332,8 @@ class Economy:
         if not 0.0 <= replenishment_rate <= 1.0:
             raise ValueError("replenishment_rate must be between zero and one")
         self.replenishment_rate = replenishment_rate
+        self.construction_cost_multiplier = construction_cost_multiplier
+        self.min_investment_capacity = min_investment_capacity
         self.zero_utilization_price_ratio = zero_utilization_price_ratio
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
@@ -447,10 +451,16 @@ class Economy:
         return {name: self.commodity_balance(name) for name in self.commodities}
 
     def cash_balance(self) -> float:
-        """Return residual of the currently modelled silver accounts."""
+        """Return residual of the currently modelled silver accounts.
+
+        Silver starts in regional pools. It can leave via freight payments
+        (to the transport sector) or construction spending (consumed by
+        investment). Both are tracked in the ledger.
+        """
         return (
             sum(r.cash for r in self.regions.values())
             + self.ledger.transport_cash
+            + self.ledger.investment_spending
             - self.ledger.initial_cash
         )
 
@@ -837,6 +847,20 @@ class Economy:
                 ):
                     continue
                 amount = shortfall * self.investment_fraction_of_shortfall
+                # Construction costs silver: days of effective cost per unit
+                # of daily capacity. Deducted when the project is commissioned.
+                construction_unit = (
+                    assumed_effective * self.construction_cost_multiplier
+                )
+                total_cost = amount * construction_unit
+                if total_cost > region.cash:
+                    # Scale down to what the region can afford.
+                    amount = region.cash / max(construction_unit, EPSILON)
+                if amount < self.min_investment_capacity:
+                    continue
+                total_cost = amount * construction_unit
+                region.cash -= total_cost
+                self.ledger.investment_spending += total_cost
                 existing_process = next(
                     (
                         p.process

@@ -62,6 +62,8 @@ class ScenarioParameters:
     speculative_inventory_limit: float = 0.50
     expectation_alpha: float = 0.05
     replenishment_rate: float = 0.10
+    construction_cost_multiplier: float = 60.0
+    min_investment_capacity: float = 0.1
     glut_fraction_of_annual_demand: float = 0.25
     producer_loss_fraction: float = 0.60
 
@@ -320,6 +322,8 @@ def seeded_two_region_economy(
         zero_utilization_price_ratio=parameters.zero_utilization_price_ratio,
         full_utilization_price_ratio=parameters.full_utilization_price_ratio,
         input_rationing=input_rationing,
+        construction_cost_multiplier=parameters.construction_cost_multiplier,
+        min_investment_capacity=parameters.min_investment_capacity,
     )
 
 

@@ -449,6 +449,14 @@ class CostFloorTests(unittest.TestCase):
             with self.subTest(day=economy.day):
                 self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
 
+    def test_investment_consumes_silver(self):
+        """Capacity investment draws from the regional cash pool."""
+        economy = producer_loss()
+        # Producer-loss triggers investment; silver must have been spent.
+        self.assertGreater(economy.ledger.investment_spending, 0.0)
+        # And the books still close.
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+
 
 if __name__ == "__main__":
     unittest.main()
