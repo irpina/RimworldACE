@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `9826489` (competitive transmission)
-**Behavioral baseline:** `213d1cd` (85 metrics: 20 refreshed + 10 new observations)
+**Latest Stage 0 model commit:** `83a780a` (constant capital + value ledger)
+**Behavioral baseline:** `7102ca4` (101 metrics: 15 refreshed + 16 new observations)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -29,6 +29,9 @@
 **Competitive transmission design:** `a475152`
 **Competitive transmission implementation:** `a9c3016`, `9826489`
 **Competitive transmission results:** `77c3078`
+**Constant capital design:** `87ac0cc`
+**Constant capital implementation:** `7bd916c`, `83a780a`
+**Constant capital results:** `1f48794`
 **Latest Stage 1 implementation:** `6794dfc`  
 **Stage 1 verification checkpoint:** `906f63e`
 
@@ -256,6 +259,12 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/23-constant-capital-and-the-overhead-design.md` — fixed capital,
+  the reclassification of the operating overhead, and the c/v/s ledger
+  decided in advance;
+- `docs/24-constant-capital-and-the-overhead-results.md` — the overhead
+  measured as the authored-price wedge, and surplus produced against
+  surplus realized;
 - `docs/21-competitive-transmission-design.md` — the cost-aware price
   anchor, cost-weighted order allocation, and the cost-competition
   scenario decided in advance;
@@ -315,6 +324,12 @@ Commits:
 - `577c869` — Refresh baseline for competitive transmission
 - `213d1cd` — Freeze ten newly observed competitive transmission quantities
 - `77c3078` — Record competitive transmission results
+- `87ac0cc` — Record constant capital and overhead design decisions
+- `7bd916c` — Fixed capital transfers its value to the product
+- `83a780a` — Add the value ledger: constant capital and the price wedge
+- `73d115a` — Refresh baseline for fixed capital
+- `7102ca4` — Freeze sixteen newly observed value ledger quantities
+- `1f48794` — Record constant capital results
 
 ### Current vertical slice
 
@@ -367,6 +382,20 @@ It supports:
   work-ticks per region, observational, with the silver wage bill and
   basket shortfall recorded beside them — money profit is not surplus
   value, and the money wage is not necessary labor;
+- **fixed capital that transfers value**: each sector carries its real
+  RimWorld building (`DrugLab`, `HydroponicsBasin`, `BiofuelRefinery`,
+  `ElectricStove`) in both silver and embodied labor, depreciating by use
+  over a service life. This repairs the omission `FINDINGS.md` recorded in
+  vanilla — where fixed capital transfers nothing — and measures it as
+  0.353% of constant capital;
+- **the value ledger**: c (circulating plus fixed), v, and s in work-ticks,
+  with the organic composition and the value rate of profit. A third
+  closing identity beside material and silver: value of output = c + v + s;
+- **the price decomposition**: every unit's price split into inputs, wages,
+  capital consumed, and the **unattributed wedge** — the gap between
+  RimWorld's authored price level and anything the model can account for.
+  Surplus is reported as two readings that name their assumption, never as
+  a single number;
 - **a cost-aware price anchor**: the anchor moves with the sector's
   output-weighted average cost relative to its seeded cost, blended by
   `competitive_price_intensity` (default 0.5, and 0 restores the
@@ -498,7 +527,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 83 tests pass;
+- all 97 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -732,7 +761,7 @@ Stage 0 production model.
 
 ## Immediate next work
 
-Steps 1–9 are **done**.
+Steps 1–10 are **done**.
 
 1. ~~Add `Process` definitions with material inputs, outputs, direct labor,
    capacity, and unit operating cost.~~
@@ -771,8 +800,30 @@ Steps 1–9 are **done**.
    and price 0.47%; capital-saving moves price 14.3% and value not at all
    (docs/22).
 
-10. **Next economic feature — the two candidates are close, and both are
-    named in `docs/22` as what this session could not finish.**
+10. ~~Give the operating overhead an economic interpretation.~~ Done, and
+    the answer is negative in a useful way: it is the gap between
+    RimWorld's authored price level and anything the model can account
+    for. Fixed capital — now implemented from the real building data —
+    explains 0.05% of it; two-thirds of the upstream price remains
+    unattributed. The wedge is reported under its own name, surplus is
+    given as two readings that state their assumption, and the classical
+    magnitudes are computable at last: organic composition 20.67, value
+    rate of profit 1.77 (docs/24).
+
+11. **Next economic feature — prices of production.** `docs/24` closes with
+    the conclusion that the wedge *cannot* be closed while RimWorld's
+    authored `MarketValue` is the price anchor: every economically
+    meaningful component has been carved out of it and two-thirds remains.
+    Deriving prices from the technical coefficients, the wage, and a
+    uniform profit rate — the classical Sraffa/Marx exercise — is the
+    resolution. The model already has every piece: input-output
+    coefficients, direct labor, fixed capital, a wage, and the iterative
+    solver. It would move every price in the model and needs its own
+    session. A non-destructive first step is to compute the implied prices
+    as an *observation* beside the authored ones, quantifying the gap per
+    commodity before adopting anything.
+
+    Still open behind it:
 
     *Capacity depreciation and mothballing*, so that competition is for
     survival and not only for orders. Today a producer that loses the
@@ -780,21 +831,21 @@ Steps 1–9 are **done**.
     demand and inventory targets through the full-capacity convention,
     and would take its share straight back. Exit is also what would let
     the social labor value migrate to a superseded technique rather than
-    resting at the mix average.
+    resting at the mix average. Time-based depreciation belongs here too,
+    since idle capacity is its subject.
 
-    *Giving the operating overhead an economic interpretation.* `docs/22`
-    measured transmission strength and found it small for labor-saving
-    change, because wages are 2-4% of money cost and `unit_cost` — a
-    residual `docs/13` derived as whatever makes producers run at full
-    utilization at reference prices — is over 95% of it for meals and
-    chemfuel. An economy whose money costs are mostly unexplained residual
-    can only say so much about labor. This one would move every metric and
-    needs its own session.
+    *A capital-goods sector (Department I).* Machinery as a produced
+    commodity that investment consumes materially. Building capacity still
+    spends silver without consuming anything, which is the last place
+    something appears from nothing.
 
-    Other candidates: equalization of profit rates across sectors through
-    capital mobility (a genuine price of production, and a large change);
-    labor content of resource grades; wage deviations from the value of
-    labor-power; absolute rent; credit and bankruptcy.
+    *An enlarged subsistence basket.* Every ratio built on v — s/v 38.30,
+    c/v 20.67, the value rate of profit 1.77 — is inflated because the
+    basket is meals-only, so the value of labor-power is understated. This
+    is the single largest caveat on the project's headline numbers.
+
+    Other candidates: labor content of resource grades; wage deviations
+    from the value of labor-power; absolute rent; credit and bankruptcy.
 
 The sensitivity sweep has not been re-run since the cost floor landed;
 `sensitivity_results.csv` describes the free-production model. Re-run it once
@@ -837,8 +888,12 @@ it is not intended for per-commit testing.
   labor-saving change because wages are 2-4% of money cost;
 - competitive *exit*: a producer that loses the order book keeps its
   capacity indefinitely, so competition is for orders and not survival;
-- an economic interpretation for the `unit_cost` operating overhead, which
-  is a calibration residual and over 95% of cost for meals and chemfuel;
+- ~~an economic interpretation for the `unit_cost` operating overhead~~ —
+  done, and the answer is that it is the authored-price wedge (`docs/24`);
+  it is now named and measured, but not removed, and removing it means
+  abandoning `MarketValue` as the price anchor;
+- a capital-goods sector: building capacity spends silver but consumes no
+  material, so capital stock still appears from nothing;
 - equalization of profit rates across sectors: the cost anchor freezes each
   sector's calibrated rate of profit rather than equalizing it;
 - labor content of resource grades: a poorer deposit costs more silver but
@@ -873,10 +928,16 @@ process graph and reproduce the closed analysis exactly, save for the one
 link `docs/08` declared stylized.
 
 The reproduction circuit is closed in both directions: goods are made from
-goods and labor, and labor is reproduced by goods. Cost reaches price, and
-the cheaper producer wins custom. What it still lacks is exit — competition
-here is for orders, not for survival — and an economic account of the
-operating overhead that dominates money cost.
+goods and labor, and labor is reproduced by goods. Cost reaches price, the
+cheaper producer wins custom, and three ledgers now close to floating-point
+zero — material, silver, and value.
+
+What it lacks is a price system of its own. Two-thirds of every upstream
+price is a wedge the model cannot account for, because prices are anchored
+to RimWorld's authored `MarketValue` while costs are built from a wage the
+authored prices never knew about. Every other component has been carved out
+and named; what remains is the seam `FINDINGS.md` found, and closing it
+means deriving prices rather than importing them.
 
 ---
 

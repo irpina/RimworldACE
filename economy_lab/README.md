@@ -45,6 +45,17 @@ circuit rather than beside it. It supports:
   value;
 - explicit material and silver ledgers separating final from productive
   consumption, with investment spending and reserve depletion tracked;
+- fixed capital that transfers value: each sector carries its real
+  RimWorld building in both silver and embodied labor, depreciating by
+  use — the omission `FINDINGS.md` recorded in vanilla, repaired and
+  measured at 0.353% of constant capital;
+- a value ledger: c, v and s in work-ticks with the organic composition
+  and the value rate of profit, and a third closing identity beside
+  material and silver — value of output equals c + v + s;
+- a price decomposition: inputs, wages, capital consumed, and the
+  unattributed wedge between RimWorld's authored price level and anything
+  the model can account for. Surplus is reported as two readings that
+  name their assumption, never as one number;
 - a cost-aware price anchor: the anchor moves with the sector's
   output-weighted average cost relative to its seeded cost, so upstream
   cost propagates downstream and a price no longer needs a starved
@@ -73,9 +84,11 @@ are in `docs/17-labor-power-and-surplus-design.md`. The value equation,
 its social scope, and the technique-change scenario are in
 `docs/19-endogenous-labor-values-design.md`. The cost-aware anchor and
 cost-weighted allocation are in
-`docs/21-competitive-transmission-design.md`. Read all six before
-changing them; each was chosen deliberately and several have defensible
-alternatives.
+`docs/21-competitive-transmission-design.md`. Fixed capital, the
+reclassification of the operating overhead, and the value ledger are in
+`docs/23-constant-capital-and-the-overhead-design.md`. Read all seven
+before changing them; each was chosen deliberately and several have
+defensible alternatives.
 
 Run all example scenarios:
 
@@ -169,7 +182,7 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 85 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 101 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
@@ -178,22 +191,29 @@ value observations (the four endogenous values, and the technique-change
 scenario's social, adopter, and laggard values with both regions' rate of
 surplus value), and ten competitive-transmission observations (the two
 contrasting scenarios' prices, the share won by the cheapest producer, and
-the depletion buffer as a fraction of target). The reporter remains
-observational; the invariant tests protect correctness.
+the depletion buffer as a fraction of target), and sixteen value-ledger
+observations (c, v, s and the classical ratios, the wedge as a share of
+each price, and each sector's money rate of surplus value against the
+uniform labor-time rate). The reporter remains observational; the
+invariant tests protect correctness.
 
-The current reference describes the model with competitive transmission. Its
-design and results are in `docs/21-competitive-transmission-design.md` and
-`docs/22-competitive-transmission-results.md`; the layers beneath it are in
-docs/13–20. Twenty of the previous 75 metrics moved, all in producer loss
-and technique change.
+The current reference describes the model with fixed capital and the value
+ledger. Its design and results are in
+`docs/23-constant-capital-and-the-overhead-design.md` and
+`docs/24-constant-capital-and-the-overhead-results.md`; the layers beneath
+it are in docs/13–22. Adding fixed capital moved no behavioral metric at
+all — only labor values and the rate of surplus value.
 
 ## Intentionally absent from this slice
 
 - competitive *exit*: a producer that loses the order book keeps its
   capacity indefinitely, so competition is for orders, not survival;
-- an economic interpretation for the operating overhead, which is a
-  calibration residual and over 95% of cost for meals and chemfuel — the
-  reason transmission is weak for labor-saving change (docs/22);
+- a price system of its own: two-thirds of every upstream price is a wedge
+  the model cannot attribute, because prices are anchored to RimWorld's
+  authored MarketValue while costs are built from a wage those prices
+  never knew about (docs/24);
+- a capital-goods sector: building capacity spends silver but consumes no
+  material;
 - equalization of profit rates across sectors;
 - labor content of resource grades, so depletion moves value as well as
   cost and rent;
@@ -205,7 +225,8 @@ and technique change.
 - more than four commodities or two regions;
 - RimWorld runtime integration.
 
-The next slice should add capacity depreciation and mothballing, so that
-competition is for survival and not only for orders; or give the operating
-overhead an economic interpretation, since an economy whose money costs are
-mostly unexplained residual can only say so much about labor.
+The next slice should derive prices of production from the technical
+coefficients, the wage, and a uniform profit rate, instead of anchoring
+them to authored MarketValue. Every other component of the overhead has
+been carved out and named; what remains cannot be closed while the anchor
+is imported.

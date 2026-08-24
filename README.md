@@ -225,7 +225,7 @@ running game.
 
 Two properties are held above everything else: **determinism** (identical
 inputs give bit-identical histories) and **ledgers that close to
-floating-point zero — material and silver alike**. Every feature below was
+floating-point zero — material, silver, and value alike**. Every feature below was
 designed in a committed document before it was implemented, measured against
 a frozen behavioral reference afterward, and the predictions were scored
 honestly whether or not they held.
@@ -247,9 +247,10 @@ delayed, capacity-limited arbitrage; capacity investment that consumes a
 construction fund; finite resource reserves with ordered grade depletion and
 differential rent; the wage relation, with silver cycling producer → wage →
 worker → basket purchase → producer; a surplus ledger in work-ticks; labor
-values solved endogenously from the process graph; and competitive
+values solved endogenously from the process graph; competitive
 transmission, where the price anchor reads cost and the order book goes to
-the cheaper producer.
+the cheaper producer; and fixed capital that transfers its value to the
+product, with c, v and s accumulated in work-ticks.
 
 Four quantities are kept strictly distinct and are never collapsed into one
 number: **labor value, market price, surplus value, and rent.** Money profit
@@ -279,7 +280,19 @@ rather than from a parameter. The magnitude carries a stated caveat: the
 basket is meals-only, so the value of labor-power is understated and s/v
 correspondingly overstated.
 
-**3. Value and price answer to different things.** Two deliberately opposite
+**3. The overhead is the seam, measured from the inside.** RimWorld's
+authored price for a meal is 15 silver. Inputs, wages, and the depreciation
+of a real `ElectricStove` account for 0.39 of it; the other **two-thirds of
+the price is a wedge the model cannot attribute** to anything. Fixed
+capital — implemented from the game's own building costs, repairing an
+omission `FINDINGS.md` found in vanilla — explains 0.05%. This is the same
+seam the research spike found from the outside: authored prices embed a
+labor rate far above what the model pays. Every sector performs surplus
+labor at the same rate, 38.3, but realizes wildly different amounts of it
+in money — 72.6 for chemfuel, 11.2 for yayo — which is the transformation
+problem as arithmetic rather than argument.
+
+**4. Value and price answer to different things.** Two deliberately opposite
 scenarios, once cost reaches price and the order book goes to the cheaper
 producer. A *labor-saving* technique moves the labor value of a meal by
 −12.7% and its price by −0.47%. A *capital-saving* one moves the price by
@@ -305,18 +318,19 @@ results document scoring the predictions afterward.
 | [17](docs/17-labor-power-and-surplus-design.md) · [18](docs/18-labor-power-and-surplus-results.md) | Labor-power, the subsistence basket, the wage circuit, the surplus ledger |
 | [19](docs/19-endogenous-labor-values-design.md) · [20](docs/20-endogenous-labor-values-results.md) | Endogenous labor values and relative surplus value |
 | [21](docs/21-competitive-transmission-design.md) · [22](docs/22-competitive-transmission-results.md) | Competitive transmission: the cost-aware price anchor and the cost-weighted order book |
+| [23](docs/23-constant-capital-and-the-overhead-design.md) · [24](docs/24-constant-capital-and-the-overhead-results.md) | Fixed capital, the value ledger, and what the operating overhead actually is |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 83 acceptance and invariant tests
+python -m unittest discover -s tests      # 97 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
-python -m economy_lab.baseline            # 85 frozen metrics vs current
+python -m economy_lab.baseline            # 101 frozen metrics vs current
 ```
 
-`behavior_baseline.json` freezes 85 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 101 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.
