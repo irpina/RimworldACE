@@ -313,6 +313,7 @@ class Economy:
         input_rationing: str = PROPORTIONAL,
         construction_cost_multiplier: float = 60.0,
         min_investment_capacity: float = 0.1,
+        buffer_refill_horizon_days: float = 60.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -334,6 +335,7 @@ class Economy:
         self.replenishment_rate = replenishment_rate
         self.construction_cost_multiplier = construction_cost_multiplier
         self.min_investment_capacity = min_investment_capacity
+        self.buffer_refill_horizon_days = buffer_refill_horizon_days
         self.zero_utilization_price_ratio = zero_utilization_price_ratio
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.ledger = Ledger(initial_cash=sum(r.cash for r in self.regions.values()))
@@ -813,9 +815,32 @@ class Economy:
                 pipeline = sum(
                     p.capacity_per_day for p in region.projects if p.commodity == name
                 )
-                shortfall = max(0.0, demand - existing - pipeline)
+
+                # --- flow-shortfall investment --------------------------
+                flow_shortfall = max(0.0, demand - existing - pipeline)
+
+                # --- buffer-deficit investment --------------------------
+                # When stock is below target and existing surplus capacity
+                # cannot close the gap within the planning horizon, build
+                # enough extra to refill. This is proportional: a larger
+                # deficit requests more capacity; a zero deficit requests
+                # nothing.
+                target_stock = demand * commodity.target_inventory_days
+                buffer_deficit = max(0.0, target_stock - region.inventory[name])
+                surplus_capacity = max(0.0, existing + pipeline - demand)
+                if surplus_capacity > EPSILON:
+                    days_to_refill = buffer_deficit / surplus_capacity
+                else:
+                    days_to_refill = float("inf") if buffer_deficit > EPSILON else 0.0
+                if days_to_refill > self.buffer_refill_horizon_days:
+                    buffer_need = buffer_deficit / self.buffer_refill_horizon_days
+                else:
+                    buffer_need = 0.0
+
+                shortfall = flow_shortfall + buffer_need
                 if shortfall <= EPSILON:
                     continue
+
                 # Use effective cost (overhead + inputs) for the margin test,
                 # but store only the operating overhead on the new producer.
                 active_effective = [

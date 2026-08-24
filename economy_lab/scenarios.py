@@ -64,6 +64,7 @@ class ScenarioParameters:
     replenishment_rate: float = 0.10
     construction_cost_multiplier: float = 60.0
     min_investment_capacity: float = 0.1
+    buffer_refill_horizon_days: float = 60.0
     glut_fraction_of_annual_demand: float = 0.25
     producer_loss_fraction: float = 0.60
 
@@ -324,6 +325,7 @@ def seeded_two_region_economy(
         input_rationing=input_rationing,
         construction_cost_multiplier=parameters.construction_cost_multiplier,
         min_investment_capacity=parameters.min_investment_capacity,
+        buffer_refill_horizon_days=parameters.buffer_refill_horizon_days,
     )
 
 

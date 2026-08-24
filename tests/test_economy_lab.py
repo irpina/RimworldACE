@@ -457,6 +457,24 @@ class CostFloorTests(unittest.TestCase):
         # And the books still close.
         self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
 
+    def test_buffer_deficit_triggers_investment_and_resolves(self):
+        """The post-shock buffer scar resolves rather than persisting."""
+        economy = producer_loss(days_after_loss=600)
+        local = economy.regions["Dust Basin"]
+        # Upstream prices should converge to reference, not a displaced value.
+        self.assertAlmostEqual(local.prices[LEAVES], 1.9, places=4)
+        self.assertAlmostEqual(local.prices[CHEMFUEL], 2.3, places=4)
+        # Stock should be at the (potentially new) target, not below it.
+        for name in (LEAVES, CHEMFUEL):
+            target = (
+                local.throughput_demand(name)
+                * economy.commodities[name].target_inventory_days
+            )
+            self.assertAlmostEqual(
+                local.inventory[name], target, places=2,
+                msg=f"{name} stock should match its target",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
