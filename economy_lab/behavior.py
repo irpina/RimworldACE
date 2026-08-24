@@ -16,6 +16,8 @@ from .scenarios import (
     LEAVES,
     producer_loss,
     regional_glut,
+    technique_change,
+    YAYO,
 )
 
 
@@ -97,6 +99,7 @@ def collect_behavioral_metrics(
     glut = regional_glut(parameters=parameters)
     loss = producer_loss(parameters=parameters)
     trade = arbitrage(parameters=parameters)
+    technique = technique_change(parameters=parameters)
 
     stable_local = stable.series(LOCAL_REGION, COMMODITY)
     stable_distant = stable.series(DISTANT_REGION, COMMODITY)
@@ -174,7 +177,11 @@ def collect_behavioral_metrics(
             terminal_label="terminal",
         )
     )
-    metrics.update(_labor_metrics(stable=stable, glut=glut, loss=loss))
+    metrics.update(
+        _labor_metrics(
+            stable=stable, glut=glut, loss=loss, technique=technique
+        )
+    )
     return metrics
 
 
@@ -183,7 +190,7 @@ def _employment_series(economy: Economy, region: str) -> list:
 
 
 def _labor_metrics(
-    *, stable: Economy, glut: Economy, loss: Economy
+    *, stable: Economy, glut: Economy, loss: Economy, technique: Economy
 ) -> Dict[str, Dict[str, object]]:
     """Observe the wage relation (docs/17, docs/18).
 
@@ -235,5 +242,42 @@ def _labor_metrics(
         ),
         "producer_loss.local.meals.price_peak": _metric(
             max(loss_meal_prices), "silver"
+        ),
+        # --- endogenous labor values (docs/19) ---------------------------
+        # Solved from the process graph, in work-ticks.  These are values,
+        # not prices, and not the authored FINDINGS.md figures, which stay
+        # untouched on the Commodity.
+        "equilibrium.value.chemfuel_ticks": _metric(
+            stable.labor_values[CHEMFUEL], "ticks"
+        ),
+        "equilibrium.value.meals_ticks": _metric(
+            stable.labor_values[MEALS], "ticks"
+        ),
+        "equilibrium.value.psychoid_leaves_ticks": _metric(
+            stable.labor_values[LEAVES], "ticks"
+        ),
+        "equilibrium.value.yayo_ticks": _metric(
+            stable.labor_values[YAYO], "ticks"
+        ),
+        # Relative surplus value: the wage good gets cheaper, so the value
+        # of labor-power falls and s/v rises, with the working day and the
+        # basket held fixed.
+        "technique_change.value.meals_social_ticks": _metric(
+            technique.labor_values[MEALS], "ticks"
+        ),
+        "technique_change.value.meals_adopter_ticks": _metric(
+            technique.regional_labor_values[LOCAL_REGION][MEALS], "ticks"
+        ),
+        "technique_change.value.meals_laggard_ticks": _metric(
+            technique.regional_labor_values[DISTANT_REGION][MEALS], "ticks"
+        ),
+        "technique_change.local.rate_of_surplus_value": _metric(
+            technique.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "technique_change.distant.rate_of_surplus_value": _metric(
+            technique.rate_of_surplus_value(DISTANT_REGION), "ratio"
+        ),
+        "technique_change.local.wage_rate": _metric(
+            technique.regions[LOCAL_REGION].wage_rate(), "silver"
         ),
     }

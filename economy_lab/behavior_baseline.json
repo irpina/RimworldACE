@@ -34,6 +34,22 @@
       "unit": "ratio",
       "value": 38.344367
     },
+    "equilibrium.value.chemfuel_ticks": {
+      "unit": "ticks",
+      "value": 25.0
+    },
+    "equilibrium.value.meals_ticks": {
+      "unit": "ticks",
+      "value": 305.0
+    },
+    "equilibrium.value.psychoid_leaves_ticks": {
+      "unit": "ticks",
+      "value": 47.45
+    },
+    "equilibrium.value.yayo_ticks": {
+      "unit": "ticks",
+      "value": 734.6
+    },
     "glut.distant_trough_day": {
       "unit": "day",
       "value": 80
@@ -261,6 +277,30 @@
     "producer_loss.local_peak_price": {
       "unit": "silver",
       "value": 38.63029
+    },
+    "technique_change.distant.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 42.380244
+    },
+    "technique_change.local.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 42.373009
+    },
+    "technique_change.local.wage_rate": {
+      "unit": "silver",
+      "value": 30.0
+    },
+    "technique_change.value.meals_adopter_ticks": {
+      "unit": "ticks",
+      "value": 228.75
+    },
+    "technique_change.value.meals_laggard_ticks": {
+      "unit": "ticks",
+      "value": 305.0
+    },
+    "technique_change.value.meals_social_ticks": {
+      "unit": "ticks",
+      "value": 266.998868
     }
   }
 }
