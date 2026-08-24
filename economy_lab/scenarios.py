@@ -121,6 +121,16 @@ class ScenarioParameters:
     employment_quantum: float = 2.0 ** -20
     subsistence_loss_fraction: float = 0.70
 
+    # --- endogenous labor values (docs/19) -----------------------------------
+    labor_value_tolerance: float = 1e-12
+    labor_value_max_iterations: int = 1000
+    #: A more productive provisioning technique: half the living labor per
+    #: meal, same capacity.  Used by the technique-change scenario to make
+    #: relative surplus value emerge without touching the wage, the basket,
+    #: or the working day.
+    meal_efficient_direct_labor: float = 152.5
+    technique_change_day: int = 60
+
     # --- resource reserves ---------------------------------------------------
     # Default: one large grade at the current operating overhead.  The reserve
     # is large enough that no existing scenario depletes it.  Override in the
@@ -461,6 +471,8 @@ def seeded_two_region_economy(
         buffer_refill_horizon_days=parameters.buffer_refill_horizon_days,
         labor_value_per_tick=parameters.labor_value_per_tick,
         employment_quantum=parameters.employment_quantum,
+        labor_value_tolerance=parameters.labor_value_tolerance,
+        labor_value_max_iterations=parameters.labor_value_max_iterations,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -682,6 +694,60 @@ def subsistence_shock(
     return economy
 
 
+def technique_change(
+    days_after_entry: int = 180,
+    *,
+    efficient_direct_labor: float | None = None,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """A more productive provisioning technique enters one region.
+
+    Relative surplus value, made to emerge (docs/19 section 7).  Dust Basin
+    gains a second provisioner whose process needs half the living labor per
+    meal.  Nothing about the wage, the basket, or the working day is
+    touched: the working day stays 24,000 ticks and the basket stays two
+    meals throughout.
+
+    Part of society's meal output is now made in half the time, so the
+    social value of meals falls, the value of labor-power falls with it, and
+    the rate of surplus value rises — in *both* regions, including the one
+    that adopted nothing.
+    """
+    parameters = parameters or ScenarioParameters()
+    efficient_labor = (
+        parameters.meal_efficient_direct_labor
+        if efficient_direct_labor is None
+        else efficient_direct_labor
+    )
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    economy.step(parameters.technique_change_day)
+    dust = economy.regions["Dust Basin"]
+    incumbent = next(p for p in dust.producers if p.commodity == MEALS)
+    dust.producers.append(
+        Producer(
+            "Dust provisioners (new technique)",
+            MEALS,
+            parameters.meal_capacity_per_day,
+            incumbent.unit_cost,
+            parameters.zero_utilization_price_ratio,
+            parameters.full_utilization_price_ratio,
+            process=Process(
+                "provisioning (efficient)",
+                outputs={MEALS: 1.0},
+                inputs={},
+                direct_labor=efficient_labor,
+            ),
+        )
+    )
+    economy.step(days_after_entry)
+    return economy
+
+
 def summary(economy: Economy) -> Dict[str, object]:
     commodity = economy.commodities["yayo"]
     regions: Dict[str, object] = {}
@@ -695,10 +761,28 @@ def summary(economy: Economy) -> Dict[str, object]:
             "minimum_price_day": price_series.index(minimum_price),
             "maximum_price": round(maximum_price, 3),
             "maximum_price_day": price_series.index(maximum_price),
-            "labor_value": commodity.labor_value,
-            "price_to_labor_value": round(
-                region.prices["yayo"] / commodity.labor_value, 3
+            # Two distinct quantities, deliberately named apart: the frozen
+            # FINDINGS.md import, and the model's own solve from the process
+            # graph (docs/19).  They differ by exactly the stylized chemfuel
+            # link, which is the point of keeping both visible.
+            "authored_labor_value": commodity.labor_value,
+            "labor_value_ticks": round(economy.labor_values["yayo"], 4),
+            "labor_value_silver": round(
+                economy.labor_values["yayo"] * economy.labor_value_per_tick, 4
             ),
+            "price_to_labor_value": round(
+                region.prices["yayo"]
+                / (
+                    economy.labor_values["yayo"] * economy.labor_value_per_tick
+                ),
+                3,
+            ),
+            "individual_labor_value_ticks": {
+                key: round(value, 4)
+                for key, value in sorted(
+                    economy.regional_labor_values.get(name, {}).items()
+                )
+            },
             "inventory": round(region.inventory["yayo"], 3),
             "capacity_per_day": round(region.capacity("yayo"), 3),
             "imports": round(region.imported_total["yayo"], 3),
@@ -738,4 +822,9 @@ def summary(economy: Economy) -> Dict[str, object]:
             for key, value in sorted(economy.commodity_balances().items())
         },
         "cash_residual": round(economy.cash_balance(), 9),
+        "social_labor_values_ticks": {
+            key: round(value, 4)
+            for key, value in sorted(economy.labor_values.items())
+        },
+        "stale_labor_values": sorted(economy.stale_labor_values),
     }

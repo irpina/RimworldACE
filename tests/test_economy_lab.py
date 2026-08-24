@@ -25,6 +25,7 @@ from economy_lab.scenarios import (
     seeded_two_region_economy,
     subsistence_shock,
     summary,
+    technique_change,
 )
 
 
@@ -742,6 +743,264 @@ class LaborPowerTests(unittest.TestCase):
         self.assertEqual(region.worker_cash, 0.0)
         self.assertEqual(region.cash, 1000.0)
         self.assertIsNone(economy.rate_of_surplus_value())
+
+
+class EndogenousLaborValueTests(unittest.TestCase):
+    """The process graph produces values instead of importing them.
+
+    The validation that matters is against `FINDINGS.md`: the closed
+    analysis solved 653 defs from extraction outward without reference to
+    price, and this circuit uses the same ratios and direct-labor figures.
+    A correct solve must reproduce it exactly, except for the one link
+    docs/08 flagged as stylized, which must account for the whole of any
+    discrepancy.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = equilibrium(240)
+
+    def test_input_free_commodities_reproduce_the_closed_analysis(self):
+        # Chemfuel and meals have no modelled inputs, so their value is
+        # their direct labor and must match the closed analysis to the bit.
+        self.assertEqual(self.economy.labor_values[CHEMFUEL], 25.0)
+        self.assertEqual(self.economy.labor_values[MEALS], 305.0)
+
+    def test_downstream_values_differ_only_by_the_stylized_link(self):
+        parameters = ScenarioParameters()
+        # Vanilla RimWorld: leaves carry their own labor and nothing else;
+        # yayo carries its own plus eight leaves.
+        vanilla_leaves = parameters.leaves_direct_labor
+        vanilla_yayo = (
+            parameters.yayo_direct_labor
+            + parameters.leaves_per_yayo * vanilla_leaves
+        )
+        # The lab knowingly adds chemfuel as an operating input in two
+        # places (docs/08). That stylization, and only it, should explain
+        # the gap from the closed analysis.
+        stylized_leaves = parameters.chemfuel_per_leaf * 25.0
+        stylized_yayo = (
+            parameters.chemfuel_per_yayo * 25.0
+            + parameters.leaves_per_yayo * stylized_leaves
+        )
+        self.assertAlmostEqual(
+            self.economy.labor_values[LEAVES],
+            vanilla_leaves + stylized_leaves,
+            places=10,
+        )
+        self.assertAlmostEqual(
+            self.economy.labor_values[YAYO],
+            vanilla_yayo + stylized_yayo,
+            places=10,
+        )
+
+    def test_value_is_transferred_labor_plus_living_labor(self):
+        values = self.economy.labor_values
+        process = circuit_processes()[YAYO]
+        transferred = sum(
+            quantity * values[name]
+            for name, quantity in process.inputs.items()
+        )
+        self.assertAlmostEqual(
+            values[YAYO], transferred + process.direct_labor, places=10
+        )
+
+    def test_authored_figures_are_not_overwritten(self):
+        # FINDINGS.md is closed analysis. The solve sits beside it.
+        parameters = ScenarioParameters()
+        self.assertEqual(
+            self.economy.commodities[YAYO].labor_value, parameters.labor_value
+        )
+        self.assertNotAlmostEqual(
+            self.economy.commodities[YAYO].labor_value,
+            self.economy.labor_values[YAYO] * self.economy.labor_value_per_tick,
+            places=3,
+        )
+
+    def test_values_are_stationary_and_reproducible_at_equilibrium(self):
+        series = [h["labor_values"][YAYO] for h in self.economy.history]
+        self.assertEqual(min(series), max(series))
+        repeat = equilibrium(240)
+        self.assertEqual(repeat.labor_values, self.economy.labor_values)
+
+    def test_joint_products_split_value_by_mass(self):
+        from economy_lab.model import Economy, Region
+
+        heavy = Commodity(
+            "heavy", reference_price=10.0, labor_value=1.0, mass_per_unit=3.0
+        )
+        light = Commodity(
+            "light", reference_price=10.0, labor_value=1.0, mass_per_unit=1.0
+        )
+        joint = Process(
+            "joint", outputs={"heavy": 1.0, "light": 1.0}, direct_labor=80.0
+        )
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"heavy": 1.0, "light": 1.0},
+            inventory={"heavy": 30.0, "light": 30.0},
+            prices={"heavy": 10.0, "light": 10.0},
+            producers=[
+                Producer("both", "heavy", 2.0, 1.0, process=joint),
+            ],
+        )
+        economy = Economy([heavy, light], [region], [])
+        economy.step(5)
+        # Mass shares are 3:1, so the 80 ticks split 60/20.
+        self.assertAlmostEqual(economy.labor_values["heavy"], 60.0, places=9)
+        self.assertAlmostEqual(economy.labor_values["light"], 20.0, places=9)
+        self.assertAlmostEqual(
+            economy.labor_values["heavy"] + economy.labor_values["light"],
+            joint.direct_labor,
+            places=9,
+        )
+
+    def test_a_non_productive_system_refuses_rather_than_returning(self):
+        from economy_lab.model import Economy, Region
+
+        # A commodity that eats more of itself than it makes has no finite
+        # value. The solve must say so instead of returning a number.
+        widget = Commodity("widget", reference_price=10.0, labor_value=1.0)
+        devouring = Process(
+            "devouring",
+            outputs={"widget": 1.0},
+            inputs={"widget": 1.5},
+            direct_labor=10.0,
+        )
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"widget": 1.0},
+            inventory={"widget": 500.0},
+            prices={"widget": 10.0},
+            producers=[
+                Producer("mill", "widget", 4.0, 1.0, process=devouring),
+            ],
+        )
+        with self.assertRaises(RuntimeError) as raised:
+            Economy([widget], [region], [])
+        self.assertIn("not productive", str(raised.exception))
+
+    def test_a_self_consuming_but_productive_system_still_solves(self):
+        from economy_lab.model import Economy, Region
+
+        # The same cycle, but productive: 0.5 widget in, 1 out. A
+        # topological pass has no answer here at all; the iteration does.
+        widget = Commodity("widget", reference_price=10.0, labor_value=1.0)
+        cyclic = Process(
+            "cyclic",
+            outputs={"widget": 1.0},
+            inputs={"widget": 0.5},
+            direct_labor=10.0,
+        )
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"widget": 1.0},
+            inventory={"widget": 500.0},
+            prices={"widget": 10.0},
+            producers=[
+                Producer("mill", "widget", 4.0, 1.0, process=cyclic),
+            ],
+        )
+        economy = Economy([widget], [region], [])
+        # v = 0.5v + 10  =>  v = 20
+        self.assertAlmostEqual(economy.labor_values["widget"], 20.0, places=6)
+
+    def test_zero_output_holds_the_last_value_instead_of_dropping_it(self):
+        # The glut idles the drug lab completely. Value describes conditions
+        # of production, which do not evaporate because nobody produced, so
+        # the yayo value must hold rather than vanish or jump.
+        economy = regional_glut(120)
+        idled = [
+            snapshot["day"]
+            for snapshot in economy.history
+            if snapshot["day"] > 60
+            and "yayo" not in snapshot["regional_labor_values"].get(
+                "Dust Basin", {}
+            )
+        ]
+        self.assertTrue(idled, "expected the glut to idle the drug lab")
+        series = [h["labor_values"][YAYO] for h in economy.history]
+        # Not bit-exact, deliberately: the value is an aggregate ratio, and
+        # (r1*A + r2*A) / (r1*B + r2*B) does not round to exactly A/B when
+        # producers run at differing levels. The claim under test is that
+        # the value holds rather than collapsing or jumping when output
+        # stops, so the tolerance is tight but not zero.
+        self.assertLess(max(series) - min(series), 1e-9)
+        self.assertAlmostEqual(min(series), 734.6, places=9)
+
+
+class RelativeSurplusValueTests(unittest.TestCase):
+    """A productivity gain in the wage-goods sector, and what follows.
+
+    The working day and the basket are fixed throughout, so any movement in
+    the rate of surplus value is relative surplus value: surplus rises
+    because the goods that reproduce labor got cheaper, not because the day
+    got longer or the basket got smaller.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = technique_change(180)
+        cls.before = equilibrium(240)
+
+    def test_the_working_day_and_the_basket_are_untouched(self):
+        parameters = ScenarioParameters()
+        for region in self.economy.regions.values():
+            self.assertEqual(
+                region.ticks_per_worker_day, parameters.ticks_per_worker_day
+            )
+            self.assertEqual(
+                region.subsistence_basket[MEALS],
+                parameters.meals_per_worker_day,
+            )
+
+    def test_the_social_value_of_the_wage_good_falls(self):
+        self.assertEqual(self.before.labor_values[MEALS], 305.0)
+        self.assertLess(self.economy.labor_values[MEALS], 280.0)
+        self.assertGreater(self.economy.labor_values[MEALS], 228.75)
+
+    def test_social_value_lies_between_the_individual_values(self):
+        dust = self.economy.regional_labor_values["Dust Basin"][MEALS]
+        river = self.economy.regional_labor_values["Green River"][MEALS]
+        social = self.economy.labor_values[MEALS]
+        # The adopter produces below social value, the laggard above it.
+        self.assertLess(dust, social)
+        self.assertLess(social, river)
+        self.assertAlmostEqual(dust, 228.75, places=6)
+        self.assertAlmostEqual(river, 305.0, places=6)
+
+    def test_the_rate_of_surplus_value_rises_in_both_regions(self):
+        base = self.before.rate_of_surplus_value()
+        for name in self.economy.regions:
+            self.assertGreater(self.economy.rate_of_surplus_value(name), base)
+
+    def test_it_rises_where_nothing_was_adopted(self):
+        # Green River adopts no new technique, yet the value of labor-power
+        # it faces falls, because value is social.
+        river_before = self.before.rate_of_surplus_value("Green River")
+        river_after = self.economy.rate_of_surplus_value("Green River")
+        self.assertGreater(river_after, river_before)
+
+    def test_the_value_of_labor_power_falls_while_its_price_does_not(self):
+        # Value and price are distinct quantities and must not be collapsed.
+        region = self.economy.regions["Dust Basin"]
+        self.assertLess(self.economy.basket_labor_value(region), 610.0)
+        self.assertAlmostEqual(region.wage_rate(), 30.0, places=6)
+
+    def test_the_scenario_closes_every_ledger(self):
+        for residual in self.economy.commodity_balances().values():
+            self.assertAlmostEqual(residual, 0.0, places=9)
+        self.assertAlmostEqual(self.economy.cash_balance(), 0.0, places=9)
+
+    def test_the_scenario_is_reproducible(self):
+        repeat = technique_change(180)
+        self.assertEqual(repeat.labor_values, self.economy.labor_values)
+        self.assertEqual(
+            repeat.rate_of_surplus_value(), self.economy.rate_of_surplus_value()
+        )
 
 
 if __name__ == "__main__":

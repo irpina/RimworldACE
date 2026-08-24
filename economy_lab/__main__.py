@@ -14,6 +14,7 @@ from .scenarios import (
     reserve_depletion,
     subsistence_shock,
     summary,
+    technique_change,
 )
 
 
@@ -25,6 +26,7 @@ SCENARIOS = {
     "input-shortage": input_shortage,
     "depletion": reserve_depletion,
     "subsistence-shock": subsistence_shock,
+    "technique-change": technique_change,
 }
 
 
