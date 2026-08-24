@@ -61,6 +61,104 @@ their output.
 
 ---
 
+## Distance to the full suite
+
+An honest assessment of how far the project is from the direction above.
+Percentages are rough and weighted by *remaining effort*, not by concepts
+ticked off — a Python demonstration is far cheaper than a shipped, save-safe,
+performant, playable mod.
+
+### The three components
+
+| component | state | remaining |
+|---|---|---|
+| **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
+| **Stage 0 lab** (`economy_lab/`) | 97 tests, 101 frozen metrics, three closing ledgers, four commodities and two regions | roughly four to six more economic sessions, then a scale test |
+| **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
+
+**The economics is the part that is nearly solved. The engineering that would
+make it a playable suite is barely started.** Labor Content is one visual pass
+from shipping; the simulation is maturing; the bridge between them is a stub.
+
+### Coverage of the stated goals
+
+| concept | in the lab | reaching a player |
+|---|---|---|
+| embodied and socially necessary labor | done, solved endogenously | yes — Labor Content, static figures |
+| wage labor and labor-power | done | no |
+| necessary versus surplus labor | done | no |
+| realization of surplus through sale | done — money and labor s/v measured apart | no |
+| price deviations from labor value | done | no |
+| differential rent | done | no |
+| monopoly rent | **not started** | no |
+| regional markets, costly trade, arbitrage | done | no |
+| **class consequences; colony as collective owner** | **not started** | no |
+| **hired outside workers** | **not started** | no |
+
+Seven of ten concepts are demonstrated in Python. None of the dynamic ones
+reach a player. The two bolded rows are the ones that are actually *gameplay*
+rather than accounting, and neither has been started.
+
+### Remaining phases
+
+**Phase A — finish the economics** (~4–6 sessions). Prices of production
+(next, and the largest single one); exit and capacity depreciation; a
+capital-goods sector; an enlarged subsistence basket; monopoly rent.
+Optionally credit and bankruptcy. Then re-run the stale sensitivity sweep.
+
+**Phase B — scale test** (~2 sessions, and genuinely risky). The lab is four
+commodities and two regions. RimWorld is ~654 producible defs and ~100
+settlements. Two solvers iterate to fixed points every day, per region.
+Nobody has checked whether that survives a hundredfold more entities at an
+acceptable tick cost, or whether the calibration holds when the process graph
+is deep and wide rather than four nodes. The closed-default "unmodelled
+commodity" policy exists for this and has never been exercised.
+
+**Phase C — runtime port** (~6–10 sessions, the bulk of the work). Port the
+model to deterministic C#; settlement profiles and regional membership; the
+full economic state through save and load; a UI that makes value, price,
+surplus and rent legible; integration with vanilla trade without
+destabilising `MarketValue`, which drives storyteller wealth.
+
+**Phase D — the gameplay layer** (~4–8 sessions, least defined). Hired-worker
+contracts: pawns arrive, work, are paid in silver or explicit in-kind, do not
+own their output, and leave. Then the class consequences — the least
+specified part of the whole project. No design document exists for what a
+player actually *does* about any of it.
+
+### Rough position: 30–35% of the suite
+
+About sixteen sessions of Stage 0 work have produced a rigorous simulation
+and one shippable read-only mod. The remaining sixteen to twenty-six sessions
+are mostly C#, UI, save compatibility and game design — different skills, and
+less amenable to the design-doc-then-measure discipline that has worked here.
+
+### The three things most likely to derail it
+
+1. **Scale.** Untested, and the failure mode is quiet: the model might work
+   but tick too slowly, or the calibration might stop holding at depth. It is
+   the cheapest large risk to retire and it is currently being deferred.
+2. **The wealth coupling.** A dynamic price system feeding `MarketValue`
+   changes raid strength, because storyteller wealth reads it. Getting this
+   wrong makes the mod feel broken rather than interesting. Already flagged
+   under "What vanilla RimWorld's economy actually does"; it constrains the
+   whole Stage 1 design.
+3. **Phase D has no design.** Everything else has a clear next step; "class
+   consequences for the player colony" does not. Write that design document
+   *early*, while the economics is still malleable, rather than discovering
+   at the end that the simulation computes the wrong things for the game.
+
+### Recommended ordering
+
+Finish prices of production, since it resolves the authored-price wedge and
+is the natural culmination of the value work. Then **jump the queue and do
+the scale test** before the remaining economics sessions: if scaling forces a
+structural change, it is better to find out with four mechanisms to rework
+than eight. Sketch Phase D's design document soon, so the laboratory is aimed
+at a game rather than at itself.
+
+---
+
 ## Closed analysis: do not re-derive
 
 `FINDINGS.md` is the completed and validated analysis of RimWorld's existing
@@ -813,6 +911,12 @@ Steps 1–10 are **done**.
     given as two readings that state their assumption, and the classical
     magnitudes are computable at last: organic composition 20.67, value
     rate of profit 1.77 (docs/24).
+
+**Scope note:** the steps below are the *economics* backlog only. For where
+they sit against the whole mod suite — the runtime port, the gameplay layer,
+and the untested scale question — see "Distance to the full suite" above,
+which also recommends running the scale test immediately after prices of
+production rather than working through the rest of this list first.
 
 11. **Next economic feature — prices of production.** `docs/24` closes with
     the conclusion that the wedge *cannot* be closed while RimWorld's
