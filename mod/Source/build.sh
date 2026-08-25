@@ -1,11 +1,17 @@
 #!/bin/sh
-# Build Labor Content's one assembly.
+# Build Labor Content's one assembly, then verify what was built.
 #
 # Uses the C# compiler Windows already ships with the .NET Framework
 # rather than the .NET SDK, which HANDOFF.md says not to install. That
 # constrains the source to C# 5 — no interpolated strings, no
 # expression-bodied members — which is why StatWorker_LaborContent.cs is
 # written the way it is.
+#
+# This csc predates Roslyn's -deterministic, so it stamps a fresh MVID
+# into every build: two builds of identical source differ in their bytes.
+# The committed DLL therefore cannot be checked against the committed
+# source by hash. What can be checked is its *content*, which is what
+# verify.py does and what this script runs afterwards.
 #
 # Usage:  sh mod/Source/build.sh  [path to RimWorld]
 set -e
@@ -33,3 +39,5 @@ mkdir -p "$ROOT/mod/Assemblies"
     "$(cygpath -w "$ROOT/mod/Source/LaborContent/StatWorker_LaborContent.cs")"
 
 echo "built mod/Assemblies/SocialProduction.LaborContent.dll"
+
+cd "$ROOT" && python mod/Source/verify.py

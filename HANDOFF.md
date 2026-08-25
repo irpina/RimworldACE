@@ -4,8 +4,9 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `a0417de` (optional history; opening stock held as state)
+**Latest Stage 0 model commit:** `7643fc4` (_allocate_orders tightened to the bit-identical limit)
 **Behavioral baseline:** `29e4627` (154 metrics: 5 structural scale observations, no timings)
+**Latest Labor Content commit:** `b3727f1` (multi-unit stat worker; packaging work committed)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -72,7 +73,7 @@ performant, playable mod.
 
 | component | state | remaining |
 |---|---|---|
-| **Labor Content** (`mod/`) | 543 patch operations across six files, plus one 40-line stat worker rendering three units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
+| **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
 | **Stage 0 lab** (`economy_lab/`) | 154 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
@@ -289,6 +290,20 @@ kept in the defs so the stat still renders if the worker ever fails to load.
 Framework that Windows already ships, *not* the .NET SDK, which this
 document says not to install. That constrains the source to C# 5 — no
 interpolated strings — which is why it is written the way it is.
+
+**The build is not reproducible, and the DLL is committed.** That csc
+predates Roslyn's `-deterministic`, so it stamps a fresh MVID into every
+build: two builds of identical source differ in their bytes, and the
+committed binary cannot be checked against the committed source by hash.
+Do not treat a changed DLL hash as evidence of a changed build.
+
+What *can* be checked is content, and `mod/Source/verify.py` checks it
+after every build using the repository's own ECMA-335 reader: that the
+type the StatDefs name exists, that `ValueToString` is a public virtual
+override, that the separator is U+00B7 rather than mojibake, and that the
+assembly still binds to exactly two RimWorld symbols. The separator check
+is load-bearing — corrupting it in a built DLL does make the verifier
+fail.
 
 **Encoding trap, already hit once:** the source has no byte-order mark, so
 `csc` reads it in the ANSI codepage. A literal `·` in a string arrives in
@@ -961,6 +976,11 @@ Runtime verification on RimWorld 1.6.4871 rev591 passed:
 
 Save serialization is confirmed. A deliberate save/reload read-back test has
 not yet been completed, so do not report reload persistence as verified.
+
+**That verification is now partly stale.** It was run when Labor Content was
+XML-only; the "loaded beside Labor Content with no assembly errors" line no
+longer covers the current Labor Content, which carries its own assembly since
+`b3727f1`. The co-load needs redoing.
 
 The local build toolchain is:
 

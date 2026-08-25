@@ -189,9 +189,25 @@ ancient buildings, unfinished-thing stubs. The real remainder:
 producible thing: labor embodied in it, split extraction vs fabrication.
 No gameplay change.
 
-**Pure XML. No assembly, no Harmony, no .NET toolchain.** Two `StatDef`s with
-the default `StatWorker` (which reads `statBases`), plus generated
-`PatchOperationConditional` patches writing a precomputed value onto each def.
+**No Harmony, no gameplay change, no save impact.** Two `StatDef`s plus
+generated `PatchOperationConditional` patches writing a precomputed value onto
+each def — 543 defs across six files, 548 `<Operation>` elements once the five
+`PatchOperationFindMod` wrappers on the expansion files are counted.
+
+One small assembly, and one only. `StatWorker_LaborContent` overrides a single
+virtual method to render each value in every unit that says something, because
+`StatDef.formatString` takes exactly one value and embodied labor spans five
+orders of magnitude — no single unit reads well at both ends:
+
+| def | fabrication labor |
+|---|---|
+| `Steel` | 0 |
+| `MealSimple` | 5 work-s · 300 ticks |
+| `Apparel_Parka` | 3.2 in-game h · 133 work-s · 8,000 ticks |
+
+The built DLL binds to exactly two RimWorld symbols, and `formatString` and
+`toStringStyle` stay in the defs so the stat still renders if the worker ever
+fails to load.
 
 | | |
 |---|---|
@@ -201,20 +217,24 @@ the default `StatWorker` (which reads `statBases`), plus generated
 | unresolved xpaths | 0 |
 | skipped | 104 generated meat defs — no XML node exists to patch |
 
-Values are in work-seconds (ticks ÷ 60, RimWorld's own work unit per
+Values are stored in work-seconds (ticks ÷ 60, RimWorld's own work unit per
 `GenText.ToStringWorkAmount`), ranging 0.008 to 6736. `toStringStyle` is
 `FloatMaxTwo` rather than `WorkAmount` because the latter ceils, which would
 flatten every animal product to "1".
 
 ```bash
-python solver.py && python make_mod.py
+python solver.py && python make_mod.py && sh mod/Source/build.sh
 ```
 
-Then copy `mod/` into `RimWorld/Mods/` and enable it.
+The build uses the `csc.exe` Windows already ships rather than the .NET SDK,
+which constrains the source to C# 5. Then copy `mod/` into `RimWorld/Mods/`
+and enable it.
 
-Known limits: meat defs are generated at load and cannot be patched from XML —
-showing those needs a real `StatWorker`, which needs C#. Values are static, so
-they do not respond to mods that change recipes.
+Known limits: meat defs are generated at load and cannot be patched from XML.
+That was a hard stop while the mod was XML-only; now that it carries an
+assembly it is a short `StaticConstructorOnStartup` away and should be
+reconsidered. Values are static, so they do not respond to mods that change
+recipes.
 
 ## The economy laboratory
 

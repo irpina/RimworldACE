@@ -31,7 +31,7 @@ Three working rules have done most of the work:
    value, and rent. Money profit is not surplus value. The model's job is to
    let them move independently, and by the end of this arc it does.
 
-A frozen behavioral reference (now 101 metrics) is re-run after every change.
+A frozen behavioral reference (now 154 metrics) is re-run after every change.
 It is a *report*, not a test: movement never fails a build, but it must be
 understood and explained before the reference is rewritten.
 
