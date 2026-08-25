@@ -230,11 +230,17 @@ The build uses the `csc.exe` Windows already ships rather than the .NET SDK,
 which constrains the source to C# 5. Then copy `mod/` into `RimWorld/Mods/`
 and enable it.
 
-Known limits: meat defs are generated at load and cannot be patched from XML.
-That was a hard stop while the mod was XML-only; now that it carries an
-assembly it is a short `StaticConstructorOnStartup` away and should be
-reconsidered. Values are static, so they do not respond to mods that change
-recipes.
+Known limits, both now cheap to fix given the assembly exists:
+
+- meat defs are generated at load, so no patch can reach them — a short
+  `StaticConstructorOnStartup` away;
+- the stat is **stuff-independent**: a plasteel knife and a wooden knife
+  report the same labor content, because `statBases` has no notion of stuff,
+  while Market Value and Work to Make on the same card do vary. 176 of 653
+  defs (27%) are stuffable. Fixing it means computing at request time from
+  `req.Thing.Stuff`.
+
+Values are also static, so they do not respond to mods that change recipes.
 
 ## The economy laboratory
 

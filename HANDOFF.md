@@ -313,20 +313,34 @@ fail.
 the assembly as `Â·`. The separator is written `·` for that reason, and
 the build is verified by looking for the UTF-16 bytes in the DLL.
 
-Two of the visual-pass questions are now **answered** (2026-08-25, at low
-resolution): the line length is fine, and a `0` row for things with no
-fabrication labor is wanted rather than noise.
+**The visual pass is complete** (2026-08-25, RimWorld 1.6.4871 rev591, all
+five expansions loaded). Verified on a plasteel knife:
 
-The third is addressed rather than answered: the stats were in
-`BasicsNonPawn` and are now their own **`SNLT_LaborContent` category**,
-labelled "Labor content", at `displayOrder` 20 — between `BasicsNonPawn`
-(12) and `Apparel` (30), so the block sits directly under Basics on every
-kind of thing. With the header carrying the context the labels shortened to
-"extraction labor" and "fabrication labor".
+```
+Labor content
+  Extraction labor     18.8 work-s · 1,125 ticks
+  Fabrication labor    30 work-s · 1,800 ticks
+```
 
-Still open: whether the *multi-unit* rendering is right, which has never
-actually been seen (see "Deployment" below), and whether the expansion-split
-patches load cleanly under every combination of official expansions.
+Confirmed in game: the `SNLT_LaborContent` section renders with its own
+header between Basics and Weapon; the multi-unit line is right and matches
+`MeleeWeapon_Knife`'s solved 1,125 / 1,800 ticks exactly; the U+00B7
+separator renders rather than mojibake; the line fits at low resolution; and
+a `0` row is wanted rather than hidden. No errors in the log.
+
+### Known limitation, now visible: the stat is stuff-independent
+
+A patch writes one value onto a ThingDef, so a plasteel knife and a wooden
+knife report identical labor content — while RimWorld's own Market Value and
+Work to Make, on the same card, vary by stuff. The plasteel knife above
+reads $285 and 66 work to make against a flat 30 work-s of fabrication.
+
+**176 of 653 defs (27%) are stuffable**, so this is not a corner case. It is
+inherent to the XML-patch approach: `statBases` has no notion of stuff.
+Fixing it means computing the stat at request time from
+`req.Thing.Stuff` — a `StatWorker` job, and the assembly that would host it
+already exists. It belongs with the 104 generated meat defs as work the
+assembly newly makes cheap.
 
 ### The expansion split never loaded, and why nothing caught it
 
