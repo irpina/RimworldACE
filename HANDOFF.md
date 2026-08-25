@@ -1085,12 +1085,22 @@ above. The scale question that section carried as its largest open risk is
     wrong — `commodity_balance` took its opening stock from `history[0]`
     — and the opening stock is state now.
 
-    *`_allocate_orders`* is now 42% of a simulated day. It is O(commodities)
-    with a heavy constant — a sort of a one-element list, four dicts keyed
-    by `id(producer)`, and a water-filling loop, per commodity per
-    iteration. The fixes are mechanical and obvious; `docs/32` §8 bound
-    the scale session to fixing only what the first measurement accused,
-    so they belong to a session that says so first.
+    *`_allocate_orders`* is now the largest single cost in a simulated day.
+    The **bit-identical** part is done: the commodity grouping is hoisted
+    out of the fixed point instead of rebuilt on every iteration, one-
+    element sectors skip their sort, and `id()` calls halved from 191,796
+    to 94,260 over three days. It bought little — the cost is per-sector
+    dictionary construction, not the bookkeeping around it.
+
+    **The remaining win is not bit-identical, and that is the decision the
+    session has to make.** The overwhelmingly common case is a sector with
+    one producer, where the whole water-filling apparatus reduces to
+    `min(wanted, ceiling)` — except that the loop computes
+    `remaining * w / total_weight` with `total_weight == w`, and
+    `x * w / w` is not exactly `x` in floating point. A fast path would
+    move results in the last bits, so it needs a design document that
+    says whether that is acceptable and a reference refresh that explains
+    the movement. It is not a refactor.
 
     Then the economics, unchanged in order:
 

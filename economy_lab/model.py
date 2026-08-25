@@ -2132,6 +2132,8 @@ class Economy:
         remains simultaneous and independent of producer list order.
         """
         planned = dict(desired)
+        # The same answer on every iteration, so it is computed once.
+        grouped = self._grouped_by_commodity(active)
         for _ in range(1000):
             intended_outflow = {
                 name: region.daily_demand(commodity)
@@ -2171,7 +2173,7 @@ class Economy:
                 )
 
             revised = self._allocate_orders(
-                region, active, desired, desired_output, requested_output
+                region, active, desired, desired_output, requested_output, grouped
             )
             if all(
                 abs(revised[key] - planned[key]) <= EPSILON
@@ -2181,6 +2183,31 @@ class Economy:
             planned = revised
         raise RuntimeError("production-order plan did not converge")
 
+    @staticmethod
+    def _grouped_by_commodity(
+        active: List[Producer],
+    ) -> List[Tuple[str, List[Producer]]]:
+        """Producers by commodity, in a deterministic order.
+
+        Sorted by commodity, and each sector's producers sorted by name, so
+        the arithmetic cannot depend on the order the producer list happens
+        to be in.  Hoisted out of `_allocate_orders` because that runs once
+        per iteration of a fixed point while this answer is the same every
+        time (docs/36).
+        """
+        by_commodity: Dict[str, List[Producer]] = {}
+        for producer in active:
+            by_commodity.setdefault(producer.commodity, []).append(producer)
+        return [
+            (
+                name,
+                producers
+                if len(producers) == 1
+                else sorted(producers, key=lambda p: (p.name, p.commodity)),
+            )
+            for name, producers in sorted(by_commodity.items())
+        ]
+
     def _allocate_orders(
         self,
         region: Region,
@@ -2188,6 +2215,7 @@ class Economy:
         desired: Dict[int, float],
         desired_output: Dict[str, float],
         requested_output: Dict[str, float],
+        grouped: Optional[List[Tuple[str, List[Producer]]]] = None,
     ) -> Dict[int, float]:
         """Share a commodity's order book among its producers by cost.
 
@@ -2203,46 +2231,45 @@ class Economy:
         exactly to the uniform factor it replaces — bit-for-bit.
         """
         epsilon_share = self.competitive_share_elasticity
-        by_commodity: Dict[str, List[Producer]] = {}
-        for producer in active:
-            by_commodity.setdefault(producer.commodity, []).append(producer)
+        by_commodity = (
+            self._grouped_by_commodity(active) if grouped is None else grouped
+        )
 
         revised: Dict[int, float] = {}
-        for name, producers in sorted(by_commodity.items()):
+        for name, producers in by_commodity:
+            keys = [id(p) for p in producers]
             available_output = desired_output[name]
             if available_output <= EPSILON:
-                for producer in producers:
-                    revised[id(producer)] = 0.0
+                for key in keys:
+                    revised[key] = 0.0
                 continue
             wanted = min(requested_output[name], available_output)
             if wanted <= EPSILON:
-                for producer in producers:
-                    revised[id(producer)] = 0.0
+                for key in keys:
+                    revised[key] = 0.0
                 continue
 
-            # Sorted so the arithmetic cannot depend on producer list order.
-            producers = sorted(producers, key=lambda p: (p.name, p.commodity))
             ceilings = {
-                id(p): desired[id(p)] * p.process.outputs[p.commodity]
-                for p in producers
+                key: desired[key] * p.process.outputs[p.commodity]
+                for key, p in zip(keys, producers)
             }
             if epsilon_share <= 0.0:
-                weights = {id(p): ceilings[id(p)] for p in producers}
+                weights = dict(ceilings)
             else:
                 costs = {
-                    id(p): max(p.effective_unit_cost(region.prices), EPSILON)
-                    for p in producers
+                    key: max(p.effective_unit_cost(region.prices), EPSILON)
+                    for key, p in zip(keys, producers)
                 }
                 cheapest = min(costs.values())
                 weights = {
-                    id(p): ceilings[id(p)]
-                    * (costs[id(p)] / cheapest) ** -epsilon_share
-                    for p in producers
+                    key: ceilings[key]
+                    * (costs[key] / cheapest) ** -epsilon_share
+                    for key in keys
                 }
 
-            allotted = {id(p): 0.0 for p in producers}
+            allotted = {key: 0.0 for key in keys}
             remaining = wanted
-            open_ids = [id(p) for p in producers if ceilings[id(p)] > EPSILON]
+            open_ids = [key for key in keys if ceilings[key] > EPSILON]
             # Water-filling: place what is left among producers still below
             # their own ceiling, until nothing remains or everyone is full.
             for _ in range(len(producers) + 1):
