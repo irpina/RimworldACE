@@ -4,27 +4,27 @@
   "metrics": {
     "arbitrage.export_volume": {
       "unit": "units",
-      "value": 11.0
+      "value": 10.322317
     },
     "cost_competition.local.meals.cheap_producer_share": {
       "unit": "fraction",
-      "value": 0.727086
+      "value": 0.72343
     },
     "cost_competition.local.meals.cost_ratio": {
       "unit": "ratio",
-      "value": 0.714606
+      "value": 0.720178
     },
     "cost_competition.local.meals.price": {
       "unit": "silver",
-      "value": 12.859543
+      "value": 12.901337
     },
     "cost_competition.local.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 38.298118
+      "value": 26.708226
     },
     "cost_competition.local.wage_rate": {
       "unit": "silver",
-      "value": 25.719087
+      "value": 37.74093
     },
     "cost_competition.value.meals_ticks": {
       "unit": "ticks",
@@ -36,11 +36,39 @@
     },
     "depletion.local.chemfuel.settled_price": {
       "unit": "silver",
-      "value": 3.427031
+      "value": 3.418192
     },
     "depletion.local.yayo.settled_price": {
       "unit": "silver",
-      "value": 21.357951
+      "value": 21.349351
+    },
+    "equilibrium.basket.commodities": {
+      "unit": "count",
+      "value": 3.0
+    },
+    "equilibrium.basket.labor_ticks": {
+      "unit": "ticks",
+      "value": 866.16993
+    },
+    "equilibrium.basket.meals_share_of_labor": {
+      "unit": "fraction",
+      "value": 0.705078
+    },
+    "equilibrium.basket.meals_share_of_money": {
+      "unit": "fraction",
+      "value": 0.714796
+    },
+    "equilibrium.basket.money_cost": {
+      "unit": "silver",
+      "value": 41.97
+    },
+    "equilibrium.basket.share_of_working_day": {
+      "unit": "fraction",
+      "value": 0.03609
+    },
+    "equilibrium.basket.workers_fed_per_provisioner_day": {
+      "unit": "workers",
+      "value": 39.298033
     },
     "equilibrium.distant_price_range": {
       "unit": "silver",
@@ -48,11 +76,11 @@
     },
     "equilibrium.local.employment_worker_days": {
       "unit": "worker-days",
-      "value": 0.314065
+      "value": 0.317533
     },
     "equilibrium.local.meals.settled_inventory": {
       "unit": "units",
-      "value": 12.751667
+      "value": 13.602976
     },
     "equilibrium.local.meals.settled_price": {
       "unit": "silver",
@@ -60,7 +88,7 @@
     },
     "equilibrium.local.wage_rate": {
       "unit": "silver",
-      "value": 30.0
+      "value": 41.97
     },
     "equilibrium.local_price_range": {
       "unit": "silver",
@@ -68,7 +96,7 @@
     },
     "equilibrium.production.basic_count": {
       "unit": "commodities",
-      "value": 1.0
+      "value": 4.0
     },
     "equilibrium.production.chemfuel_over_value_ratio": {
       "unit": "ratio",
@@ -78,61 +106,93 @@
       "unit": "ratio",
       "value": 0.081967
     },
+    "equilibrium.production.garments_over_value_ratio": {
+      "unit": "ratio",
+      "value": 1.348025
+    },
+    "equilibrium.production.garments_relative_to_meals": {
+      "unit": "ratio",
+      "value": 7.25577
+    },
+    "equilibrium.production.herbal_medicine_over_value_ratio": {
+      "unit": "ratio",
+      "value": 1.001128
+    },
+    "equilibrium.production.herbal_medicine_relative_to_meals": {
+      "unit": "ratio",
+      "value": 1.311475
+    },
     "equilibrium.production.iterations": {
       "unit": "count",
-      "value": 5.0
+      "value": 13.0
     },
     "equilibrium.production.profit_rate": {
       "unit": "ratio",
-      "value": 38.344262
+      "value": 24.623882
+    },
+    "equilibrium.production.profit_rate_over_rank_one": {
+      "unit": "ratio",
+      "value": 0.917908
     },
     "equilibrium.production.psychoid_leaves_over_value_ratio": {
       "unit": "ratio",
-      "value": 2.010609
+      "value": 1.649078
     },
     "equilibrium.production.psychoid_leaves_relative_to_meals": {
       "unit": "ratio",
-      "value": 0.312722
+      "value": 0.256491
+    },
+    "equilibrium.production.rank_one_profit_rate": {
+      "unit": "ratio",
+      "value": 26.826087
     },
     "equilibrium.production.total_profit_over_surplus": {
       "unit": "ratio",
-      "value": 1.525917
+      "value": 1.515622
     },
     "equilibrium.production.wage_per_tick": {
       "unit": "silver",
-      "value": 0.00125
+      "value": 0.001919
     },
     "equilibrium.production.yayo_over_authored_ratio": {
       "unit": "ratio",
-      "value": 71.587987
+      "value": 38.675737
     },
     "equilibrium.production.yayo_over_value_ratio": {
       "unit": "ratio",
-      "value": 41.582978
+      "value": 22.465394
     },
     "equilibrium.production.yayo_relative_to_meals": {
       "unit": "ratio",
-      "value": 100.223182
+      "value": 54.146031
     },
     "equilibrium.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 38.298137
+      "value": 26.708223
     },
     "equilibrium.realized.chemfuel_money_rate": {
       "unit": "ratio",
-      "value": 72.578333
+      "value": 51.593519
+    },
+    "equilibrium.realized.garments_money_rate": {
+      "unit": "ratio",
+      "value": 28.514264
+    },
+    "equilibrium.realized.herbal_medicine_money_rate": {
+      "unit": "ratio",
+      "value": 13.294301
     },
     "equilibrium.realized.meals_money_rate": {
       "unit": "ratio",
-      "value": 38.331762
+      "value": 27.114197
     },
     "equilibrium.realized.psychoid_leaves_money_rate": {
       "unit": "ratio",
-      "value": 29.896313
+      "value": 21.08457
     },
     "equilibrium.realized.yayo_money_rate": {
       "unit": "ratio",
-      "value": 11.180992
+      "value": 7.706928
     },
     "equilibrium.value.chemfuel_ticks": {
       "unit": "ticks",
@@ -152,31 +212,31 @@
     },
     "equilibrium.value_ledger.constant_capital": {
       "unit": "ticks",
-      "value": 951309.810818
+      "value": 951535.794385
     },
     "equilibrium.value_ledger.fixed_capital_consumed": {
       "unit": "ticks",
-      "value": 3353.972984
+      "value": 3359.102722
     },
     "equilibrium.value_ledger.fixed_share_of_constant": {
       "unit": "fraction",
-      "value": 0.003526
+      "value": 0.00353
     },
     "equilibrium.value_ledger.organic_composition": {
       "unit": "ratio",
-      "value": 20.665732
+      "value": 14.415262
     },
     "equilibrium.value_ledger.surplus_labor": {
       "unit": "ticks",
-      "value": 1762985.910682
+      "value": 1762980.780945
     },
     "equilibrium.value_ledger.value_rate_of_profit": {
       "unit": "ratio",
-      "value": 1.767683
+      "value": 1.732583
     },
     "equilibrium.value_ledger.variable_capital": {
       "unit": "ticks",
-      "value": 46033.202324
+      "value": 66008.91301
     },
     "equilibrium.wedge.chemfuel_share_of_price": {
       "unit": "fraction",
@@ -194,17 +254,37 @@
       "unit": "fraction",
       "value": -0.000515
     },
+    "generous_basket.basket.share_of_working_day": {
+      "unit": "fraction",
+      "value": 0.080745
+    },
+    "generous_basket.organic_composition": {
+      "unit": "ratio",
+      "value": 6.149661
+    },
+    "generous_basket.production.profit_rate": {
+      "unit": "ratio",
+      "value": 10.651479
+    },
+    "generous_basket.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 11.384647
+    },
+    "generous_basket.value_rate_of_profit": {
+      "unit": "ratio",
+      "value": 1.592334
+    },
     "glut.distant_trough_day": {
       "unit": "day",
-      "value": 80
+      "value": 79
     },
     "glut.distant_trough_price": {
       "unit": "silver",
-      "value": 20.464413
+      "value": 20.491017
     },
     "glut.local.chemfuel.inventory_peak": {
       "unit": "units",
-      "value": 120.0
+      "value": 124.628571
     },
     "glut.local.chemfuel.inventory_peak_day": {
       "unit": "day",
@@ -212,7 +292,7 @@
     },
     "glut.local.chemfuel.inventory_trough": {
       "unit": "units",
-      "value": 120.0
+      "value": 124.628571
     },
     "glut.local.chemfuel.inventory_trough_day": {
       "unit": "day",
@@ -236,7 +316,7 @@
     },
     "glut.local.chemfuel.settled_inventory": {
       "unit": "units",
-      "value": 120.0
+      "value": 124.628571
     },
     "glut.local.chemfuel.settled_price": {
       "unit": "silver",
@@ -244,7 +324,7 @@
     },
     "glut.local.employment_trough": {
       "unit": "worker-days",
-      "value": 0.000202
+      "value": 0.000412
     },
     "glut.local.employment_trough_day": {
       "unit": "day",
@@ -308,7 +388,7 @@
     },
     "glut.local_trough_price": {
       "unit": "silver",
-      "value": 14.367961
+      "value": 14.372385
     },
     "producer_loss.capacity_recovery_days": {
       "unit": "days",
@@ -320,7 +400,7 @@
     },
     "producer_loss.local.chemfuel.inventory_peak": {
       "unit": "units",
-      "value": 125.364398
+      "value": 139.76469
     },
     "producer_loss.local.chemfuel.inventory_peak_day": {
       "unit": "day",
@@ -328,7 +408,7 @@
     },
     "producer_loss.local.chemfuel.inventory_trough": {
       "unit": "units",
-      "value": 96.131386
+      "value": 100.758043
     },
     "producer_loss.local.chemfuel.inventory_trough_day": {
       "unit": "day",
@@ -336,15 +416,15 @@
     },
     "producer_loss.local.chemfuel.price_peak": {
       "unit": "silver",
-      "value": 2.621071
+      "value": 2.516208
     },
     "producer_loss.local.chemfuel.price_peak_day": {
       "unit": "day",
-      "value": 154
+      "value": 142
     },
     "producer_loss.local.chemfuel.price_trough": {
       "unit": "silver",
-      "value": 1.918998
+      "value": 1.935352
     },
     "producer_loss.local.chemfuel.price_trough_day": {
       "unit": "day",
@@ -352,11 +432,11 @@
     },
     "producer_loss.local.chemfuel.terminal_inventory": {
       "unit": "units",
-      "value": 125.364398
+      "value": 139.76469
     },
     "producer_loss.local.chemfuel.terminal_price": {
       "unit": "silver",
-      "value": 2.583318
+      "value": 2.400285
     },
     "producer_loss.local.employment_trough": {
       "unit": "worker-days",
@@ -368,15 +448,15 @@
     },
     "producer_loss.local.meals.price_peak": {
       "unit": "silver",
-      "value": 16.499139
+      "value": 16.393137
     },
     "producer_loss.local.meals.price_trough": {
       "unit": "silver",
-      "value": 11.69763
+      "value": 11.945408
     },
     "producer_loss.local.psychoid_leaves.inventory_peak": {
       "unit": "units",
-      "value": 1878.373967
+      "value": 1875.394158
     },
     "producer_loss.local.psychoid_leaves.inventory_peak_day": {
       "unit": "day",
@@ -392,7 +472,7 @@
     },
     "producer_loss.local.psychoid_leaves.price_peak": {
       "unit": "silver",
-      "value": 2.795978
+      "value": 2.791871
     },
     "producer_loss.local.psychoid_leaves.price_peak_day": {
       "unit": "day",
@@ -408,11 +488,11 @@
     },
     "producer_loss.local.psychoid_leaves.terminal_inventory": {
       "unit": "units",
-      "value": 1878.373967
+      "value": 1875.394158
     },
     "producer_loss.local.psychoid_leaves.terminal_price": {
       "unit": "silver",
-      "value": 1.956306
+      "value": 1.952619
     },
     "producer_loss.local_peak_day": {
       "unit": "day",
@@ -420,35 +500,35 @@
     },
     "producer_loss.local_peak_price": {
       "unit": "silver",
-      "value": 45.253086
+      "value": 45.145699
     },
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.411207
+      "value": 28.706403
     },
     "technique_change.local.meals.price": {
       "unit": "silver",
-      "value": 14.928898
+      "value": 14.901296
     },
     "technique_change.local.rate_of_surplus_value": {
       "unit": "ratio",
-      "value": 42.403666
+      "value": 28.702818
     },
     "technique_change.local.wage_rate": {
       "unit": "silver",
-      "value": 29.857795
+      "value": 41.771099
     },
     "technique_change.production.profit_rate": {
       "unit": "ratio",
-      "value": 44.061921
+      "value": 26.750606
     },
     "technique_change.production.profit_rate_gain": {
       "unit": "ratio",
-      "value": 1.149114
+      "value": 1.086368
     },
     "technique_change.value.meals_adopter_ticks": {
       "unit": "ticks",
-      "value": 227.610968
+      "value": 227.070785
     },
     "technique_change.value.meals_laggard_ticks": {
       "unit": "ticks",
@@ -456,7 +536,7 @@
     },
     "technique_change.value.meals_social_ticks": {
       "unit": "ticks",
-      "value": 266.613502
+      "value": 266.346672
     }
   }
 }

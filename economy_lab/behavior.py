@@ -15,6 +15,9 @@ from .scenarios import (
     equilibrium,
     LEAVES,
     cost_competition,
+    GARMENTS,
+    generous_basket,
+    MEDICINE,
     producer_loss,
     regional_glut,
     reserve_depletion,
@@ -194,7 +197,61 @@ def collect_behavioral_metrics(
     metrics.update(
         _price_of_production_metrics(stable=stable, technique=technique)
     )
+    metrics.update(_subsistence_basket_metrics(stable=stable))
     return metrics
+
+
+def _subsistence_basket_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
+    """Observe the enlarged subsistence basket (docs/28).
+
+    The two that carry the session's result are
+    `basket.share_of_working_day` — necessary labor as a fraction of the
+    day, which is what every ratio built on `v` inverts — and
+    `generous_basket.rate_of_surplus_value`, which bounds from above what
+    any defensible bundle could achieve.
+    """
+    region = stable.regions[LOCAL_REGION]
+    basket = region.subsistence_basket
+    embodied = stable.basket_labor_value(region)
+    generous = generous_basket()
+    return {
+        "equilibrium.basket.commodities": _metric(float(len(basket)), "count"),
+        "equilibrium.basket.labor_ticks": _metric(embodied, "ticks"),
+        "equilibrium.basket.share_of_working_day": _metric(
+            embodied / region.ticks_per_worker_day, "fraction"
+        ),
+        "equilibrium.basket.money_cost": _metric(region.wage_rate(), "silver"),
+        "equilibrium.basket.meals_share_of_money": _metric(
+            basket[MEALS] * region.prices[MEALS] / region.wage_rate(), "fraction"
+        ),
+        "equilibrium.basket.meals_share_of_labor": _metric(
+            basket[MEALS] * stable.labor_values[MEALS] / embodied, "fraction"
+        ),
+        # How many workers one provisioner's day feeds. The sentence the
+        # whole session reduces to, as a number.
+        "equilibrium.basket.workers_fed_per_provisioner_day": _metric(
+            region.ticks_per_worker_day
+            / (basket[MEALS] * stable.labor_values[MEALS]),
+            "workers",
+        ),
+        "generous_basket.rate_of_surplus_value": _metric(
+            generous.rate_of_surplus_value(), "ratio"
+        ),
+        "generous_basket.organic_composition": _metric(
+            generous.organic_composition(), "ratio"
+        ),
+        "generous_basket.value_rate_of_profit": _metric(
+            generous.value_rate_of_profit(), "ratio"
+        ),
+        "generous_basket.production.profit_rate": _metric(
+            generous.prices_of_production()["profit_rate"], "ratio"
+        ),
+        "generous_basket.basket.share_of_working_day": _metric(
+            generous.basket_labor_value(generous.regions[LOCAL_REGION])
+            / generous.regions[LOCAL_REGION].ticks_per_worker_day,
+            "fraction",
+        ),
+    }
 
 
 def _price_of_production_metrics(
@@ -248,6 +305,26 @@ def _price_of_production_metrics(
         ),
         "equilibrium.production.psychoid_leaves_relative_to_meals": _metric(
             relative(LEAVES), "ratio"
+        ),
+        "equilibrium.production.garments_relative_to_meals": _metric(
+            relative(GARMENTS), "ratio"
+        ),
+        "equilibrium.production.herbal_medicine_relative_to_meals": _metric(
+            relative(MEDICINE), "ratio"
+        ),
+        "equilibrium.production.garments_over_value_ratio": _metric(
+            relative(GARMENTS) / value_ratio(GARMENTS), "ratio"
+        ),
+        "equilibrium.production.herbal_medicine_over_value_ratio": _metric(
+            relative(MEDICINE) / value_ratio(MEDICINE), "ratio"
+        ),
+        # The rank-one rate: what r would be if no wage good had material
+        # inputs. It did until docs/28, which is why r was exactly s/v.
+        "equilibrium.production.rank_one_profit_rate": _metric(
+            _rank_one_profit_rate(stable), "ratio"
+        ),
+        "equilibrium.production.profit_rate_over_rank_one": _metric(
+            system["profit_rate"] / _rank_one_profit_rate(stable), "ratio"
         ),
         "equilibrium.production.yayo_relative_to_meals": _metric(
             relative(YAYO), "ratio"
@@ -475,7 +552,34 @@ def _labor_metrics(
         "equilibrium.realized.psychoid_leaves_money_rate": _metric(
             _money_rate(stable, LOCAL_REGION, LEAVES), "ratio"
         ),
+        # The two new wage goods straddle the labor-time rate, which is
+        # what dissolves docs/24's "agreement by construction" for meals.
+        "equilibrium.realized.garments_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, GARMENTS), "ratio"
+        ),
+        "equilibrium.realized.herbal_medicine_money_rate": _metric(
+            _money_rate(stable, LOCAL_REGION, MEDICINE), "ratio"
+        ),
     }
+
+
+def _rank_one_profit_rate(economy: Economy) -> float:
+    """`T / sum(b*l) - 1`: the profit rate with pure-labor wage goods.
+
+    With no material inputs to any wage good the augmented matrix
+    restricted to the basket is the outer product `(l/T) . b`, whose only
+    non-zero eigenvalue is `sum(b*l)/T`.  That is why `r` was exactly the
+    rate of surplus value before docs/28, and the distance from it is how
+    much the general Sraffa case departs from the corn model.
+    """
+    region = economy.regions[LOCAL_REGION]
+    _, labor, _ = economy.social_technique()
+    embodied = sum(
+        quantity * labor[name]
+        for name, quantity in sorted(region.subsistence_basket.items())
+        if quantity > 0.0
+    )
+    return region.ticks_per_worker_day / embodied - 1.0
 
 
 def _wedge_share(economy: Economy, region: str, commodity: str) -> float:
