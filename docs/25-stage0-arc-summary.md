@@ -6,7 +6,7 @@ exists, what is next, what not to break. This is the argument: what each layer
 was for, what it measured, and what it got wrong.
 
 The detailed record lives in the design/results pairs, `docs/06` through
-`docs/33`. Every feature was designed in a committed document *before* it was
+`docs/35`. Every feature was designed in a committed document *before* it was
 implemented, and every prediction was scored afterward whether or not it held.
 
 ---
@@ -55,6 +55,7 @@ Each layer removed something that was appearing from nothing.
 | 12 | workers ate and wore and needed nothing else | the basket is food, clothing and medicine | 28–29 |
 | 13 | profit was charged against a day's flow | it is charged against the capital actually advanced | 30–31 |
 | 14 | nobody knew whether any of it scaled | it does, linearly, and the memory design does not | 32–33 |
+| 15 | history grew forever, and the ledger read it | history is optional; the opening stock is state | 34–35 |
 
 ---
 
@@ -461,22 +462,19 @@ sector.
 
 ## Where it goes next
 
-**Two small sessions, then the economics resumes.** Reshape
-`Economy.history` — sampled, opt-in, or reduced to the series the analysis
-actually reads — because it is the one thing `docs/33` found that the runtime
-port cannot inherit, and it is cheap while the Python model is its only
-consumer. Then `_allocate_orders`, which is now 42% of a simulated day and
-whose fixes are mechanical: it sorts one-element lists, keys four dictionaries
-by `id(producer)`, and rebuilds its commodity grouping on every iteration.
+**`_allocate_orders`**, which is now 42% of a simulated day and whose fixes
+are mechanical: it sorts one-element lists, keys four dictionaries by
+`id(producer)`, and rebuilds its commodity grouping on every iteration. The
+history reshape that stood beside it is done (`docs/35`).
 
-Behind them, in the economics: a capital-goods sector, which building capacity
+Behind it, in the economics: a capital-goods sector, which building capacity
 needs anyway — silver is still spent without consuming material — and which
 is what would let fixed capital into the price system. Then capacity
 depreciation and exit, so competition is for survival and not only for
 orders. And recreation in the basket, which is worth doing on its own rather
 than alongside something else.
 
-**Current state:** 147 tests, 154 frozen metrics, six commodities, two
+**Current state:** 154 tests, 154 frozen metrics, six commodities, two
 regions, three closing ledgers, a classical price system with an
 interpretable profit rate computed beside the authored one, a harness that
 runs the same model at 647 commodities across 100 regions, and an equilibrium

@@ -350,11 +350,12 @@ results document scoring the predictions afterward.
 | [28](docs/28-enlarged-subsistence-basket-design.md) · [29](docs/29-enlarged-subsistence-basket-results.md) | Clothing and medicine in the basket, and why the constraint was never the basket |
 | [30](docs/30-turnover-design.md) · [31](docs/31-turnover-results.md) | Turnover: profit on capital advanced, and the two rates that were not rates |
 | [32](docs/32-scale-test-design.md) · [33](docs/33-scale-test-results.md) | The scale test: 647 commodities across 100 regions, and what the runtime port cannot keep |
+| [34](docs/34-history-detail-design.md) · [35](docs/35-history-detail-results.md) | Making history optional, and a ledger that was reading its own report |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 147 acceptance and invariant tests
+python -m unittest discover -s tests      # 154 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect

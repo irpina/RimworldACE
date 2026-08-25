@@ -4,7 +4,7 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `39dc165` (the scale harness; throughput demand made linear)
+**Latest Stage 0 model commit:** `a0417de` (optional history; opening stock held as state)
 **Behavioral baseline:** `29e4627` (154 metrics: 5 structural scale observations, no timings)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
@@ -73,7 +73,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
-| **Stage 0 lab** (`economy_lab/`) | 147 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 154 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -119,11 +119,10 @@ conservative 20× lands under 20 µs a tick. Ledgers close, determinism holds,
 and the labor value solve reproduces the closed analysis exactly for all 447
 commodities the generator did not contaminate.
 
-**One finding goes straight into Phase C.** `Economy.history` grows ~16 MiB
-per simulated day at full scale — 3.8 GB over a 240-day run — and that is a
-design decision rather than an implementation cost. A faster language does
-not make it smaller. History has to become sampled or opt-in *before* the
-port, not after.
+**That finding is now closed too** (docs/35). `record_history=False` and
+`history_every=k` land the runtime's memory at a flat 54 MiB at 647
+commodities and 100 settlements, instead of 3.8 GB over a run, with the
+laboratory's full history unchanged by default.
 
 **Phase C — runtime port** (~6–10 sessions, the bulk of the work). Port the
 model to deterministic C#; settlement profiles and regional membership; the
@@ -155,10 +154,10 @@ open risk turned out to be a constant factor rather than a rewrite.
 
 ### The three things most likely to derail it
 
-1. ~~**Scale.**~~ **Retired** (docs/33). The architecture is linear and the
-   calibration held at 647 commodities. What replaces it on this list is
-   narrower and known: **the history design**, which costs 3.8 GB over a run
-   and must be reshaped before the port rather than after.
+1. ~~**Scale.**~~ **Retired** (docs/33), and the memory finding it left
+   behind is closed too (docs/35). Nothing has replaced it on this list:
+   the two remaining risks below are both about Stage 1 and neither is
+   about whether the model works.
 2. **The wealth coupling.** A dynamic price system feeding `MarketValue`
    changes raid strength, because storyteller wealth reads it. Getting this
    wrong makes the mod feel broken rather than interesting. Already flagged
@@ -378,6 +377,11 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/34-history-detail-design.md` — history as an optional output,
+  and the claim about what reads it that turned out to be false;
+- `docs/35-history-detail-results.md` — memory flat at ~60 MiB instead
+  of 3.8 GB over a run, and the material ledger stopped reading its own
+  report to find its opening stock;
 - `docs/32-scale-test-design.md` — the size question, the budget fixed
   before measuring, and the depth histogram that shaped the whole test;
 - `docs/33-scale-test-results.md` — linear after one method changed,
@@ -677,7 +681,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 147 tests pass;
+- all 154 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -1074,10 +1078,12 @@ above. The scale question that section carried as its largest open risk is
 
 15. **Next — two small sessions, then the economics resumes.**
 
-    *Reshape `Economy.history`* — sampled, opt-in, or reduced to the
-    series the analysis actually reads. Named by `docs/33` §4 as the one
-    thing the runtime port cannot inherit, and cheap to do while the
-    Python model is still the only consumer.
+    *~~Reshape `Economy.history`~~* — done (docs/35).
+    `record_history=False` and `history_every=k`, defaulting to today's
+    behaviour, put the runtime's memory at a flat 54 MiB instead of 3.8
+    GB over a run. The design's claim that nothing reads history back was
+    wrong — `commodity_balance` took its opening stock from `history[0]`
+    — and the opening stock is state now.
 
     *`_allocate_orders`* is now 42% of a simulated day. It is O(commodities)
     with a heavy constant — a sort of a one-element list, four dicts keyed
