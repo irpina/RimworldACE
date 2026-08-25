@@ -396,7 +396,7 @@ are all in the generated-meat table. Caught by comparing a card against
 `out/embodied_labor.csv`, which is the check `check_labor.py` exists to make
 routine.
 
-**The Alphabeaver outlier is real, and it is the model working.** Meat
+**The Alphabeaver outlier is a classification gap, not a finding.** Meat
 extraction labor broadly tracks inversely with body size — Thrumbo 0.5
 ticks, Elephant 0.6, median 6.5 — and **Alphabeaver is 717.7**, ten times
 Cat's 66.4 despite the larger body. Flagged first as a possible instance of
@@ -416,11 +416,37 @@ costs **68.2 nutrition and yields 63 meat**:
 | Thrumbo | 155.2 | 560 | 0.28 |
 | **Alphabeaver** | **68.2** | **63** | **1.08** |
 
-Thirty times worse than a muffalo. So the number is not a defect to chase:
-it is RimWorld's own data saying an alphabeaver is a catastrophic food
-source, and the labor solve reproducing that. A good example of the value
-side finding something the price side hides — an alphabeaver corpse's
-*market* value gives no hint of it.
+Thirty times worse than a muffalo. That much is real — the hunger rate is
+extreme by design, because alphabeavers exist to strip a forest fast enough
+that a player wants them gone.
+
+**But it does not explain the 717.7, and an earlier note in this file
+claiming it did was wrong.** `animals.py` charges feed labor only to
+animals that cannot graze, and the test is one string:
+
+```python
+can_graze = "Rough" in food      # foodType
+```
+
+RimWorld has exactly three dendrovores. **Thrumbo** and **AlphaThrumbo**
+list `VegetarianRoughAnimal, DendrovoreAnimal`, match "Rough", graze for
+free, and come out at **0.6 and 0.5 ticks**. **Alphabeaver** lists
+`DendrovoreAnimal` alone, misses the test, and is billed 68.2 nutrition of
+**hay it cannot eat** — giving **717.7**.
+
+So one animal, one string test, and the entire 1,435× spread across the 104
+meat defs. The module's own justification for the graze rule is that
+"pasture is finite, but that is differential rent, not labor content" — and
+a wild forest is a free gift of nature on exactly the same terms. Whichever
+way it is resolved, treating two dendrovores differently because one of
+their `foodType` lists happens to also say "Rough" is not defensible.
+
+**Proposed one-line fix, not applied:** `can_graze` should accept
+`Dendrovore` as well as `Rough`. That would move a shipped number and
+`FINDINGS.md` is closed, so it is the user's call, not a silent correction.
+Expect Alphabeaver meat to drop from 717.7 to roughly the butchery-only
+figure — single-digit ticks — and the meat table's spread to collapse from
+1,435× to about 150×.
 
 **The 104 generated meat defs are reached.** They have no XML node, so no
 patch can touch them. `LaborContentTableDef` ships the solved figures and a
