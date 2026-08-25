@@ -2569,5 +2569,102 @@ class ScaleHarnessTests(unittest.TestCase):
         self.assertGreater(len({row["depth"] for row in rows}), 2)
 
 
+class HistoryDetailTests(unittest.TestCase):
+    """History is an output, and the runtime cannot afford it (docs/34).
+
+    At 647 commodities and a hundred regions a full snapshot costs ~16 MiB
+    a day. The laboratory needs every field; the runtime needs none. The
+    property that makes opting out safe is that nothing in the simulation
+    reads history back — which this class asserts rather than assumes,
+    because the design document asserted it and was wrong.
+    """
+
+    def run_pair(self, days=90, **kwargs):
+        full = equilibrium(days)
+        sparse = equilibrium(
+            days, parameters=replace(ScenarioParameters(), **kwargs)
+        )
+        return full, sparse
+
+    def test_opting_out_leaves_the_simulation_bit_identical(self):
+        full, bare = self.run_pair(record_history=False)
+        for name, region in full.regions.items():
+            other = bare.regions[name]
+            for commodity in sorted(full.commodities):
+                with self.subTest(region=name, commodity=commodity):
+                    self.assertEqual(
+                        region.prices[commodity], other.prices[commodity]
+                    )
+                    self.assertEqual(
+                        region.inventory[commodity], other.inventory[commodity]
+                    )
+            self.assertEqual(region.cash, other.cash)
+            self.assertEqual(region.worker_cash, other.worker_cash)
+        self.assertEqual(full.labor_values, bare.labor_values)
+        self.assertEqual(
+            full.rate_of_surplus_value(), bare.rate_of_surplus_value()
+        )
+
+    def test_the_material_ledger_still_closes_without_history(self):
+        """The dependency docs/34 section 3.3 missed.
+
+        `commodity_balance` read its opening stock out of `history[0]`, so
+        opting out of history broke the material ledger. The opening stock
+        is state now, and this is the test that says so.
+        """
+        _, bare = self.run_pair(days=60, record_history=False)
+        for name, residual in bare.commodity_balances().items():
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(residual, 0.0, places=7)
+        self.assertAlmostEqual(bare.cash_balance(), 0.0, places=7)
+
+    def test_the_opening_stock_is_what_history_recorded(self):
+        economy = equilibrium(0)
+        self.assertEqual(
+            economy.opening_inventory,
+            economy.history[0]["system_inventory"],
+        )
+
+    def test_opting_out_leaves_only_day_markers(self):
+        _, bare = self.run_pair(days=30, record_history=False)
+        self.assertEqual(len(bare.history), 31)
+        self.assertEqual(
+            [snapshot["day"] for snapshot in bare.history], list(range(31))
+        )
+        for snapshot in bare.history:
+            self.assertEqual(set(snapshot), {"day"})
+
+    def test_sampling_keeps_the_days_it_promises(self):
+        _, sparse = self.run_pair(days=30, history_every=7)
+        detailed = [
+            snapshot["day"]
+            for snapshot in sparse.history
+            if "system_inventory" in snapshot
+        ]
+        # Day zero, every seventh day, and the last day of the run, so a
+        # sampled history brackets its own range.
+        self.assertEqual(detailed, [0, 7, 14, 21, 28, 30])
+        self.assertEqual(len(sparse.history), 31)
+
+    def test_series_refuses_rather_than_mis_indexing(self):
+        # Callers read the index as a day number. A shorter list would
+        # corrupt every shock metric in the reference and fail nothing.
+        _, bare = self.run_pair(days=10, record_history=False)
+        with self.assertRaises(RuntimeError) as raised:
+            bare.series("Dust Basin", YAYO)
+        self.assertIn("record_history=False", str(raised.exception))
+
+        _, sparse = self.run_pair(days=10, history_every=5)
+        with self.assertRaises(RuntimeError) as raised:
+            sparse.series("Dust Basin", YAYO)
+        self.assertIn("samples history", str(raised.exception))
+
+    def test_history_every_must_be_a_real_interval(self):
+        from economy_lab.model import Economy
+
+        with self.assertRaises(ValueError):
+            Economy([], [], [], history_every=0)
+
+
 if __name__ == "__main__":
     unittest.main()

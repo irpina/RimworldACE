@@ -590,6 +590,8 @@ class Economy:
         production_price_tolerance: float = 1e-12,
         production_price_max_iterations: int = 1000,
         production_period_days: float = 1.0,
+        record_history: bool = True,
+        history_every: int = 1,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -632,6 +634,13 @@ class Economy:
         #: How long one run occupies its capital before the product
         #: exists.  One `step()`, which is what the runtime does.
         self.production_period_days = production_period_days
+        if history_every < 1:
+            raise ValueError("history_every must be at least one day")
+        #: History is an *output*: nothing in the simulation reads it.
+        #: At 647 commodities and 100 regions a full snapshot costs
+        #: ~16 MiB a day, which the runtime cannot carry (docs/33).
+        self.record_history = record_history
+        self.history_every = history_every
         #: Social labor values in work-ticks, solved from the process graph.
         #: Distinct from ``Commodity.labor_value``, which stays the authored
         #: FINDINGS.md figure.  See docs/19.
@@ -701,12 +710,19 @@ class Economy:
                 if cost is not None:
                     region.seed_unit_cost[name] = cost
                 region.cost_ratio.setdefault(name, 1.0)
+        #: Opening stock, for the material ledger.  Held as state rather
+        #: than read back out of `history[0]`, which was a dependency on an
+        #: *output* — and the one docs/34 section 3.3 wrongly asserted did
+        #: not exist.
+        self.opening_inventory = {
+            name: self.system_inventory(name) for name in self.commodities
+        }
         self._record_history()
 
     # ------------------------------------------------------------- public API
 
     def step(self, days: int = 1) -> None:
-        for _ in range(days):
+        for index in range(days):
             self.day += 1
             self._arrive_shipments()
             self._complete_projects()
@@ -727,7 +743,7 @@ class Economy:
             self._update_expectations()
             if self.day % self.investment_interval_days == 0:
                 self._invest()
-            self._record_history()
+            self._record_history(final=index == days - 1)
 
     def _refresh_throughput(self) -> None:
         """Recompute every region's throughput demand for the day."""
@@ -783,7 +799,7 @@ class Economy:
         consumption, use as a production input, external destruction) or still
         be held somewhere.
         """
-        initial = self.history[0]["system_inventory"][commodity]
+        initial = self.opening_inventory[commodity]
         produced = self.ledger.production.get(commodity, 0.0)
         injected = self.ledger.external_injections.get(commodity, 0.0)
         destroyed = self.ledger.external_destruction.get(commodity, 0.0)
@@ -1480,6 +1496,25 @@ class Economy:
         return held + in_transit
 
     def series(self, region: str, commodity: str, field: str = "price") -> List[float]:
+        """One value per day, indexed by day.
+
+        Callers index this positionally and read the index as a day number.
+        A sampled or disabled history cannot honour that, so it refuses
+        rather than returning a shorter list that would be silently
+        mis-indexed — which would corrupt every shock metric in the frozen
+        reference without failing anything (docs/34 section 3.2).
+        """
+        if not self.record_history:
+            raise RuntimeError(
+                "no series: this economy was built with record_history=False"
+            )
+        if self.history_every != 1:
+            raise RuntimeError(
+                "no series: this economy samples history every "
+                f"{self.history_every} days, so a positional index is not a "
+                "day; read `history` directly, where each snapshot carries "
+                "its own day"
+            )
         return [h["regions"][region][field][commodity] for h in self.history]
 
     # ------------------------------------------------------------ daily flows
@@ -2488,7 +2523,20 @@ class Economy:
 
     # --------------------------------------------------------------- snapshots
 
-    def _record_history(self) -> None:
+    def _record_history(self, *, final: bool = False) -> None:
+        """Append a snapshot, in as much detail as this economy records.
+
+        A sampled or disabled history still records the day, so a run can
+        say which days it covered.  Day zero and the last day of every
+        `step()` are always kept, so a sampled history brackets its own
+        range rather than ending somewhere arbitrary.
+        """
+        if not self.record_history:
+            self.history.append({"day": self.day})
+            return
+        if not (final or self.day % self.history_every == 0):
+            self.history.append({"day": self.day})
+            return
         self.history.append(
             {
                 "day": self.day,

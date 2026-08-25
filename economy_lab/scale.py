@@ -179,6 +179,7 @@ def synthetic_economy(
     basket_fraction: float = 0.02,
     capacity_headroom: float = 1.25,
     target_inventory_days: float = 20.0,
+    record_history: bool = True,
     seed: int = 20260825,
 ) -> Economy:
     """A running economy of the requested size.
@@ -289,7 +290,7 @@ def synthetic_economy(
                 region.throughput_demand(good.name) * good.target_inventory_days
             )
 
-    economy = Economy(goods, built, routes)
+    economy = Economy(goods, built, routes, record_history=record_history)
     economy.scale_record = record  # type: ignore[attr-defined]
     return economy
 
@@ -306,6 +307,9 @@ def history_entries(economy: Economy) -> int:
     """
     total = 0
     for snapshot in economy.history:
+        if "system_inventory" not in snapshot:
+            # A day marker from a sampled or disabled history (docs/34).
+            continue
         total += len(snapshot["system_inventory"]) + len(snapshot["labor_values"])
         for values in snapshot["regional_labor_values"].values():
             total += len(values)
@@ -322,11 +326,14 @@ def measure(
     regions: int,
     days: int,
     profile: bool = False,
+    record_history: bool = True,
 ) -> Dict[str, object]:
     """Build an economy of the given size and time a run of it."""
     tracemalloc.start()
     started = time.perf_counter()
-    economy = synthetic_economy(commodities=commodities, regions=regions)
+    economy = synthetic_economy(
+        commodities=commodities, regions=regions, record_history=record_history
+    )
     construction = time.perf_counter() - started
 
     profile_text = ""
@@ -371,6 +378,11 @@ def main() -> None:
     parser.add_argument("--days", type=int, default=5)
     parser.add_argument("--profile", action="store_true")
     parser.add_argument(
+        "--no-history",
+        action="store_true",
+        help="build with record_history=False, as the runtime would",
+    )
+    parser.add_argument(
         "--sweep",
         action="store_true",
         help="run the size ladder from docs/32 section 5",
@@ -381,19 +393,25 @@ def main() -> None:
         ladder = [(6, 2), (64, 2), (653, 2), (653, 10)]
         print(
             f"{'commodities':>12}{'regions':>9}{'producers':>11}"
-            f"{'build s':>10}{'s/day':>10}{'peak MiB':>11}{'history':>12}"
+            f"{'build s':>10}{'s/day':>10}{'peak MiB':>11}"
+            f"{'MiB no hist':>13}{'history':>12}"
         )
         for count, places in ladder:
-            result = measure(
-                commodities=count, regions=places, days=args.days
+            full = measure(commodities=count, regions=places, days=args.days)
+            bare = measure(
+                commodities=count,
+                regions=places,
+                days=args.days,
+                record_history=False,
             )
             print(
-                f"{result['commodities']:>12}{result['regions']:>9}"
-                f"{result['producers']:>11}"
-                f"{result['construction_seconds']:>10.2f}"
-                f"{result['seconds_per_day']:>10.3f}"
-                f"{result['peak_mib']:>11.1f}"
-                f"{result['history_entries']:>12,}"
+                f"{full['commodities']:>12}{full['regions']:>9}"
+                f"{full['producers']:>11}"
+                f"{full['construction_seconds']:>10.2f}"
+                f"{full['seconds_per_day']:>10.3f}"
+                f"{full['peak_mib']:>11.1f}"
+                f"{bare['peak_mib']:>13.1f}"
+                f"{full['history_entries']:>12,}"
             )
         return
 
@@ -402,6 +420,7 @@ def main() -> None:
         regions=args.regions,
         days=args.days,
         profile=args.profile,
+        record_history=not args.no_history,
     )
     for key in (
         "commodities",

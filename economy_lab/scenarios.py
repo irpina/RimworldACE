@@ -210,6 +210,13 @@ class ScenarioParameters:
     meal_target_inventory_days: float = 20.0
     perishable_meal_days: float = 4.0
 
+    # --- history detail (docs/34) ---------------------------------------------
+    #: History is an output; nothing in the simulation reads it.  At 647
+    #: commodities and 100 regions a full snapshot costs ~16 MiB a day,
+    #: which the runtime cannot carry.  Defaults reproduce today exactly.
+    record_history: bool = True
+    history_every: int = 1
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -771,6 +778,8 @@ def seeded_two_region_economy(
             parameters.production_price_max_iterations
         ),
         production_period_days=parameters.production_period_days,
+        record_history=parameters.record_history,
+        history_every=parameters.history_every,
     )
     _assert_reference_full_utilization(economy)
     return economy
