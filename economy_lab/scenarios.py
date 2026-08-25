@@ -159,6 +159,12 @@ class ScenarioParameters:
     provisioner_capital_money: float = 225.0
     provisioner_capital_labor: float = 16_940.0
 
+    # --- prices of production (docs/26) --------------------------------------
+    # Same convergence discipline as the labor value solve, so the two
+    # iterative systems fail on the same terms.
+    production_price_tolerance: float = 1e-12
+    production_price_max_iterations: int = 1000
+
     def machines_per_capacity(self, direct_labor: float) -> float:
         """Machines needed to support one unit of daily output."""
         return direct_labor / self.ticks_per_worker_day
@@ -556,6 +562,10 @@ def seeded_two_region_economy(
         competitive_price_intensity=parameters.competitive_price_intensity,
         competitive_share_elasticity=parameters.competitive_share_elasticity,
         capital_service_life_days=parameters.capital_service_life_days,
+        production_price_tolerance=parameters.production_price_tolerance,
+        production_price_max_iterations=(
+            parameters.production_price_max_iterations
+        ),
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1028,4 +1038,53 @@ def summary(economy: Economy) -> Dict[str, object]:
             for key, value in sorted(economy.labor_values.items())
         },
         "stale_labor_values": sorted(economy.stale_labor_values),
+        # The classical price system, computed but not adopted (docs/26).
+        # An observation beside the authored prices, never an input to them.
+        "prices_of_production": _production_price_report(economy),
+    }
+
+
+def _production_price_report(economy: Economy) -> Dict[str, object] | None:
+    """Prices of production beside labor values and authored prices.
+
+    Reported relative to the wage good, because the eigenvector fixes only
+    relative prices and a table of ratios is the readable form.  The
+    aggregates use the labor-value normalization, under which total price
+    equals total value by construction and total profit then does not
+    (docs/26 section 3.6).
+    """
+    system = economy.prices_of_production(numeraire=MEALS)
+    if system is None:
+        return None
+    aggregates = economy.production_price_aggregates()
+    prices = system["prices"]
+    base_price = prices.get(MEALS, 0.0)
+    base_value = economy.labor_values.get(MEALS, 0.0)
+    base_reference = economy.commodities[MEALS].reference_price
+    return {
+        "profit_rate": round(system["profit_rate"], 6),
+        "basics": system["basics"],
+        "iterations": system["iterations"],
+        "wage_per_tick": round(system["wage"], 8),
+        "relative_to_meals": {
+            key: {
+                "labor_value": round(
+                    economy.labor_values.get(key, 0.0) / base_value, 5
+                ),
+                "price_of_production": round(prices[key] / base_price, 5),
+                "authored_price": round(
+                    economy.commodities[key].reference_price / base_reference, 5
+                ),
+            }
+            for key in sorted(prices)
+            if base_price > 0.0 and base_value > 0.0
+        },
+        "aggregates": {
+            key: round(value, 4) for key, value in sorted(aggregates.items())
+        },
+        # Marx's two invariance postulates cannot both hold.  The first is
+        # imposed by the normalization; this is how far the second misses.
+        "profit_over_surplus": round(
+            aggregates["total_profit"] / aggregates["total_surplus"], 5
+        ),
     }

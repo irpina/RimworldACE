@@ -1492,5 +1492,351 @@ class PriceDecompositionTests(unittest.TestCase):
         self.assertLess(yayo_money_rate, labor_rate / 2.0)
 
 
+class PriceOfProductionTests(unittest.TestCase):
+    """The classical price system, computed but deliberately not adopted.
+
+    Prices of production come from the technique and the real wage alone,
+    with no authored price anywhere in the derivation. The profit rate is
+    therefore an outcome, and — this being the point of the exercise —
+    Sraffa's basics/non-basics structure decides which sector's technique
+    can move it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.economy = equilibrium(240)
+        cls.system = cls.economy.prices_of_production(numeraire=MEALS)
+        cls.parameters = ScenarioParameters()
+
+    def relative(self, commodity):
+        prices = self.system["prices"]
+        return prices[commodity] / prices[MEALS]
+
+    def test_meals_is_the_only_basic_commodity(self):
+        # Meals enter every sector through the wage. Chemfuel enters leaves
+        # and yayo but not meals, whose process has no modelled inputs, so
+        # the whole material circuit is non-basic.
+        self.assertEqual(self.system["basics"], [MEALS])
+
+    def test_the_profit_rate_is_fixed_by_the_wage_good_alone(self):
+        """A single basic good made by labor alone is a corn model.
+
+        `r` then reduces to the working day over the basket's labor, which
+        is why the number lands where it does — and why every caveat on the
+        meals-only basket lands on `r` as well.
+        """
+        _, labor, _ = self.economy.social_technique()
+        expected = self.parameters.ticks_per_worker_day / (
+            self.parameters.meals_per_worker_day * labor[MEALS]
+        ) - 1.0
+        # Tight rather than exact: the eigenvalue arrives through an
+        # iteration and a normalization, so it lands within an ulp or two
+        # of the closed form rather than on it.
+        self.assertAlmostEqual(self.system["profit_rate"], expected, places=9)
+
+    def test_the_profit_rate_exceeds_the_rate_of_surplus_value_by_fixed_capital(self):
+        """r and s/v are the same magnitude here, and differ only by an omission.
+
+        When the wage good is produced without means of production, the
+        uniform profit rate *is* the rate of surplus value. The price
+        system omits fixed capital (docs/26 section 3.5) while the value
+        system carries it, so the whole of the small gap between them is
+        that omission — asserted rather than tolerated.
+        """
+        region = self.economy.regions["Dust Basin"]
+        ticks = self.parameters.ticks_per_worker_day
+        _, labor, _ = self.economy.social_technique()
+        _, capital = circuit_processes()[MEALS].capital_consumed_per_unit(
+            MEALS,
+            self.economy.capital_service_life_days,
+            self.economy.commodities,
+        )
+
+        with_capital = self.economy.basket_labor_value(region)
+        without_capital = self.parameters.meals_per_worker_day * labor[MEALS]
+        # The whole difference between the two systems' baskets is the plant
+        # the price system has nowhere to put.
+        self.assertAlmostEqual(
+            with_capital - without_capital,
+            self.parameters.meals_per_worker_day * capital,
+            places=9,
+        )
+
+        self.assertAlmostEqual(
+            self.system["profit_rate"],
+            ticks / without_capital - 1.0,
+            places=9,
+        )
+        # The ledger's s/v is cumulative over the run while the basket value
+        # is terminal, so the two agree closely rather than exactly; the
+        # claim under test is the ordering and the size of the gap.
+        cumulative = self.economy.rate_of_surplus_value()
+        self.assertAlmostEqual(cumulative, ticks / with_capital - 1.0, delta=1e-3)
+        gap = (self.system["profit_rate"] - cumulative) / cumulative
+        self.assertGreater(gap, 0.0)
+        self.assertLess(gap, 0.002)
+
+    def test_a_pure_labor_good_prices_at_its_direct_labor_ratio(self):
+        # Chemfuel and meals both have no modelled inputs, so each is
+        # (1 + r) * w * l and the markup cancels in the ratio.
+        _, labor, _ = self.economy.social_technique()
+        self.assertAlmostEqual(
+            self.relative(CHEMFUEL),
+            labor[CHEMFUEL] / labor[MEALS],
+            places=12,
+        )
+
+    def test_the_value_ratio_and_the_price_ratio_part_by_exactly_that_omission(self):
+        """Not identical, and the difference is named.
+
+        The prediction in docs/26 section 7.5 said these two ratios would
+        agree exactly. They do not, because labor values carry the plant's
+        embodied labor and the price system leaves fixed capital out. The
+        gap is small, one-directional, and fully explained.
+        """
+        process = circuit_processes()
+        _, labor, _ = self.economy.social_technique()
+
+        def capital(commodity):
+            _, ticks = process[commodity].capital_consumed_per_unit(
+                commodity,
+                self.economy.capital_service_life_days,
+                self.economy.commodities,
+            )
+            return ticks
+
+        value_ratio = (
+            self.economy.labor_values[CHEMFUEL]
+            / self.economy.labor_values[MEALS]
+        )
+        self.assertAlmostEqual(
+            value_ratio,
+            (labor[CHEMFUEL] + capital(CHEMFUEL))
+            / (labor[MEALS] + capital(MEALS)),
+            places=12,
+        )
+        self.assertNotAlmostEqual(value_ratio, self.relative(CHEMFUEL), places=12)
+        self.assertLess(
+            abs(value_ratio - self.relative(CHEMFUEL)) / value_ratio, 0.001
+        )
+
+    def test_the_markup_compounds_through_the_input_chain(self):
+        """The headline negative result: these prices are worse than authored.
+
+        Yayo takes eight leaves, and the gross markup applies to the leaves
+        and again to the yayo, so a two-stage chain meets a 39-fold markup
+        twice. Nothing is wrong with the arithmetic; the meals-only basket
+        makes `r` absurd and the chain amplifies it.
+        """
+        authored = (
+            self.parameters.reference_price / self.parameters.meal_reference_price
+        )
+        self.assertGreater(self.relative(YAYO) / authored, 60.0)
+        # Leaves are one stage up and overshoot by about a factor of two.
+        self.assertGreater(self.relative(LEAVES), 1.8 * self.economy.labor_values[
+            LEAVES
+        ] / self.economy.labor_values[MEALS])
+
+    def test_total_price_equals_total_value_under_that_normalization(self):
+        aggregates = self.economy.production_price_aggregates()
+        self.assertAlmostEqual(
+            aggregates["total_price"], aggregates["total_value"], places=6
+        )
+
+    def test_total_profit_does_not_equal_total_surplus(self):
+        """Marx's two invariance postulates, and the one that has to give.
+
+        Imposing total price = total value leaves total profit well above
+        total surplus. Asserted as a positive claim about the size of the
+        gap rather than tolerated as slack: if this ever came out near 1.0
+        the normalization would be doing something the model does not
+        intend.
+        """
+        aggregates = self.economy.production_price_aggregates()
+        ratio = aggregates["total_profit"] / aggregates["total_surplus"]
+        self.assertGreater(ratio, 1.4)
+        self.assertLess(ratio, 1.7)
+
+    # -- Sraffa's basics theorem, on a purpose-built three-good economy ------
+
+    def three_good_economy(self, *, bread_labor=500.0, tool_labor=30.0):
+        """Bread feeds the workers; ore makes tools; tools feed nobody.
+
+        Bread is the only basic commodity, so the profit rate must answer
+        to bread's technique and to nothing else.
+        """
+        from economy_lab.model import Economy, Region
+
+        commodities = [
+            Commodity("bread", reference_price=10.0, labor_value=1.0),
+            Commodity("ore", reference_price=10.0, labor_value=1.0),
+            Commodity("tool", reference_price=10.0, labor_value=1.0),
+        ]
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"bread": 0.0, "ore": 0.0, "tool": 1.0},
+            inventory={"bread": 100.0, "ore": 100.0, "tool": 100.0},
+            prices={"bread": 10.0, "ore": 10.0, "tool": 10.0},
+            producers=[
+                Producer(
+                    "bakery", "bread", 1.0, 1.0,
+                    process=Process(
+                        "baking",
+                        outputs={"bread": 1.0},
+                        direct_labor=bread_labor,
+                    ),
+                ),
+                Producer(
+                    "mine", "ore", 2.0, 1.0,
+                    process=Process(
+                        "mining", outputs={"ore": 1.0}, direct_labor=20.0
+                    ),
+                ),
+                Producer(
+                    "smithy", "tool", 1.0, 1.0,
+                    process=Process(
+                        "smithing",
+                        outputs={"tool": 1.0},
+                        inputs={"ore": 2.0},
+                        direct_labor=tool_labor,
+                    ),
+                ),
+            ],
+            subsistence_basket={"bread": 1.0},
+            ticks_per_worker_day=1000.0,
+        )
+        economy = Economy(commodities, [region], [])
+        return economy.prices_of_production(
+            numeraire="bread", use_capacity=True
+        )
+
+    def test_the_three_good_system_solves_to_the_hand_computed_prices(self):
+        system = self.three_good_economy()
+        self.assertEqual(system["basics"], ["bread"])
+        # r = 1000 ticks per worker-day / 500 ticks of bread - 1.
+        self.assertAlmostEqual(system["profit_rate"], 1.0, places=9)
+        # w = 10 silver of bread / 1000 ticks; ore is 2 * (0.01 * 20).
+        self.assertAlmostEqual(system["wage"], 0.01, places=12)
+        self.assertAlmostEqual(system["prices"]["ore"], 0.4, places=9)
+        # tool = 2 * (2 ore + 0.01 * 30)
+        self.assertAlmostEqual(system["prices"]["tool"], 2.2, places=9)
+
+    def test_a_non_basic_technique_change_leaves_the_profit_rate_untouched(self):
+        base = self.three_good_economy()
+        doubled = self.three_good_economy(tool_labor=60.0)
+        self.assertEqual(doubled["profit_rate"], base["profit_rate"])
+        self.assertEqual(doubled["prices"]["ore"], base["prices"]["ore"])
+        self.assertEqual(doubled["prices"]["bread"], base["prices"]["bread"])
+        # Only the changed sector's own price moves.
+        self.assertAlmostEqual(doubled["prices"]["tool"], 2.8, places=9)
+
+    def test_a_basic_technique_change_moves_the_profit_rate(self):
+        cheaper = self.three_good_economy(bread_labor=400.0)
+        self.assertAlmostEqual(cheaper["profit_rate"], 1.5, places=9)
+        # And it moves every price with it, the wage good's included.
+        self.assertAlmostEqual(cheaper["prices"]["ore"], 0.5, places=9)
+        self.assertAlmostEqual(cheaper["prices"]["tool"], 3.25, places=9)
+
+    # -- undefined and impossible systems ------------------------------------
+
+    def test_a_model_without_a_wage_relation_has_no_price_system(self):
+        from economy_lab.model import Economy, Region
+
+        widget = Commodity("widget", reference_price=10.0, labor_value=1.0)
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"widget": 1.0},
+            inventory={"widget": 5.0},
+            prices={"widget": 10.0},
+            producers=[
+                Producer(
+                    "mill", "widget", 4.0, 1.0,
+                    process=Process(
+                        "milling", outputs={"widget": 1.0}, direct_labor=10.0
+                    ),
+                ),
+            ],
+        )
+        economy = Economy([widget], [region], [])
+        economy.step(5)
+        # Produced, priced, and still undefined: without a basket the wage
+        # is zero and every pure-labor good would price at zero.
+        self.assertGreater(economy.ledger.production["widget"], 0.0)
+        self.assertIsNone(economy.prices_of_production())
+        self.assertIsNone(economy.production_price_aggregates())
+
+    def test_a_closed_exchange_cycle_refuses_rather_than_returning(self):
+        """Two goods that only make each other have no settled relative price.
+
+        The iteration oscillates instead of converging, and that must be an
+        explicit error like the value solve's, not a number pulled from
+        whichever iteration the loop happened to stop on.
+        """
+        from economy_lab.model import Economy, Region
+
+        commodities = [
+            Commodity("bread", reference_price=10.0, labor_value=1.0),
+            Commodity("alpha", reference_price=10.0, labor_value=1.0),
+            Commodity("beta", reference_price=10.0, labor_value=1.0),
+        ]
+        region = Region(
+            "Plain",
+            cash=10_000.0,
+            base_daily_demand={"bread": 0.0, "alpha": 0.0, "beta": 0.0},
+            inventory={"bread": 100.0, "alpha": 100.0, "beta": 100.0},
+            prices={"bread": 10.0, "alpha": 10.0, "beta": 10.0},
+            producers=[
+                Producer(
+                    "bakery", "bread", 1.0, 1.0,
+                    process=Process(
+                        "baking", outputs={"bread": 1.0}, direct_labor=500.0
+                    ),
+                ),
+                Producer(
+                    "alpha works", "alpha", 1.0, 1.0,
+                    process=Process(
+                        "alpha", outputs={"alpha": 1.0}, inputs={"beta": 2.0}
+                    ),
+                ),
+                Producer(
+                    "beta works", "beta", 1.0, 1.0,
+                    process=Process(
+                        "beta", outputs={"beta": 1.0}, inputs={"alpha": 0.5}
+                    ),
+                ),
+            ],
+            subsistence_basket={"bread": 1.0},
+            ticks_per_worker_day=1000.0,
+        )
+        economy = Economy(commodities, [region], [])
+        with self.assertRaises(RuntimeError) as raised:
+            economy.prices_of_production(use_capacity=True)
+        self.assertIn("closed cycle", str(raised.exception))
+
+    def test_querying_the_price_system_does_not_perturb_the_economy(self):
+        """An observation, not a step. Bit-identical histories or nothing."""
+        quiet = equilibrium(0)
+        noisy = equilibrium(0)
+        for _ in range(60):
+            quiet.step(1)
+            noisy.step(1)
+            noisy.prices_of_production()
+            noisy.production_price_aggregates()
+        for name, region in quiet.regions.items():
+            other = noisy.regions[name]
+            for commodity in quiet.commodities:
+                with self.subTest(region=name, commodity=commodity):
+                    self.assertEqual(
+                        region.prices[commodity], other.prices[commodity]
+                    )
+                    self.assertEqual(
+                        region.inventory[commodity], other.inventory[commodity]
+                    )
+            self.assertEqual(region.cash, other.cash)
+            self.assertEqual(region.worker_cash, other.worker_cash)
+
+
 if __name__ == "__main__":
     unittest.main()

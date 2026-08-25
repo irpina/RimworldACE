@@ -548,6 +548,8 @@ class Economy:
         competitive_price_intensity: float = 0.5,
         competitive_share_elasticity: float = 2.0,
         capital_service_life_days: float = 600.0,
+        production_price_tolerance: float = 1e-12,
+        production_price_max_iterations: int = 1000,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -583,6 +585,8 @@ class Economy:
         self.competitive_price_intensity = competitive_price_intensity
         self.competitive_share_elasticity = competitive_share_elasticity
         self.capital_service_life_days = capital_service_life_days
+        self.production_price_tolerance = production_price_tolerance
+        self.production_price_max_iterations = production_price_max_iterations
         #: Social labor values in work-ticks, solved from the process graph.
         #: Distinct from ``Commodity.labor_value``, which stays the authored
         #: FINDINGS.md figure.  See docs/19.
@@ -871,6 +875,340 @@ class Economy:
             return None
         living = sum(self.ledger.living_labor.get(n, 0.0) for n in names)
         return (living - necessary) / necessary
+
+    def social_technique(
+        self, *, use_capacity: bool = False
+    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float], Dict[str, float]]:
+        """Output-weighted input coefficients, direct labor, and gross output.
+
+        The same weighting the labor value solve uses (docs/19): total input
+        over total output and total labor over total output, across every
+        active producer in every region.  One social technique per commodity,
+        so the value system and the price system see the identical
+        technology.
+
+        Joint outputs apportion both inputs and labor by ``share_of_cost``,
+        which is again what the value solve does.
+
+        Returns ``(inputs, labor, output)`` keyed by commodity; only
+        commodities with positive output appear.
+        """
+
+        def weight(producer: Producer) -> float:
+            if use_capacity:
+                return producer.process.runs_for(producer.capacity_per_day)
+            return producer.last_runs
+
+        inputs: Dict[str, Dict[str, float]] = {}
+        labor: Dict[str, float] = {}
+        output: Dict[str, float] = {}
+        for region in sorted(self.regions):
+            for producer in self.regions[region].producers:
+                if not producer.active:
+                    continue
+                runs = weight(producer)
+                if runs <= EPSILON:
+                    continue
+                process = producer.process
+                for name, per_run in sorted(process.outputs.items()):
+                    if name not in self.commodities:
+                        continue
+                    share = process.share_of_cost(name, self.commodities)
+                    output[name] = output.get(name, 0.0) + runs * per_run
+                    labor[name] = (
+                        labor.get(name, 0.0) + runs * process.direct_labor * share
+                    )
+                    row = inputs.setdefault(name, {})
+                    for other, quantity in sorted(process.inputs.items()):
+                        row[other] = row.get(other, 0.0) + runs * quantity * share
+
+        priced = {name for name, total in output.items() if total > EPSILON}
+        return (
+            {
+                name: {
+                    other: total / output[name]
+                    for other, total in sorted(inputs.get(name, {}).items())
+                    if total > EPSILON
+                }
+                for name in sorted(priced)
+            },
+            {name: labor.get(name, 0.0) / output[name] for name in sorted(priced)},
+            {name: output[name] for name in sorted(priced)},
+        )
+
+    def social_wage_bundle(self, *, use_capacity: bool = False) -> Dict[str, float]:
+        """The subsistence basket per work-tick, averaged over regions.
+
+        ``b / T`` is what enters the augmented input matrix, and both the
+        basket and the working day are regional.  Regions are weighted by the
+        labor they actually perform, which is the same run-weighting used
+        everywhere else and reduces exactly to the common value when they
+        agree.  A region that works without a basket contributes a zero
+        bundle and correctly pulls the social wage down.
+
+        An empty result means there is no wage relation anywhere.
+        """
+
+        def weight(producer: Producer) -> float:
+            if use_capacity:
+                return producer.process.runs_for(producer.capacity_per_day)
+            return producer.last_runs
+
+        bundle: Dict[str, float] = {}
+        total_labor = 0.0
+        for name in sorted(self.regions):
+            region = self.regions[name]
+            performed = sum(
+                weight(producer) * producer.process.direct_labor
+                for producer in region.producers
+                if producer.active
+            )
+            if performed <= EPSILON:
+                continue
+            total_labor += performed
+            ticks = max(region.ticks_per_worker_day, EPSILON)
+            for commodity, quantity in sorted(region.subsistence_basket.items()):
+                if commodity in self.commodities:
+                    bundle[commodity] = (
+                        bundle.get(commodity, 0.0)
+                        + performed * quantity / ticks
+                    )
+        if total_labor <= EPSILON:
+            return {}
+        return {
+            name: total / total_labor
+            for name, total in sorted(bundle.items())
+            if total > EPSILON
+        }
+
+    @staticmethod
+    def _basic_commodities(
+        matrix: Dict[str, Dict[str, float]], priced: List[str]
+    ) -> List[str]:
+        """Commodities entering the production of every commodity, directly
+        or indirectly.
+
+        Sraffa's distinction, and the reason the profit rate comes out where
+        it does: ``r`` is fixed by the basic subsystem alone, so a change in a
+        non-basic sector's technique moves that sector's price and nothing
+        else.
+        """
+        users: Dict[str, List[str]] = {name: [] for name in priced}
+        for consumer in priced:
+            for supplier, quantity in matrix[consumer].items():
+                if quantity > EPSILON and supplier in users:
+                    users[supplier].append(consumer)
+        basics: List[str] = []
+        for start in priced:
+            seen: set = set()
+            frontier = [start]
+            while frontier:
+                current = frontier.pop()
+                for consumer in users[current]:
+                    if consumer not in seen:
+                        seen.add(consumer)
+                        frontier.append(consumer)
+            if seen >= set(priced):
+                basics.append(start)
+        return basics
+
+    def prices_of_production(
+        self,
+        *,
+        numeraire: str = "labor_value",
+        use_capacity: bool = False,
+    ) -> Optional[Dict[str, object]]:
+        """Solve the classical price system (docs/26).
+
+        Fold the subsistence basket into the input matrix, so that a unit of
+        output advances means of production *and* means of subsistence::
+
+            M[i][j] = a[i][j] + (l[i] / T) * b[j]
+            p       = (1 + r) * M * p
+
+        Every sector then earns the same rate on its advances.  This is a
+        homogeneous eigen-system: ``1/(1+r)`` is the dominant eigenvalue of
+        ``M`` and ``p`` its right eigenvector, fixed only up to scale.
+
+        The wage enters as a physical bundle rather than as money, so no
+        authored price can leak into a computation whose whole purpose is to
+        be free of one; the money wage is an output, ``p . b / T``.
+
+        **Fixed capital is omitted.** The model's machines are exogenous —
+        their money price and embodied labor are imported from the closed
+        analysis because buildings are not produced inside the circuit — and
+        a price system has nowhere to put such a thing without mixing an
+        authored magnitude or a second numeraire into the answer.  docs/24
+        bounds what this costs: 0.353% of constant capital.  A capital-goods
+        sector is the proper fix and is the next item behind this one.
+
+        This is an observation.  Nothing here feeds back into prices, costs,
+        or the order book.
+
+        ``numeraire`` may be ``"labor_value"`` (total price of gross output
+        equals its total labor value — Marx's first invariance postulate),
+        ``"reference_price"`` (total price equals the authored total), or a
+        commodity name (that commodity prices at its reference price).
+
+        Returns ``None`` where the system is undefined: no wage relation
+        means the wage cost is zero and every pure-labor good would price at
+        zero, which is a degenerate vector rather than an answer.
+
+        A *negative* profit rate is returned rather than refused.  It means
+        the technique cannot both pay the basket and replace its means of
+        production, which is a finding about the technique and not an error
+        in the solve.
+        """
+        inputs, labor, output = self.social_technique(use_capacity=use_capacity)
+        bundle = self.social_wage_bundle(use_capacity=use_capacity)
+        priced = sorted(output)
+        if not priced or not bundle:
+            return None
+
+        matrix: Dict[str, Dict[str, float]] = {}
+        for name in priced:
+            row = dict(inputs.get(name, {}))
+            for commodity, per_tick in bundle.items():
+                row[commodity] = row.get(commodity, 0.0) + labor[name] * per_tick
+            matrix[name] = row
+
+        # A priced good may not depend on a good nobody produced: its price
+        # would be an invention.  Loud, like the value solve's convergence
+        # failure, rather than a silent zero.
+        for name in priced:
+            missing = sorted(
+                other
+                for other, quantity in matrix[name].items()
+                if quantity > EPSILON and other not in output
+            )
+            if missing:
+                raise RuntimeError(
+                    f"cannot price {name!r}: its technique requires "
+                    f"{missing}, which nothing produced"
+                )
+
+        prices = {
+            name: max(self.labor_values.get(name, 0.0), EPSILON)
+            for name in priced
+        }
+        scale = sum(output[name] * prices[name] for name in priced)
+        prices = {name: value / scale for name, value in prices.items()}
+
+        eigenvalue = 0.0
+        iterations = 0
+        for iterations in range(1, self.production_price_max_iterations + 1):
+            advanced = {
+                name: sum(
+                    quantity * prices[other]
+                    for other, quantity in matrix[name].items()
+                )
+                for name in priced
+            }
+            step = sum(output[name] * advanced[name] for name in priced)
+            if step <= EPSILON:
+                raise RuntimeError(
+                    "price of production solve degenerated: nothing is "
+                    "advanced to produce anything, so no rate of profit is "
+                    "defined"
+                )
+            revised = {name: advanced[name] / step for name in priced}
+            converged = abs(step - eigenvalue) <= self.production_price_tolerance and all(
+                abs(revised[name] - prices[name]) <= self.production_price_tolerance
+                for name in priced
+            )
+            prices, eigenvalue = revised, step
+            if converged:
+                break
+        else:
+            raise RuntimeError(
+                "price of production solve did not converge; the augmented "
+                "input matrix has no single dominant price vector, which "
+                "happens when a subsystem exchanges in a closed cycle that "
+                "nothing else enters, so its relative prices oscillate "
+                "instead of settling"
+            )
+
+        if numeraire == "labor_value":
+            target = sum(
+                output[name] * self.labor_values.get(name, 0.0) for name in priced
+            )
+        elif numeraire == "reference_price":
+            target = sum(
+                output[name] * self.commodities[name].reference_price
+                for name in priced
+            )
+        elif numeraire in self.commodities:
+            if prices.get(numeraire, 0.0) <= EPSILON:
+                raise ValueError(
+                    f"cannot normalize on {numeraire!r}: its price of "
+                    "production is zero"
+                )
+            target = (
+                self.commodities[numeraire].reference_price
+                / prices[numeraire]
+            )
+        else:
+            raise ValueError(f"unknown numeraire {numeraire!r}")
+        prices = {name: value * target for name, value in prices.items()}
+
+        return {
+            "profit_rate": 1.0 / eigenvalue - 1.0,
+            "prices": prices,
+            "wage": sum(
+                per_tick * prices[name]
+                for name, per_tick in bundle.items()
+                if name in prices
+            ),
+            "basics": self._basic_commodities(matrix, priced),
+            "iterations": iterations,
+        }
+
+    def production_price_aggregates(
+        self, *, use_capacity: bool = False
+    ) -> Optional[Dict[str, float]]:
+        """Marx's two aggregate equalities, measured rather than assumed.
+
+        Normalized so that total price equals total value, the first
+        postulate holds by construction.  The second — total profit equals
+        total surplus value — then does not, and the gap is reported as a
+        positive result rather than absorbed by choosing a kinder
+        normalization (docs/26 section 3.6).
+
+        Surplus is the daily flow implied by the same social technique, not
+        the ledger's cumulative figure, so that both sides describe the same
+        period.
+        """
+        system = self.prices_of_production(
+            numeraire="labor_value", use_capacity=use_capacity
+        )
+        if system is None:
+            return None
+        _, labor, output = self.social_technique(use_capacity=use_capacity)
+        bundle = self.social_wage_bundle(use_capacity=use_capacity)
+        prices = system["prices"]
+        rate = system["profit_rate"]
+
+        total_price = sum(output[name] * prices[name] for name in output)
+        total_value = sum(
+            output[name] * self.labor_values.get(name, 0.0) for name in output
+        )
+        # Advances = total price / (1 + r), since every sector marks up by r.
+        total_profit = total_price - total_price / (1.0 + rate)
+
+        living = sum(output[name] * labor[name] for name in output)
+        basket_value = sum(
+            per_tick * self.labor_values.get(name, 0.0)
+            for name, per_tick in bundle.items()
+        )
+        necessary = living * basket_value
+        return {
+            "total_price": total_price,
+            "total_value": total_value,
+            "total_profit": total_profit,
+            "total_surplus": living - necessary,
+            "living_labor": living,
+            "necessary_labor": necessary,
+        }
 
     def system_inventory(self, commodity: str) -> float:
         held = sum(r.inventory.get(commodity, 0.0) for r in self.regions.values())
