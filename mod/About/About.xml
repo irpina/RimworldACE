@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
   <packageId>pina.snlt</packageId>
-  <name>SNLT — Labor Ledger</name>
+  <name>Labor Content</name>
   <author>pina</author>
   <supportedVersions>
     <li>1.6</li>
@@ -14,9 +14,15 @@
     <li>Ludeon.RimWorld.Anomaly</li>
     <li>Ludeon.RimWorld.Odyssey</li>
   </forceLoadAfter>
-  <description>Adds two read-only stats to the info card of every producible thing: the labor embodied in it, split into the labor spent extracting raw materials and the labor spent fabricating.
+  <description>A parka is almost pure fabrication labor. Its grazed leather costs essentially nothing to extract, while sewing it takes nearly all the work. RimWorld never shows you that split. Labor Content does.
 
-Changes no gameplay. No Harmony, no assemblies, no save impact — two StatDefs and a set of XML patches.
+Adds two read-only stats to the info card of every producible thing: labor embodied in extracting its raw materials, and labor embodied in fabricating the finished thing.
 
-The numbers are precomputed by solving the production graph to a fixed point from extraction outward, so a thing's labor content is the cheapest chain of real work that could produce it. Market value never enters the calculation, which is what makes the split meaningful: RimWorld prices extraction labor about fourteen times higher than fabrication labor, and this stat lets you see which side of that seam any given item sits on.</description>
+Each is shown three ways at once - in-game hours, work-seconds, and raw ticks - because embodied labor spans five orders of magnitude and no single unit reads well at both ends.
+
+The numbers are precomputed from the full production chain, from extraction outward. Market value never enters the calculation. Put the two side by side and a hidden seam becomes visible: RimWorld prices extraction labor several times above fabrication labor.
+
+No gameplay changes, no Harmony, no save impact. Read-only throughout: nothing here alters a def, a price, or a recipe. One small assembly, whose entire job is rendering a number in three units, because RimWorld's XML can only format one.
+
+Supports RimWorld 1.6 with any combination of official expansions.</description>
 </ModMetaData>

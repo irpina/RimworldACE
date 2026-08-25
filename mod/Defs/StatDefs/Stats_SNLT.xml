@@ -5,16 +5,24 @@
     Values are stored in work-seconds (ticks / 60), RimWorld's own work unit -
     GenText.ToStringWorkAmount is CeilToInt(ticks / 60). We do not use
     toStringStyle WorkAmount because it ceils, which would flatten every
-    animal product to "1"; embodied labor spans ~0.01 to ~5000 work-seconds.
+    animal product to "1"; embodied labor spans ~0.01 to ~7000 work-seconds.
 
-    No workerClass: the default StatWorker reads statBases, which is all we
-    need since the patches write a precomputed value onto each def.
+    workerClass renders each value in three units at once. Embodied labor
+    covers five orders of magnitude, so no single unit reads well across the
+    range: seconds are unreadable at the top and hours are all zeroes at the
+    bottom. StatDef.formatString takes exactly one value and cannot compute a
+    second, so this is the one thing in the mod that needs an assembly.
+
+    formatString and toStringStyle are kept deliberately. They are unused
+    while the worker is loaded, and they are what renders the stat if it
+    ever is not.
   -->
 
   <StatDef>
     <defName>SNLT_ExtractionLabor</defName>
     <label>embodied labor: extraction</label>
-    <description>Labor spent at the point of extraction — mining, harvesting, and butchery — to obtain the raw materials embodied in this thing, per unit.\n\nMeasured in seconds of colonist work at nominal work speed, following the cheapest chain of production that could yield this thing. Nature contributes nothing: an ore vein's labor content is the work of mining it, not what the ore is worth.</description>
+    <description>Labor spent at the point of extraction — mining, harvesting, and butchery — to obtain the raw materials embodied in this thing, per unit.\n\nMeasured following the cheapest chain of production that could yield this thing. Nature contributes nothing: an ore vein's labor content is the work of mining it, not what the ore is worth.\n\nShown in every unit that says something, from the coarsest down to raw ticks: in-game hours of work (2,500 ticks each), work-seconds (60 ticks each, the unit a recipe's work amount is quoted in), and ticks. Small things read in ticks alone, because at that magnitude the coarser units are all zeroes.</description>
+    <workerClass>SocialProduction.LaborContent.StatWorker_LaborContent</workerClass>
     <category>BasicsNonPawn</category>
     <defaultBaseValue>0</defaultBaseValue>
     <minValue>0</minValue>
@@ -28,7 +36,8 @@
   <StatDef>
     <defName>SNLT_FabricationLabor</defName>
     <label>embodied labor: fabrication</label>
-    <description>Labor spent transforming materials into this thing — crafting, smithing, cooking, construction — summed over every production step, per unit.\n\nMeasured in seconds of colonist work at nominal work speed. Excludes the extraction labor embodied in the inputs, which is reported separately.\n\nRimWorld's own pricing pays roughly fourteen times more for a second of extraction labor than for a second of fabrication labor, so a thing dominated by this stat is one whose labor the economy barely rewards.</description>
+    <description>Labor spent transforming materials into this thing — crafting, smithing, cooking, construction — summed over every production step, per unit.\n\nExcludes the extraction labor embodied in the inputs, which is reported separately.\n\nRimWorld's own pricing pays several times more for extraction labor than for fabrication labor, so a thing dominated by this stat is one whose labor the economy barely rewards.\n\nShown in every unit that says something, from the coarsest down to raw ticks: in-game hours of work (2,500 ticks each), work-seconds (60 ticks each, the unit a recipe's work amount is quoted in), and ticks. Small things read in ticks alone, because at that magnitude the coarser units are all zeroes.</description>
+    <workerClass>SocialProduction.LaborContent.StatWorker_LaborContent</workerClass>
     <category>BasicsNonPawn</category>
     <defaultBaseValue>0</defaultBaseValue>
     <minValue>0</minValue>

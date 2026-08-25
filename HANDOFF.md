@@ -72,7 +72,7 @@ performant, playable mod.
 
 | component | state | remaining |
 |---|---|---|
-| **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
+| **Labor Content** (`mod/`) | 543 patch operations across six files, plus one 40-line stat worker rendering three units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
 | **Stage 0 lab** (`economy_lab/`) | 154 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
@@ -220,7 +220,8 @@ Constraints:
 - no gameplay change;
 - no save impact;
 - no Harmony;
-- no assembly;
+- **one small assembly** — the constraint that used to say "no assembly"
+  was dropped deliberately, see below;
 - RimWorld 1.6;
 - graceful behavior with any combination of official expansions.
 
@@ -228,7 +229,10 @@ Validated scope:
 
 - 543 XML-backed defs can be patched;
 - all 543 XPath targets were previously validated;
-- 104 generated meat defs have no XML node and remain a v1.1 gap.
+- 104 generated meat defs have no XML node, so no patch can reach them.
+  This was a v1.1 gap while the mod was XML-only; now that it carries an
+  assembly it is a short `StaticConstructorOnStartup` that writes the two
+  statBases onto the generated defs, and should be reconsidered.
 
 ### Current uncommitted packaging work
 
@@ -248,9 +252,73 @@ Stage 0 commits. Preserve them:
 These changes were XML-parsed and ownership-checked but not committed. Do not
 mistake them for unrelated dirt or discard them.
 
-The required in-game visual pass is still incomplete. Display units and info
-card ordering must be decided by looking at real items in game. Current units
-remain work-seconds. Do not change them purely by reasoning.
+### Display units: multi-unit rendering, and why there is now an assembly
+
+Embodied labor spans five orders of magnitude — 22 ticks for a wood log,
+404,812 for the dearest bionic — so **no single unit reads well across the
+range**. Seconds are unreadable at the top; hours are all zeroes at the
+bottom. `StatDef.formatString` takes exactly one value and cannot compute a
+second, so XML cannot solve this. That is the whole reason the mod now
+carries an assembly.
+
+`mod/Source/LaborContent/StatWorker_LaborContent.cs` overrides one virtual
+method, `StatWorker.ValueToString`, and renders every unit that says
+something, coarsest first:
+
+| def | extraction | fabrication |
+|---|---|---|
+| `Steel` | 47.5 ticks | 0 |
+| `MealSimple` | 5 ticks | 5 work-s · 300 ticks |
+| `Apparel_BasicShirt` | 20 ticks | 26.7 work-s · 1,600 ticks |
+| `Apparel_Parka` | 40 ticks | 3.2 in-game h · 133 work-s · 8,000 ticks |
+| `ComponentIndustrial` | 9.5 work-s · 570 ticks | 2 in-game h · 83.3 work-s · 5,000 ticks |
+
+A unit below 1 is dropped from the front rather than printed as a leading
+zero-point-something. Both conversions are exact and neither is a
+convention: a work-second is 60 ticks (`GenText.ToStringWorkAmount`'s
+divisor), an in-game hour is 2,500. There is deliberately no "colonist-day",
+which would need an assumption about how much of a day a colonist works.
+
+What the assembly costs, stated plainly: the mod is now coupled to a
+RimWorld version. The coupling is as small as it can be — the built DLL
+binds to exactly two RimWorld symbols, `RimWorld.StatWorker` and
+`Verse.ToStringNumberSense` — and `formatString` and `toStringStyle` are
+kept in the defs so the stat still renders if the worker ever fails to load.
+
+**Build:** `sh mod/Source/build.sh`. It uses `csc.exe` from the .NET
+Framework that Windows already ships, *not* the .NET SDK, which this
+document says not to install. That constrains the source to C# 5 — no
+interpolated strings — which is why it is written the way it is.
+
+**Encoding trap, already hit once:** the source has no byte-order mark, so
+`csc` reads it in the ANSI codepage. A literal `·` in a string arrives in
+the assembly as `Â·`. The separator is written `·` for that reason, and
+the build is verified by looking for the UTF-16 bytes in the DLL.
+
+The required in-game visual pass is still incomplete. What is left to decide
+by looking at real items in game: whether the three-unit line is too long for
+the info card at common resolutions, whether the two stats sit in the right
+place in `BasicsNonPawn`, and whether the expansion-split patches load
+cleanly under every combination of official expansions.
+
+### Planned successor mod: gated economic information
+
+A separate mod, deliberately not this one. Labor Content shows every figure
+to every player for free; the successor makes economic information something
+a colony has to *produce*.
+
+- research and technology prerequisites before the figures are legible at
+  all;
+- an actively-worked station, in the shape of a research bench, whose work
+  maintains the accuracy of the colony's financial information — so
+  knowledge of one's own economy is itself a product of labor, and decays
+  without it.
+
+This is a gameplay mod and belongs after the Stage 1 runtime, not before it:
+the thing it gates has to be dynamic before gating it means anything. Recorded
+here so the design is not re-derived from scratch. It also pairs naturally
+with Phase D — a colony that must labor to know its own costs is already
+halfway to the class-consequences material.
 
 ---
 
