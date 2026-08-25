@@ -116,6 +116,7 @@ def failures():
         "Verse.DefDatabase`1",
         "Verse.Log",
         "Verse.StaticConstructorOnStartup",
+        "Verse.StuffProperties",
         "Verse.ThingDef",
         "Verse.ToStringNumberSense",
     ]
@@ -135,7 +136,7 @@ def main():
         raise SystemExit(1)
     print(
         "verified: {} overrides its three methods, separator "
-        "is U+00B7, binding surface is the 13 expected symbols".format(
+        "is U+00B7, binding surface is the 14 expected symbols".format(
             WORKER.rsplit(".", 1)[1]
         )
     )
