@@ -314,7 +314,11 @@ the assembly as `Â·`. The separator is written `·` for that reason, and
 the build is verified by looking for the UTF-16 bytes in the DLL.
 
 **The visual pass is complete** (2026-08-25, RimWorld 1.6.4871 rev591, all
-five expansions loaded). Verified on a plasteel knife:
+five expansions loaded), and a second pass verified the chain arithmetic on a
+bolt-action rifle against the card's own rows: extraction 4,560 ticks is
+60 steel x 47.5 + 3 components x 570, and fabrication 27,000 ticks is the
+components' own 15,000 plus the rifle's 12,000 — which is the 200 shown in
+"Work to make". Verified earlier on a plasteel knife:
 
 ```
 Labor content
@@ -323,10 +327,14 @@ Labor content
 ```
 
 Confirmed in game: the `SNLT_LaborContent` section renders with its own
-header between Basics and Weapon; the multi-unit line is right and matches
-`MeleeWeapon_Knife`'s solved 1,125 / 1,800 ticks exactly; the U+00B7
-separator renders rather than mojibake; the line fits at low resolution; and
-a `0` row is wanted rather than hidden. No errors in the log.
+header between Basics and Weapon; the values match the solve exactly; the
+U+00B7 separator renders rather than mojibake; and a `0` row is wanted
+rather than hidden. No errors in the log.
+
+**At most two units are shown**, because three wrapped onto a second row on
+a rifle at 1080p. The unit dropped is always the least useful one present —
+ticks, once a thing is large enough to have hours. Small things still read
+in ticks alone, which is exactly when ticks are the readable unit.
 
 ### Stuff-awareness and generated defs: both done
 

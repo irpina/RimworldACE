@@ -26,10 +26,12 @@ namespace SocialProduction.LaborContent
     /// Deliberately absent is any "colonist-day", which would need an
     /// assumption about how much of a day a colonist works.
     ///
-    /// A unit is shown only where it says something. A steel bar reads
-    /// "48 ticks" rather than "0.019 in-game h · 0.79 work-s · 48
-    /// ticks", because at that magnitude the coarse units are noise and
-    /// leading with noise is worse than showing one unit.
+    /// A unit is shown only where it says something, and at most two are
+    /// shown so the line cannot wrap. A steel bar reads "48 ticks" rather
+    /// than "0.019 in-game h · 0.79 work-s · 48 ticks", because at that
+    /// magnitude the coarse units are noise; a rifle reads "10.8 in-game h
+    /// · 450 work-s" and drops the ticks, which are the least useful unit
+    /// once a thing is big enough to have hours.
     /// </summary>
     public class StatWorker_LaborContent : StatWorker
     {
@@ -132,7 +134,7 @@ namespace SocialProduction.LaborContent
             // Every unit from the coarsest useful one down to ticks. A unit
             // below 1 is dropped from the front rather than printed as a
             // leading zero-point-something.
-            List<string> parts = new List<string>(3);
+            List<string> parts = new List<string>(2);
             if (hours >= 1f)
             {
                 parts.Add(Readable(hours) + " in-game h");
@@ -141,7 +143,15 @@ namespace SocialProduction.LaborContent
             {
                 parts.Add(Readable(val) + " work-s");
             }
-            parts.Add(Readable(ticks) + " ticks");
+            // At most two. Three wrapped onto a second row on a bolt-action
+            // rifle at 1080p, and the unit that gets dropped is always the
+            // least useful one present: ticks, when the thing is big enough
+            // to have hours. Ticks still appear on their own for small
+            // things, which is exactly when they are the readable unit.
+            if (parts.Count < 2)
+            {
+                parts.Add(Readable(ticks) + " ticks");
+            }
             // Escaped rather than literal: without a byte-order mark
             // csc reads source in the ANSI codepage, and a middle dot
             // would arrive in the assembly as mojibake.
