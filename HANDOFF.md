@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `e84787c` (turnover: profit on capital advanced)
-**Behavioral baseline:** `2537b38` (149 metrics: 15 new observations + 5 renames, nothing moved)
+**Latest Stage 0 model commit:** `39dc165` (the scale harness; throughput demand made linear)
+**Behavioral baseline:** `29e4627` (154 metrics: 5 structural scale observations, no timings)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -73,7 +73,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
-| **Stage 0 lab** (`economy_lab/`) | 138 tests, 149 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions | **the scale test is now due**, then two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 147 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -110,25 +110,30 @@ capital-goods sector; exit and capacity depreciation; recreation in the
 basket; monopoly rent. Optionally credit and bankruptcy. Then re-run
 the stale sensitivity sweep.
 
-**But Phase B should come first.** `docs/29` said "after turnover would
-be a defensible place to stop" and `docs/31` §9 says this is that
-place. The economics has three closing ledgers, an interpretable profit
-rate and six commodities, and nobody has checked whether any of it
-survives 654 defs and a hundred settlements.
+**Phase B — scale test: DONE** (docs/33, one session). The lab was six
+commodities and two regions; the harness now runs 647 commodities across 100
+regions. After one method changed, cost is **linear** in both — 10.1× the
+commodities costs 10.9× the time where it cost 22.5× — so the CPU miss is a
+constant factor rather than a scaling failure, and a C# port at a
+conservative 20× lands under 20 µs a tick. Ledgers close, determinism holds,
+and the labor value solve reproduces the closed analysis exactly for all 447
+commodities the generator did not contaminate.
 
-**Phase B — scale test** (~2 sessions, and genuinely risky). The lab is four
-commodities and two regions. RimWorld is ~654 producible defs and ~100
-settlements. Two solvers iterate to fixed points every day, per region.
-Nobody has checked whether that survives a hundredfold more entities at an
-acceptable tick cost, or whether the calibration holds when the process graph
-is deep and wide rather than four nodes. The closed-default "unmodelled
-commodity" policy exists for this and has never been exercised.
+**One finding goes straight into Phase C.** `Economy.history` grows ~16 MiB
+per simulated day at full scale — 3.8 GB over a 240-day run — and that is a
+design decision rather than an implementation cost. A faster language does
+not make it smaller. History has to become sampled or opt-in *before* the
+port, not after.
 
 **Phase C — runtime port** (~6–10 sessions, the bulk of the work). Port the
 model to deterministic C#; settlement profiles and regional membership; the
 full economic state through save and load; a UI that makes value, price,
 surplus and rent legible; integration with vanilla trade without
-destabilising `MarketValue`, which drives storyteller wealth.
+destabilising `MarketValue`, which drives storyteller wealth. Two
+constraints are now measured rather than guessed: the daily update must be
+**amortised across ticks** (about 1.1 s of C# work per simulated day at full
+scale, against a 60,000-tick day), and the history design must change before
+anything is ported.
 
 **Phase D — the gameplay layer** (~4–8 sessions, least defined). Hired-worker
 contracts: pawns arrive, work, are paid in silver or explicit in-kind, do not
@@ -136,18 +141,24 @@ own their output, and leave. Then the class consequences — the least
 specified part of the whole project. No design document exists for what a
 player actually *does* about any of it.
 
-### Rough position: 30–35% of the suite
+### Rough position: 35–40% of the suite
 
-About sixteen sessions of Stage 0 work have produced a rigorous simulation
-and one shippable read-only mod. The remaining sixteen to twenty-six sessions
-are mostly C#, UI, save compatibility and game design — different skills, and
-less amenable to the design-doc-then-measure discipline that has worked here.
+About twenty sessions of Stage 0 work have produced a rigorous simulation,
+one shippable read-only mod, and — since `docs/33` — a measured answer to the
+question that could have invalidated all of it. The remaining fourteen to
+twenty-two sessions are mostly C#, UI, save compatibility and game design —
+different skills, and less amenable to the design-doc-then-measure discipline
+that has worked here.
+
+The move from 30–35% is not a session's worth of code. It is that the largest
+open risk turned out to be a constant factor rather than a rewrite.
 
 ### The three things most likely to derail it
 
-1. **Scale.** Untested, and the failure mode is quiet: the model might work
-   but tick too slowly, or the calibration might stop holding at depth. It is
-   the cheapest large risk to retire and it is currently being deferred.
+1. ~~**Scale.**~~ **Retired** (docs/33). The architecture is linear and the
+   calibration held at 647 commodities. What replaces it on this list is
+   narrower and known: **the history design**, which costs 3.8 GB over a run
+   and must be reshaped before the port rather than after.
 2. **The wealth coupling.** A dynamic price system feeding `MarketValue`
    changes raid strength, because storyteller wealth reads it. Getting this
    wrong makes the mod feel broken rather than interesting. Already flagged
@@ -367,6 +378,11 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/32-scale-test-design.md` — the size question, the budget fixed
+  before measuring, and the depth histogram that shaped the whole test;
+- `docs/33-scale-test-results.md` — linear after one method changed,
+  memory as the architectural failure, and the value solve validated at
+  447 commodities;
 - `docs/30-turnover-design.md` — profit charged against capital
   advanced rather than consumed, turnover read off each commodity's
   own inventory life, and the correction of `docs/29`'s envelope
@@ -661,7 +677,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 138 tests pass;
+- all 147 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -945,10 +961,9 @@ Steps 1–10 are **done**.
     rate of profit 1.77 (docs/24).
 
 **Scope note:** for where these sit against the whole mod suite — the
-runtime port, the gameplay layer, and the untested scale question — see
-"Distance to the full suite" above. Step 14 is no longer an economics step:
-turnover was the natural stopping point the roadmap kept pointing at, and
-the scale test is now the thing to do next.
+runtime port and the gameplay layer — see "Distance to the full suite"
+above. The scale question that section carried as its largest open risk is
+**retired** (step 14); what replaces it is narrower and known.
 
 11. ~~Prices of production.~~ Done as an observation, and the result is
     negative in a way that reorders everything behind it. The classical
@@ -1023,22 +1038,55 @@ the scale test is now the thing to do next.
     own, invisible while they were equal. Caught only because the
     stationarity invariant is exact rather than tolerance-based.
 
-14. **Next — the scale test, jumping the economics queue.** `docs/29`
-    said "after turnover would be a defensible place to stop" and
-    `docs/31` §9 says this is that place. The lab is six commodities and
-    two regions; RimWorld is ~654 producible defs and ~100 settlements.
-    Three solvers now iterate to fixed points — labor values, prices of
-    production, and the production-order plan — and nobody has checked
-    whether they survive a hundredfold more entities at an acceptable
-    tick cost, or whether the calibration holds when the process graph is
-    deep and wide rather than six nodes. The closed-default "unmodelled
-    commodity" policy exists for exactly this and has never been
-    exercised.
+14. ~~The scale test.~~ Done in one session, and the answer is better
+    than expected for a different reason than expected (docs/33).
+    `economy_lab/scale.py` builds an economy of any size from the real def
+    population; it runs **647 commodities across 100 regions**.
 
-    It is the cheapest large risk to retire and it has been deferred
-    three times. See "Distance to the full suite" above.
+    **The architecture is linear**, in commodities and in regions, after
+    one method changed: `throughput_demand` is O(producers) and was being
+    called once per commodity inside a fixed point, so a day was
+    O(commodities × producers) several times over. `throughput_demands`
+    computes them all in one pass. 10.1× the commodities now costs 10.9×
+    the time where it cost 22.5×.
 
-    Still open in the economics behind it:
+    **CPU fails in Python and would pass in C#.** 22.3 s per simulated day
+    at full scale against a 50 ms budget — but linear, and amortisable
+    across a 60,000-tick day. A conservative 20× port lands under 20 µs a
+    tick.
+
+    **Memory fails architecturally.** `Economy.history` grows ~16 MiB per
+    simulated day at full scale, 3.8 GB over a run. That is a design
+    decision, not an implementation cost, and it is now on the critical
+    path for the port.
+
+    **Everything correctness-shaped held**, and one result came free: run
+    at 647 commodities rather than four, the labor value solve reproduces
+    the closed analysis's embodied labor **exactly** for all 447
+    commodities the generator did not contaminate. `docs/20` validated it
+    on four.
+
+    Also found: the equivalence test for the new batch method caught a
+    one-ulp divergence the reasoning had missed, because CPython's `sum`
+    compensates its float error and a `+=` loop does not. The frozen
+    reference did not notice — it rounds to six decimals — and the test
+    did.
+
+15. **Next — two small sessions, then the economics resumes.**
+
+    *Reshape `Economy.history`* — sampled, opt-in, or reduced to the
+    series the analysis actually reads. Named by `docs/33` §4 as the one
+    thing the runtime port cannot inherit, and cheap to do while the
+    Python model is still the only consumer.
+
+    *`_allocate_orders`* is now 42% of a simulated day. It is O(commodities)
+    with a heavy constant — a sort of a one-element list, four dicts keyed
+    by `id(producer)`, and a water-filling loop, per commodity per
+    iteration. The fixes are mechanical and obvious; `docs/32` §8 bound
+    the scale session to fixing only what the first measurement accused,
+    so they belong to a session that says so first.
+
+    Then the economics, unchanged in order:
 
     *A capital-goods sector (Department I).* Machinery as a produced
     commodity that investment consumes materially. Building capacity still

@@ -182,7 +182,7 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 149 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 154 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
@@ -207,8 +207,12 @@ fifteen turnover observations (the profit rate per period beside the
 gross markup, the capital advanced itemised into commodity stock,
 installed plant and the wage advance, realized turnover against the
 turnover the price system assumes, the rate of profit on advances, and
-the perishable-meals scenario). The reporter remains observational;
-the invariant tests protect correctness.
+the perishable-meals scenario), and five structural scale observations.
+The scale figures deliberately exclude *timings*, which are
+machine-dependent; what is frozen is that the labor value solve run at
+647 commodities reproduces the closed analysis exactly for all 447 the
+generator did not contaminate. The reporter remains observational; the
+invariant tests protect correctness.
 
 The current reference describes the model with profit charged against
 capital advanced rather than capital consumed. Its design and results

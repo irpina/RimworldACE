@@ -349,20 +349,22 @@ results document scoring the predictions afterward.
 | [26](docs/26-prices-of-production-design.md) · [27](docs/27-prices-of-production-results.md) | Prices of production: Sraffa's basics, the corn-model profit rate, and the aggregate invariance failure |
 | [28](docs/28-enlarged-subsistence-basket-design.md) · [29](docs/29-enlarged-subsistence-basket-results.md) | Clothing and medicine in the basket, and why the constraint was never the basket |
 | [30](docs/30-turnover-design.md) · [31](docs/31-turnover-results.md) | Turnover: profit on capital advanced, and the two rates that were not rates |
+| [32](docs/32-scale-test-design.md) · [33](docs/33-scale-test-results.md) | The scale test: 647 commodities across 100 regions, and what the runtime port cannot keep |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 138 acceptance and invariant tests
+python -m unittest discover -s tests      # 147 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
 python -m economy_lab generous-basket     # the basket, pushed past defensible
 python -m economy_lab perishable-meals    # differential turnover: meals rot
-python -m economy_lab.baseline            # 149 frozen metrics vs current
+python -m economy_lab.baseline            # 154 frozen metrics vs current
+python -m economy_lab.scale --sweep       # the size ladder, 6 to 6,470 producers
 ```
 
-`behavior_baseline.json` freezes 149 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 154 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

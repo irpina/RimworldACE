@@ -6,7 +6,7 @@ exists, what is next, what not to break. This is the argument: what each layer
 was for, what it measured, and what it got wrong.
 
 The detailed record lives in the design/results pairs, `docs/06` through
-`docs/31`. Every feature was designed in a committed document *before* it was
+`docs/33`. Every feature was designed in a committed document *before* it was
 implemented, and every prediction was scored afterward whether or not it held.
 
 ---
@@ -54,6 +54,7 @@ Each layer removed something that was appearing from nothing.
 | 11 | the profit rate was frozen per sector by calibration | a uniform rate is solved from the technique and the real wage | 26–27 |
 | 12 | workers ate and wore and needed nothing else | the basket is food, clothing and medicine | 28–29 |
 | 13 | profit was charged against a day's flow | it is charged against the capital actually advanced | 30–31 |
+| 14 | nobody knew whether any of it scaled | it does, linearly, and the memory design does not | 32–33 |
 
 ---
 
@@ -318,6 +319,65 @@ hundred of the capital in play.
 
 ---
 
+## The size question, finally asked
+
+Every layer above was measured on **six commodities and two regions**.
+RimWorld is 653 producible defs and roughly a hundred settlements, and three
+roadmaps in a row called this "the cheapest large risk to retire" and
+deferred it. `docs/33` retired it in one session.
+
+The most useful fact came out of the data rather than the code. The real
+graph is **wide and shallow** — 163 / 252 / 159 / 79 defs at depths 0 to 3,
+maximum depth 3. Every fixed point in the model propagates along the input
+graph, so width buys work per pass and not more passes, and iteration counts
+stay flat at any size.
+
+**The architecture is linear**, after one method changed.
+`Region.throughput_demand` is O(producers) and was being called once per
+commodity inside a fixed point — so a simulated day was O(commodities ×
+producers) several times over, and the profiler put it at 84% of the run.
+Computing all of them in one pass over each producer's *inputs* made it
+O(producers × inputs):
+
+| | before | after |
+|---|---|---|
+| 10.1× the commodities costs | **22.5×** the time | **10.9×** the time |
+| 647 commodities × 2 regions | 0.97 s/day | 0.40 s/day |
+| 647 × 100 (full scale) | ~50 s/day | **22.3 s/day** |
+
+Against a 50 ms budget that is still 446× over — but it is a *constant
+factor* now rather than a scaling failure, and a C# port at a conservative
+20× lands at about 1.1 s per simulated day, under 20 µs a tick once
+amortised across a 60,000-tick day.
+
+**Memory is the failure that a faster language does not fix.**
+`Economy.history` grows about 16 MiB per simulated day at full scale — 3.8 GB
+over a 240-day run. That is a design decision, not an implementation cost,
+and it moved onto the critical path for the runtime port.
+
+### The result that came free
+
+The harness was built to measure cost and it delivered the arc's largest
+validation. `docs/20` checked the labor value solver against `FINDINGS.md` on
+**four** commodities. Run at 647, of the 611 with a positive authored figure:
+36 had their direct labor floored by the generator's own synthetic wiring,
+164 sit downstream of one of those, and **all 447 remaining commodities
+reproduce the closed analysis's embodied labor exactly**. Not approximately —
+`scale.value_solve_exact_share` is frozen at 1.0.
+
+### And a lesson about the two instruments
+
+The batch method claimed bit-equality with the one it replaced, argued from
+"the terms accumulate in the same producer order". The argument was wrong:
+**CPython's `sum` compensates its floating-point error and a `+=` loop does
+not**, so the two disagreed in the last bit wherever a commodity had more
+than one consumer. The frozen reference did not notice, because it rounds to
+six decimals. The equivalence test did, within a minute of existing. That is
+precisely the division of labour the tests and the reference were separated
+for.
+
+---
+
 ## Predictions that were wrong, and what they taught
 
 Kept because they are the most informative part of the record.
@@ -334,6 +394,16 @@ Kept because they are the most informative part of the record.
   because v is tiny, not because c is large. Necessary labor was 2.5% of the
   working day under the meals-only basket, and is 3.6% under the enlarged
   one, which brings c/v to 14.42 and no further.
+- **`_record_history` would be the second-largest cost** (`docs/32` §7.1).
+  It is **0.6%** of a simulated day, against 84% for the function it was
+  paired with. Both are O(producers) called per commodity — the same shape —
+  but one runs once a day and the other five times per iteration of a fixed
+  point. **Where a function sits matters more than what it costs**, and
+  reading the code without counting call sites got that backwards.
+- **Memory would be the first hard wall** (`docs/32` §7.2). It is not first:
+  at 22 s a day nobody reaches day 240 to run out of it. The *conclusion*
+  survived the timing being wrong, because the CPU cost is a language
+  constant and the memory is not.
 - **A turnover correction would put `r` near 0.28** (`docs/29` §10). It is
   **1.17**, four times higher. The envelope compounded `r` over twenty
   periods where the classical formulation charges it once on the advance.
@@ -391,24 +461,24 @@ sector.
 
 ## Where it goes next
 
-**The scale test, jumping the economics queue.** The laboratory is six
-commodities and two regions; RimWorld is ~654 producible defs and ~100
-settlements. Three solvers now iterate to fixed points — labor values, prices
-of production, and the production-order plan — and nobody has checked whether
-they survive a hundredfold more entities at an acceptable tick cost, or
-whether the calibration holds when the process graph is deep and wide rather
-than six nodes. It is the cheapest large risk to retire and it has been
-deferred three times.
+**Two small sessions, then the economics resumes.** Reshape
+`Economy.history` — sampled, opt-in, or reduced to the series the analysis
+actually reads — because it is the one thing `docs/33` found that the runtime
+port cannot inherit, and it is cheap while the Python model is its only
+consumer. Then `_allocate_orders`, which is now 42% of a simulated day and
+whose fixes are mechanical: it sorts one-element lists, keys four dictionaries
+by `id(producer)`, and rebuilds its commodity grouping on every iteration.
 
-Behind it, in the economics: a capital-goods sector, which building capacity
+Behind them, in the economics: a capital-goods sector, which building capacity
 needs anyway — silver is still spent without consuming material — and which
 is what would let fixed capital into the price system. Then capacity
 depreciation and exit, so competition is for survival and not only for
 orders. And recreation in the basket, which is worth doing on its own rather
 than alongside something else.
 
-**Current state:** 138 tests, 149 frozen metrics, six commodities, two
+**Current state:** 147 tests, 154 frozen metrics, six commodities, two
 regions, three closing ledgers, a classical price system with an
-interpretable profit rate computed beside the authored one, and an
-equilibrium that is still exactly stationary — a price range of exactly zero,
-in both regions, across four in-game years.
+interpretable profit rate computed beside the authored one, a harness that
+runs the same model at 647 commodities across 100 regions, and an equilibrium
+that is still exactly stationary — a price range of exactly zero, in both
+regions, across four in-game years.
