@@ -396,12 +396,31 @@ are all in the generated-meat table. Caught by comparing a card against
 `out/embodied_labor.csv`, which is the check `check_labor.py` exists to make
 routine.
 
-**Worth a look, not introduced here:** meat extraction labor should track
-inversely with body size, since butchery work is flat against a size-scaled
-yield. It broadly does — Thrumbo 0.5 ticks, Elephant 0.6, median 6.5 — but
-**Alphabeaver is 717.7**, ten times Cat's 66.4 despite a larger body (0.45
-against 0.32). That is closed-analysis output rather than anything this work
-changed, so it is flagged rather than re-derived.
+**The Alphabeaver outlier is real, and it is the model working.** Meat
+extraction labor broadly tracks inversely with body size — Thrumbo 0.5
+ticks, Elephant 0.6, median 6.5 — and **Alphabeaver is 717.7**, ten times
+Cat's 66.4 despite the larger body. Flagged first as a possible instance of
+the inherited-defaults trap; it is not.
+
+Butchery work is only part of the labor. The rest is the cost of *raising*
+the animal, and an alphabeaver's `baseHungerRate` is **3.0** — nearly twice
+a thrumbo's 1.75 on a body a ninth the size, because it is a
+`DendrovoreAnimal` designed to eat your trees. Feeding one to adulthood
+costs **68.2 nutrition and yields 63 meat**:
+
+| animal | nutrition to adult | adult meat | nutrition per meat |
+|---|---:|---:|---:|
+| Muffalo | 12.3 | 336 | 0.04 |
+| Cat | 4.0 | 45 | 0.09 |
+| Elephant | 78.3 | 560 | 0.14 |
+| Thrumbo | 155.2 | 560 | 0.28 |
+| **Alphabeaver** | **68.2** | **63** | **1.08** |
+
+Thirty times worse than a muffalo. So the number is not a defect to chase:
+it is RimWorld's own data saying an alphabeaver is a catastrophic food
+source, and the labor solve reproducing that. A good example of the value
+side finding something the price side hides — an alphabeaver corpse's
+*market* value gives no hint of it.
 
 **The 104 generated meat defs are reached.** They have no XML node, so no
 patch can touch them. `LaborContentTableDef` ships the solved figures and a
