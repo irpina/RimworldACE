@@ -300,8 +300,17 @@ producer. A *labor-saving* technique moves the labor value of a meal by
 value, not money: it rises in the first case and does not budge in the
 second, even though the money wage there falls 14%. Transmission is weak for
 labor-saving change for a measured reason — wages are 2–4% of money cost, and
-the operating overhead that dominates it is a calibration residual with no
-economic interpretation. That is the named next piece of work.
+the operating overhead that dominates it is the authored-price wedge: the gap
+between RimWorld's `MarketValue` and anything the model can account for.
+
+The classical answer to that wedge is now computed. Folding the subsistence
+basket into the input matrix and solving `p = (1 + r)Mp` gives a price system
+with no authored magnitude anywhere in it — and the result is that **meals is
+the only basic commodity**, so the uniform profit rate reduces to a corn model
+at **38.34** and yayo prices at **71.6×** its authored ratio to meals. The
+blocker is not the price theory but the meals-only subsistence basket, which
+makes necessary labor 2.5% of the working day. It has stopped being a caveat
+and become the next piece of work.
 
 ### Design and results documents
 
@@ -320,18 +329,19 @@ results document scoring the predictions afterward.
 | [19](docs/19-endogenous-labor-values-design.md) · [20](docs/20-endogenous-labor-values-results.md) | Endogenous labor values and relative surplus value |
 | [21](docs/21-competitive-transmission-design.md) · [22](docs/22-competitive-transmission-results.md) | Competitive transmission: the cost-aware price anchor and the cost-weighted order book |
 | [23](docs/23-constant-capital-and-the-overhead-design.md) · [24](docs/24-constant-capital-and-the-overhead-results.md) | Fixed capital, the value ledger, and what the operating overhead actually is |
+| [26](docs/26-prices-of-production-design.md) · [27](docs/27-prices-of-production-results.md) | Prices of production: Sraffa's basics, the corn-model profit rate, and the aggregate invariance failure |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 97 acceptance and invariant tests
+python -m unittest discover -s tests      # 111 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
-python -m economy_lab.baseline            # 101 frozen metrics vs current
+python -m economy_lab.baseline            # 114 frozen metrics vs current
 ```
 
-`behavior_baseline.json` freezes 101 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 114 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

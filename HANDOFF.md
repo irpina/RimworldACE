@@ -1,11 +1,11 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-08-24  
+**Last updated:** 2026-08-25  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `83a780a` (constant capital + value ledger)
-**Behavioral baseline:** `7102ca4` (101 metrics: 15 refreshed + 16 new observations)
+**Latest Stage 0 model commit:** `e2e2cae` (prices of production, observation only)
+**Behavioral baseline:** `0b96285` (114 metrics: 14 new observations, nothing refreshed)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -73,7 +73,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
-| **Stage 0 lab** (`economy_lab/`) | 97 tests, 101 frozen metrics, three closing ledgers, four commodities and two regions | roughly four to six more economic sessions, then a scale test |
+| **Stage 0 lab** (`economy_lab/`) | 111 tests, 114 frozen metrics, three closing ledgers, a classical price system, four commodities and two regions | roughly three to five more economic sessions, then a scale test |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -88,7 +88,7 @@ from shipping; the simulation is maturing; the bridge between them is a stub.
 | wage labor and labor-power | done | no |
 | necessary versus surplus labor | done | no |
 | realization of surplus through sale | done — money and labor s/v measured apart | no |
-| price deviations from labor value | done | no |
+| price deviations from labor value | done — prices of production solved (docs/27) | no |
 | differential rent | done | no |
 | monopoly rent | **not started** | no |
 | regional markets, costly trade, arbitrage | done | no |
@@ -101,10 +101,13 @@ rather than accounting, and neither has been started.
 
 ### Remaining phases
 
-**Phase A — finish the economics** (~4–6 sessions). Prices of production
-(next, and the largest single one); exit and capacity depreciation; a
-capital-goods sector; an enlarged subsistence basket; monopoly rent.
-Optionally credit and bankruptcy. Then re-run the stale sensitivity sweep.
+**Phase A — finish the economics** (~3–5 sessions). Prices of production
+is **done** (docs/27) and reordered what follows it: the enlarged
+subsistence basket is now a prerequisite rather than a caveat, because
+a meals-only basket makes the uniform profit rate 38 and the derived
+prices unusable. Then a capital-goods sector; exit and capacity
+depreciation; monopoly rent. Optionally credit and bankruptcy. Then
+re-run the stale sensitivity sweep.
 
 **Phase B — scale test** (~2 sessions, and genuinely risky). The lab is four
 commodities and two regions. RimWorld is ~654 producible defs and ~100
@@ -357,6 +360,12 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/26-prices-of-production-design.md` — the classical eigen-system,
+  the physical wage closure, the omission of fixed capital, and the
+  hand-derived predictions recorded before any code existed;
+- `docs/27-prices-of-production-results.md` — meals as the only basic
+  commodity, the corn-model profit rate, the aggregate invariance
+  failure, and why the subsistence basket is now a prerequisite;
 - `docs/25-stage0-arc-summary.md` — the narrative summary of the whole
   Stage 0 arc: what each layer measured, the three thesis-relevant
   results, the wrong predictions, and the standing caveat on every
@@ -629,7 +638,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 97 tests pass;
+- all 111 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -918,20 +927,47 @@ and the untested scale question — see "Distance to the full suite" above,
 which also recommends running the scale test immediately after prices of
 production rather than working through the rest of this list first.
 
-11. **Next economic feature — prices of production.** `docs/24` closes with
-    the conclusion that the wedge *cannot* be closed while RimWorld's
-    authored `MarketValue` is the price anchor: every economically
-    meaningful component has been carved out of it and two-thirds remains.
-    Deriving prices from the technical coefficients, the wage, and a
-    uniform profit rate — the classical Sraffa/Marx exercise — is the
-    resolution. The model already has every piece: input-output
-    coefficients, direct labor, fixed capital, a wage, and the iterative
-    solver. It would move every price in the model and needs its own
-    session. A non-destructive first step is to compute the implied prices
-    as an *observation* beside the authored ones, quantifying the gap per
-    commodity before adopting anything.
+11. ~~Prices of production.~~ Done as an observation, and the result is
+    negative in a way that reorders everything behind it. The classical
+    system solves — `p = (1 + r)Mp` with the subsistence basket folded
+    into the input matrix — and the uniform profit rate comes out of the
+    technique and the real wage with no authored price in the derivation.
+    But **meals is the only basic commodity** in the circuit, so `r` is
+    fixed by the wage good alone and reduces to a corn model:
+    `r = 38.344`, which is the rate of surplus value arrived at from the
+    price side. A gross markup of 39.34 then meets yayo's two-stage input
+    chain twice, pricing it at **71.6×** its authored ratio to meals.
+    Nothing is wrong with the arithmetic; the input to it is. Also
+    measured: total price can be made to equal total value, and total
+    profit is then 1.526× total surplus (docs/27).
+
+    Nothing feeds back. Prices, costs and the order book are untouched and
+    the frozen reference did not move by a digit.
+
+12. **Next economic feature — an enlarged subsistence basket.** Promoted
+    from third place by `docs/27`. It was already the single largest
+    caveat on every headline number: s/v 38.30, c/v 20.67 and the value
+    rate of profit 1.77 are all inflated because the basket is meals-only
+    and the value of labor-power is understated. It is now also the thing
+    blocking the price system, since `r = T / (b · l) − 1` makes the
+    profit rate the reciprocal of the basket's share of the working day —
+    2.5% here, hence 38. A defensible `r` near 1 would need a basket
+    embodying half a working day, which is 39 meals unless the basket
+    holds shelter, clothing, medicine and recreation as `docs/17`
+    intended.
+
+    It is also the cheapest of the remaining items and the only one that
+    makes every existing number more trustworthy rather than adding a new
+    mechanism.
 
     Still open behind it:
+
+    *A capital-goods sector (Department I).* Machinery as a produced
+    commodity that investment consumes materially. Building capacity still
+    spends silver without consuming anything, which is the last place
+    something appears from nothing. Since `docs/27` it has a second
+    reason to exist: it is what would let fixed capital into the price
+    system and close the 0.12% gap between `r` and s/v honestly.
 
     *Capacity depreciation and mothballing*, so that competition is for
     survival and not only for orders. Today a producer that loses the
@@ -942,15 +978,10 @@ production rather than working through the rest of this list first.
     resting at the mix average. Time-based depreciation belongs here too,
     since idle capacity is its subject.
 
-    *A capital-goods sector (Department I).* Machinery as a produced
-    commodity that investment consumes materially. Building capacity still
-    spends silver without consuming anything, which is the last place
-    something appears from nothing.
-
-    *An enlarged subsistence basket.* Every ratio built on v — s/v 38.30,
-    c/v 20.67, the value rate of profit 1.77 — is inflated because the
-    basket is meals-only, so the value of labor-power is understated. This
-    is the single largest caveat on the project's headline numbers.
+    *A turnover period.* `docs/27` reports `r` as a rate per production
+    period, and the model's period is one day, so a daily 38 cannot be
+    compared to any empirical profit rate at all. Any profit rate shown
+    to a player needs an explicit turnover time first.
 
     Other candidates: labor content of resource grades; wage deviations
     from the value of labor-power; absolute rent; credit and bankruptcy.
@@ -1002,8 +1033,11 @@ it is not intended for per-commit testing.
   abandoning `MarketValue` as the price anchor;
 - a capital-goods sector: building capacity spends silver but consumes no
   material, so capital stock still appears from nothing;
-- equalization of profit rates across sectors: the cost anchor freezes each
-  sector's calibrated rate of profit rather than equalizing it;
+- equalization of profit rates across sectors: *computed* as an
+  observation since `docs/27`, but not adopted — the cost anchor still
+  freezes each sector's calibrated rate of profit rather than
+  equalizing it, and the derived prices are not usable until the
+  subsistence basket is enlarged;
 - labor content of resource grades: a poorer deposit costs more silver but
   no more labor, so depletion moves cost and rent but not value;
 - joint products in an actual scenario — the mass apportionment rule is

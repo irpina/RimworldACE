@@ -6,7 +6,7 @@ exists, what is next, what not to break. This is the argument: what each layer
 was for, what it measured, and what it got wrong.
 
 The detailed record lives in the design/results pairs, `docs/06` through
-`docs/24`. Every feature was designed in a committed document *before* it was
+`docs/27`. Every feature was designed in a committed document *before* it was
 implemented, and every prediction was scored afterward whether or not it held.
 
 ---
@@ -51,6 +51,7 @@ Each layer removed something that was appearing from nothing.
 | 8 | labor values were imported constants | solved from the process graph | 19–20 |
 | 9 | cost could not reach price | cost-aware anchor; the order book goes to the cheaper producer | 21–22 |
 | 10 | fixed capital transferred nothing; the overhead was unexplained | capital depreciates into value; the overhead is measured and named | 23–24 |
+| 11 | the profit rate was frozen per sector by calibration | a uniform rate is solved from the technique and the real wage | 26–27 |
 
 ---
 
@@ -101,7 +102,7 @@ are kept apart because the model makes them move apart.
 
 ---
 
-## What the last session established: the overhead is the seam
+## What the last two sessions established
 
 The model's ceiling, named in `docs/22`, was that money costs were mostly an
 unexplained residual — `unit_cost`, which `docs/13` had derived as *whatever
@@ -166,6 +167,52 @@ argument.
 
 ---
 
+## The price system: solved, and deliberately not adopted
+
+`docs/24` concluded that the authored-price wedge could not be closed while
+`MarketValue` is the anchor, and named prices of production as the
+resolution. `docs/27` computed them, and they are not the resolution.
+
+Folding the subsistence basket into the input matrix gives a price system
+with no authored magnitude anywhere in it — `p = (1 + r)Mp`, solved by
+iteration, with the profit rate as an outcome rather than a coefficient.
+Sraffa's structure then decides the answer: **meals is the only basic
+commodity**, because every sector employs labor and the provisioning process
+has no modelled inputs. A single basic good made by labor alone is a corn
+model, so
+
+```
+r  =  T / (b · l) − 1  =  38.344
+```
+
+which is the rate of surplus value, arrived at from the price side without a
+value magnitude entering the computation. That is a genuine result. What
+follows from it is not usable: a gross markup of 39.34 meets yayo's
+two-stage input chain twice, pricing a unit of yayo at **a hundred meals**
+where RimWorld says one and a half.
+
+Nothing is wrong with the arithmetic. The input to it is. `r` is the
+reciprocal of the basket's share of the working day, and the basket is meals
+only, so necessary labor is 2.5% of the day. **The caveat that has been
+attached to every headline number since `docs/17` has stopped being a caveat
+and become a prerequisite.**
+
+The same session measured the transformation problem at the aggregate level,
+beside `docs/24`'s sectoral version. Normalized so that total price equals
+total value, total profit comes to **1.526×** total surplus. Marx's two
+invariance postulates do not both hold, and choosing the other normalization
+moves the discrepancy rather than removing it.
+
+Relative surplus value shows up here too: in `technique-change`, halving the
+living labor in part of society's meal output lifts the uniform profit rate
+from 38.34 to **44.06**, with the working day, the basket and every material
+technique untouched. The wage good is the only lever on `r` because it is the
+only basic commodity — asserted directly, on a purpose-built three-good
+economy where changing the non-basic sector's technique leaves the profit
+rate *bit-identical*.
+
+---
+
 ## Predictions that were wrong, and what they taught
 
 Kept because they are the most informative part of the record.
@@ -184,6 +231,13 @@ Kept because they are the most informative part of the record.
 - **Upstream troughs would shallow** with the wage (`docs/18`). Unchanged:
   the farms were already fully idle before the trough. The cost floor moves
   *when idling begins*, not the floor of the overshoot.
+- **Chemfuel's production price would equal its value ratio exactly**
+  (`docs/26`). It is 0.999383 of it. Both goods are pure-labor, so the price
+  ratio *is* exactly 25/305 — but labor values have carried the plant's
+  embodied labor since `docs/23`, and the prediction forgot the model's own
+  most recent feature. A small number with a real lesson: the fixed-capital
+  omission is not cosmetic bookkeeping, it changes which identities hold
+  exactly.
 
 ---
 
@@ -199,21 +253,23 @@ rate of profit 1.77 — is inflated by the same mechanism. Flagged since
 
 ## Where it goes next
 
-**Prices of production.** `docs/24` concludes that the wedge cannot be closed
-while RimWorld's authored `MarketValue` is the anchor: every economically
-meaningful component has been carved out of it and two-thirds remains.
-Deriving prices from the technical coefficients, the wage, and a uniform
-profit rate is the resolution, and the model already holds every piece —
-input-output coefficients, direct labor, fixed capital, a wage, and the
-iterative solver. A non-destructive first step is to compute the implied
-prices as an *observation* beside the authored ones.
+**An enlarged subsistence basket**, promoted from third place by the price
+system's failure. It is the cheapest remaining item and the only one that
+makes every existing number more trustworthy rather than adding a new
+mechanism: s/v, c/v, the value rate of profit and now `r` all come down to
+defensible magnitudes in one change. A profit rate near 1 needs a basket
+embodying half a working day, which is 39 meals unless the basket holds
+shelter, clothing, medicine and recreation as `docs/17` intended it to.
 
-Behind it: capacity depreciation and exit, so competition is for survival and
-not only for orders; a capital-goods sector, since building capacity still
-spends silver without consuming material; and an enlarged basket, which would
-bring every ratio above down to a defensible magnitude.
+Behind it: a capital-goods sector, which building capacity needs anyway —
+silver is still spent without consuming material — and which is what would
+let fixed capital into the price system and close the 0.12% gap between `r`
+and s/v honestly. Then capacity depreciation and exit, so competition is for
+survival and not only for orders. And a turnover period, because `r` is a
+rate *per production period* and the model's period is one day, so a daily
+38 is not comparable to any empirical profit rate at all.
 
-**Current state:** 97 tests, 101 frozen metrics, four commodities, two
-regions, three closing ledgers, and an equilibrium that is still exactly
-stationary — a price range of exactly zero, in both regions, across four
-in-game years.
+**Current state:** 111 tests, 114 frozen metrics, four commodities, two
+regions, three closing ledgers, a classical price system computed beside the
+authored one, and an equilibrium that is still exactly stationary — a price
+range of exactly zero, in both regions, across four in-game years.

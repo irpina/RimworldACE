@@ -182,7 +182,7 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 101 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 114 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
@@ -194,15 +194,20 @@ contrasting scenarios' prices, the share won by the cheapest producer, and
 the depletion buffer as a fraction of target), and sixteen value-ledger
 observations (c, v, s and the classical ratios, the wedge as a share of
 each price, and each sector's money rate of surplus value against the
-uniform labor-time rate). The reporter remains observational; the
-invariant tests protect correctness.
+uniform labor-time rate), and fourteen price-of-production observations
+(the uniform profit rate, the basics count, each commodity's production
+price against meals, against its labor value and against its authored
+price, the aggregate profit-over-surplus ratio, and the profit rate
+after the wage-good technique change). The reporter remains
+observational; the invariant tests protect correctness.
 
-The current reference describes the model with fixed capital and the value
-ledger. Its design and results are in
-`docs/23-constant-capital-and-the-overhead-design.md` and
-`docs/24-constant-capital-and-the-overhead-results.md`; the layers beneath
-it are in docs/13–22. Adding fixed capital moved no behavioral metric at
-all — only labor values and the rate of surplus value.
+The current reference describes the model with the classical price system
+computed beside it. Its design and results are in
+`docs/26-prices-of-production-design.md` and
+`docs/27-prices-of-production-results.md`; the layers beneath it are in
+docs/13–24. Neither of the last two sessions moved a behavioral metric:
+fixed capital was carved out of the operating overhead rather than added
+to it, and prices of production are an observation with no feedback.
 
 ## Intentionally absent from this slice
 
@@ -211,10 +216,13 @@ all — only labor values and the rate of surplus value.
 - a price system of its own: two-thirds of every upstream price is a wedge
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices
-  never knew about (docs/24);
+  never knew about (docs/24). Prices of production are now *computed*
+  beside the authored ones but deliberately not adopted: a meals-only
+  basket puts the uniform profit rate at 38 and the derived prices are
+  unusable until the basket is enlarged (docs/27);
 - a capital-goods sector: building capacity spends silver but consumes no
   material;
-- equalization of profit rates across sectors;
+- equalization of profit rates across sectors — computed, not adopted;
 - labor content of resource grades, so depletion moves value as well as
   cost and rent;
 - absolute (monopoly) rent;
