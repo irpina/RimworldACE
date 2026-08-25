@@ -449,7 +449,6 @@ AnimalSleepingBox,BuildingsFurniture,cost,costList,180.0,562.5,180.0,742.5,0.297
 Dye,PlantMatter,extract,Plant_Tinctoria,740.0,740.0,0.0,740.0,0.296,0,2.65,0.003581,False,1.0
 Shell_Toxic,MortarShells,cost,costList,0.0,725.0,0.0,725.0,0.29,1,55.0,0.075862,False,
 Yayo,Drugs,cost,costList,350.0,370.0,350.0,720.0,0.288,1,21.0,0.029167,False,
-Meat_Alphabeaver,MeatRaw,extract,Alphabeaver/hayfed,5.2,717.7,0.0,717.7,0.287,0,2.0,0.002787,False,
 PlantPot,BuildingsFurniture,cost,costList,250.0,450.0,250.0,700.0,0.28,1,40.9,0.058429,True,
 Campfire,Building,cost,costList,200.0,450.0,200.0,650.0,0.26,1,24.72,0.038031,False,
 Bedroll,BuildingsFurniture,cost,costList,600.0,20.0,600.0,620.0,0.248,1,82.16,0.132516,True,
@@ -585,6 +584,7 @@ Meat_Iguana,MeatRaw,extract,Iguana/graze,5.8,5.8,0.0,5.8,0.002,0,2.0,0.347429,Fa
 Meat_Armadillo,MeatRaw,extract,Armadillo/graze,5.8,5.8,0.0,5.8,0.002,0,2.0,0.347429,False,7.27
 Meat_Otter,MeatRaw,extract,Otter/graze,5.8,5.8,0.0,5.8,0.002,0,2.0,0.347429,False,5.7
 RawFungus,PlantFoodRaw,extract,Agarilux,5.7,5.7,0.0,5.7,0.002,0,1.1,0.1925,False,5.89
+Meat_Alphabeaver,MeatRaw,extract,Alphabeaver/graze,5.2,5.2,0.0,5.2,0.002,0,2.0,0.385143,False,138.21
 Leather_Lizard,Leathers,extract,Tortoise/graze,4.7,4.7,0.0,4.7,0.002,0,2.1,0.444,False,20.8
 Meat_Tortoise,MeatRaw,extract,Tortoise/graze,4.7,4.7,0.0,4.7,0.002,0,2.0,0.422857,False,3.36
 Meat_SeaTurtle,MeatRaw,extract,SeaTurtle/graze,4.7,4.7,0.0,4.7,0.002,0,2.0,0.422857,False,3.86

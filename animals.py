@@ -17,9 +17,19 @@ Everything here is read from the assembly rather than assumed:
 Husbandry paths are modelled as *competing options*, not averaged - min-cost
 picks, and the spread is reported:
 
-  graze    feed labor 0, for animals whose foodType includes rough plant
-           matter. Pasture is finite, but that is differential rent, not
+  graze    feed labor 0, for animals that feed themselves off the map -
+           foodType including rough plant matter (pasture) or Dendrovore
+           (trees). Both are finite, but that is differential rent, not
            labor content, and is deliberately out of scope.
+
+           Dendrovore was added after the rule's first form charged the
+           Alphabeaver 68 nutrition of hay it cannot eat, purely because
+           its foodType says "DendrovoreAnimal" and not also
+           "VegetarianRoughAnimal". Thrumbo and AlphaThrumbo say both, so
+           they grazed free at 0.6 and 0.5 ticks per meat while the
+           Alphabeaver came out at 717.7 - one animal producing the whole
+           1,435x spread across the meat defs. A forest is a free gift of
+           nature on exactly the same terms as a pasture.
   hay-fed  nutrition to adulthood / 0.05 per hay unit, times hay's own
            embodied labor.
 
@@ -275,7 +285,7 @@ def animal_rows(db):
 
         nutrition = _nutrition_to_adult(race, stages, el)
         food = (race.findtext("foodType") or "")
-        can_graze = "Rough" in food
+        can_graze = "Rough" in food or "Dendrovore" in food
 
         rows.append({
             "race": dn,

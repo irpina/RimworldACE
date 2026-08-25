@@ -441,12 +441,24 @@ a wild forest is a free gift of nature on exactly the same terms. Whichever
 way it is resolved, treating two dendrovores differently because one of
 their `foodType` lists happens to also say "Rough" is not defensible.
 
-**Proposed one-line fix, not applied:** `can_graze` should accept
-`Dendrovore` as well as `Rough`. That would move a shipped number and
-`FINDINGS.md` is closed, so it is the user's call, not a silent correction.
-Expect Alphabeaver meat to drop from 717.7 to roughly the butchery-only
-figure — single-digit ticks — and the meat table's spread to collapse from
-1,435× to about 150×.
+**Fixed (2026-08-25), on the user's decision.** `can_graze` now accepts
+`Dendrovore` as well as `Rough`. The blast radius was measured by diffing
+the whole solve before and after:
+
+| | |
+|---|---|
+| defs whose embodied labor moved | **1 of 653** |
+| `Meat_Alphabeaver` | 717.7 → **5.2 ticks** (−99.3%) |
+| meat table spread | 1,435× → **179×** |
+
+Alphabeaver meat now sits *below* the 6.50 median and correctly cheaper
+per unit than Cat (66.4) or Husky (89.7), which is what a larger
+free-feeding animal should look like. No leather ripple: the cheaper
+carcass did not displace any other source of `Leather_Light`.
+
+This is a `FINDINGS.md` correction. The headline conclusions are unaffected
+— one meat def out of 653, and the extraction-versus-fabrication premium
+does not run through it.
 
 **The 104 generated meat defs are reached.** They have no XML node, so no
 patch can touch them. `LaborContentTableDef` ships the solved figures and a
@@ -516,6 +528,27 @@ setup: check what the game is loading before trusting what it shows.
 The stale copy was moved out of `Mods/` rather than deleted in place —
 leaving it there would have created a duplicate `packageId` conflict with
 the junction.
+
+### Gameplay idea parked: the alphabeaver as a consumer
+
+**No gameplay change was made and none is planned in this mod.** The
+alphabeaver's `baseHungerRate` of 3.0 is untouched; only the labor
+*accounting* changed.
+
+But the observation that produced this fix is worth keeping for the
+gameplay layer. An alphabeaver is a pure consumer: it converts a colony's
+standing timber into nothing the colony can use, at nearly twice a
+thrumbo's appetite on a ninth of the body. The player's economic interest
+is to kill it before it eats the trees, and the meat is incidental — that
+is *defence of stock*, not production, and it is a different economic act
+from harvesting.
+
+The suite has nowhere to say that yet. A QoL feature could: surface which
+map fauna are net consumers of colony resources and what they are costing
+per day, so "clear the alphabeavers" becomes a legible economic decision
+rather than folk knowledge. It fits the same shelf as the gated-information
+mod below — information about one's own economy that the colony has to
+work to obtain.
 
 ### Planned successor mod: gated economic information
 
