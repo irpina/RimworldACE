@@ -16,7 +16,7 @@ stylized link (chemfuel as an operating input) is flagged in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import floor
 from typing import Dict, List
 
@@ -39,6 +39,8 @@ YAYO = "yayo"
 LEAVES = "psychoid_leaves"
 CHEMFUEL = "chemfuel"
 MEALS = "meals"
+GARMENTS = "garments"
+MEDICINE = "herbal_medicine"
 
 
 @dataclass(frozen=True)
@@ -159,6 +161,44 @@ class ScenarioParameters:
     provisioner_capital_money: float = 225.0
     provisioner_capital_labor: float = 16_940.0
 
+    # --- the enlarged subsistence basket (docs/28) ---------------------------
+    # Clothing and medicine join meals.  Reference prices are RimWorld
+    # MarketValue and direct labor is embodied work-ticks, both from the
+    # closed analysis: Apparel_BasicShirt at 1620 ticks and MedicineHerbal
+    # at 400.  The basket quantities come from a cold-biome wardrobe
+    # (shirt, pants, tuque, parka = 8.16 shirt-equivalents) replaced
+    # annually over a 60-day year, and from 7.5 doses a year, each rounded
+    # down to an exact binary fraction for the same floating-point reasons
+    # as the rest of the calibration.
+    garment_reference_price: float = 85.76
+    garment_direct_labor: float = 1620.0
+    garment_labor_value: float = 1620.0 * 11.4 / 720.0
+    garment_mass: float = 0.6
+    garment_capacity_per_day: float = 0.25
+    garments_per_worker_day: float = 0.125
+    medicine_reference_price: float = 10.0
+    medicine_direct_labor: float = 400.0
+    medicine_labor_value: float = 400.0 * 11.4 / 720.0
+    medicine_mass: float = 0.35
+    medicine_capacity_per_day: float = 0.25
+    medicine_per_worker_day: float = 0.125
+    #: The tailoring bench is powered.  Derived, not chosen: the drug lab
+    #: draws 0.2 chemfuel per 350 ticks of work, so the same energy per tick
+    #: of bench time gives 1620 * 0.2 / 350.  The third use of the docs/08
+    #: stylization, and the one that makes chemfuel a *basic* commodity.
+    chemfuel_per_garment: float = 0.2 * 1620.0 / 350.0
+    #: Hand bench and plant pot, from the closed analysis, on the docs/23
+    #: rule: machines in proportion to the labor performed at them.
+    tailoring_bench_capital_money: float = 157.2
+    tailoring_bench_capital_labor: float = 3_687.5
+    plant_pot_capital_money: float = 40.9
+    plant_pot_capital_labor: float = 700.0
+    #: An indefensibly large bundle, to bound the answer from above rather
+    #: than resting the conclusion on one point estimate (docs/28 s3.5).
+    generous_meals_per_worker_day: float = 3.0
+    generous_garments_per_worker_day: float = 0.5
+    generous_medicine_per_worker_day: float = 0.5
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -186,9 +226,39 @@ class ScenarioParameters:
 
     @property
     def chemfuel_capacity_per_day(self) -> float:
+        """Enough for every consumer at *its* full capacity.
+
+        Production is demand-led (`Economy._planned_runs`), so this is
+        headroom rather than a target: the refinery runs at the day's draw
+        and the surplus capacity only widens the inventory target.  The
+        garment term is at full garment capacity, which is well above the
+        basket's equilibrium call on it.
+        """
         return (
             self.leaves_capacity_per_day * self.chemfuel_per_leaf
             + self.producer_capacity_per_day * self.chemfuel_per_yayo
+            + self.garment_capacity_per_day * self.chemfuel_per_garment
+        )
+
+    @property
+    def subsistence_basket(self) -> Dict[str, float]:
+        """Units of each commodity reproducing one worker-day of labor-power."""
+        return {
+            MEALS: self.meals_per_worker_day,
+            GARMENTS: self.garments_per_worker_day,
+            MEDICINE: self.medicine_per_worker_day,
+        }
+
+    def basket_cost(self) -> float:
+        """The basket at reference prices: the money wage per worker-day."""
+        reference = {
+            MEALS: self.meal_reference_price,
+            GARMENTS: self.garment_reference_price,
+            MEDICINE: self.medicine_reference_price,
+        }
+        return sum(
+            quantity * reference[name]
+            for name, quantity in sorted(self.subsistence_basket.items())
         )
 
     def total_unit_cost(self, reference_price: float, region_cost: float) -> float:
@@ -217,6 +287,8 @@ class ScenarioParameters:
             LEAVES: self.leaves_reference_price,
             CHEMFUEL: self.chemfuel_reference_price,
             MEALS: self.meal_reference_price,
+            GARMENTS: self.garment_reference_price,
+            MEDICINE: self.medicine_reference_price,
         }
         processes = circuit_processes(self)
         process = processes[commodity]
@@ -285,6 +357,20 @@ def circuit_commodities(
             parameters.meal_reference_price,
             parameters.meal_labor_value,
             parameters.meal_mass,
+        ),
+        _commodity(
+            parameters,
+            GARMENTS,
+            parameters.garment_reference_price,
+            parameters.garment_labor_value,
+            parameters.garment_mass,
+        ),
+        _commodity(
+            parameters,
+            MEDICINE,
+            parameters.medicine_reference_price,
+            parameters.medicine_labor_value,
+            parameters.medicine_mass,
         ),
     ]
 
@@ -377,6 +463,49 @@ def circuit_processes(
                 * parameters.provisioner_capital_labor
             ),
         ),
+        GARMENTS: Process(
+            "tailoring",
+            outputs={GARMENTS: 1.0},
+            # The bench is powered.  Same energy per tick of bench time as
+            # the drug lab, which is where the coefficient comes from; the
+            # cloth itself sits outside the boundary like the raw food and
+            # the organic feedstock, its labor already inside the 1620
+            # embodied ticks the closed analysis measured.
+            inputs={CHEMFUEL: parameters.chemfuel_per_garment},
+            direct_labor=parameters.garment_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.garment_direct_labor
+                )
+                * parameters.tailoring_bench_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.garment_direct_labor
+                )
+                * parameters.tailoring_bench_capital_labor
+            ),
+        ),
+        MEDICINE: Process(
+            "herb gathering",
+            outputs={MEDICINE: 1.0},
+            # Grown in soil and harvested by hand: no energy draw, and the
+            # only plant is the pot it grows in.
+            inputs={},
+            direct_labor=parameters.medicine_direct_labor,
+            capital_money_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.medicine_direct_labor
+                )
+                * parameters.plant_pot_capital_money
+            ),
+            capital_labor_per_capacity=(
+                parameters.machines_per_capacity(
+                    parameters.medicine_direct_labor
+                )
+                * parameters.plant_pot_capital_labor
+            ),
+        ),
     }
 
 
@@ -393,6 +522,8 @@ def _region(
         LEAVES: parameters.leaves_capacity_per_day,
         CHEMFUEL: parameters.chemfuel_capacity_per_day,
         MEALS: parameters.meal_capacity_per_day,
+        GARMENTS: parameters.garment_capacity_per_day,
+        MEDICINE: parameters.medicine_capacity_per_day,
     }
     producers = [
         Producer(
@@ -404,7 +535,7 @@ def _region(
             parameters.full_utilization_price_ratio,
             process=processes[key],
         )
-        for key in (YAYO, LEAVES, CHEMFUEL, MEALS)
+        for key in (YAYO, LEAVES, CHEMFUEL, MEALS, GARMENTS, MEDICINE)
     ]
     # Build chemfuel reserve: first grade at the operating overhead, optional
     # second grade at a higher cost for depletion scenarios.
@@ -426,13 +557,11 @@ def _region(
         prices={key: commodities[key].reference_price for key in commodities},
         producers=producers,
         reserves={CHEMFUEL: ResourceReserve(CHEMFUEL, grades)},
-        subsistence_basket={MEALS: parameters.meals_per_worker_day},
+        subsistence_basket=parameters.subsistence_basket,
         ticks_per_worker_day=parameters.ticks_per_worker_day,
         labor_pool=parameters.labor_pool_worker_days,
         worker_cash=(
-            parameters.worker_initial_cash_days
-            * parameters.meals_per_worker_day
-            * parameters.meal_reference_price
+            parameters.worker_initial_cash_days * parameters.basket_cost()
         ),
     )
     # Seed employment at the quantized fixed point of the daily map, so the
@@ -449,48 +578,99 @@ def _region(
     return region
 
 
+def _stationary_runs(
+    region: Region, ordered: List[Producer], worker_days: float
+) -> Dict[int, float]:
+    """Runs that exactly replace a day's outflow, capped by capacity.
+
+    This is `Economy._planned_runs` evaluated at the stationary point:
+    with every stock already at its target the replenishment correction is
+    zero, so requested output *is* the day's intended outflow — final
+    demand, the workers' basket, and every producer's input draw.
+
+    Generalized from the earlier "non-basket producers run at capacity"
+    rule, which was true only while every intermediate sector's capacity
+    happened to equal its draw.  It stopped being true when a wage good
+    acquired a material input (docs/28).
+    """
+    runs = {id(producer): 0.0 for producer in ordered}
+    for _ in range(len(ordered) + 2):
+        outflow = {
+            name: region.base_daily_demand.get(name, 0.0)
+            for name in region.prices
+        }
+        for name, quantity in sorted(region.subsistence_basket.items()):
+            if name in outflow:
+                outflow[name] += quantity * worker_days
+        for producer in ordered:
+            for name, per_run in producer.process.inputs.items():
+                outflow[name] += runs[id(producer)] * per_run
+        revised = {}
+        for producer in ordered:
+            units = producer.process.outputs[producer.commodity]
+            revised[id(producer)] = min(
+                outflow.get(producer.commodity, 0.0) / units,
+                producer.process.runs_for(producer.capacity_per_day),
+            )
+        if revised == runs:
+            return revised
+        runs = revised
+    raise ValueError(
+        "stationary production plan did not converge; the input matrix is "
+        "not productive at these capacities"
+    )
+
+
 def _equilibrium_worker_days(
     region: Region, parameters: ScenarioParameters
 ) -> float:
     """Solve the quantized employment fixed point the runtime will repeat.
 
-    The daily map is: legacy producers run at capacity, the provisioners run
-    at the basket demand earned yesterday, and the resulting labor is
-    quantized to the employment grid.  The float operations and the
-    producer summation order replicate the runtime exactly, so the seeded
-    value reproduces itself from day one.  Refuses loudly rather than
-    seeding an inexact equilibrium.
+    The daily map is: every producer replaces the day's outflow (capped by
+    its capacity), the basket sectors' outflow is the demand earned
+    yesterday, and the resulting labor is quantized to the employment grid.
+    The float operations replicate the runtime, so the seeded value
+    reproduces itself from day one.  Refuses loudly rather than seeding an
+    inexact equilibrium.
     """
     ordered = sorted(region.producers, key=lambda p: (p.name, p.commodity))
     quantum = parameters.employment_quantum
-    basket_quantity = parameters.meals_per_worker_day
     worker_days = 0.0
     for _ in range(256):
+        runs = _stationary_runs(region, ordered, worker_days)
         labor = 0.0
         for producer in ordered:
-            if producer.commodity == MEALS:
-                runs = basket_quantity * worker_days
-            else:
-                runs = producer.process.runs_for(producer.capacity_per_day)
-            labor += runs * producer.process.direct_labor
+            labor += runs[id(producer)] * producer.process.direct_labor
         raw = labor / parameters.ticks_per_worker_day
         if quantum > 0.0:
             revised = floor(raw / quantum) * quantum
         else:
             revised = raw
         if revised == worker_days:
-            meal_demand = basket_quantity * worker_days
-            if meal_demand >= parameters.meal_capacity_per_day:
-                raise ValueError(
-                    "equilibrium meal demand exceeds provisioning capacity; "
-                    "the seeded circuit would not be stationary"
-                )
+            _assert_basket_provisioned(region, worker_days)
             return worker_days
         worker_days = revised
     raise ValueError(
         "employment fixed point did not converge exactly; the wage circuit "
         "cannot be seeded stationary with these parameters"
     )
+
+
+def _assert_basket_provisioned(region: Region, worker_days: float) -> None:
+    """Every basket good must have capacity to spare, and be named if not.
+
+    An under-provisioned basket would otherwise show up as a permanent
+    shortfall in the ledger rather than as an error at seeding.
+    """
+    for name, quantity in sorted(region.subsistence_basket.items()):
+        demand = quantity * worker_days
+        capacity = region.capacity(name)
+        if demand >= capacity:
+            raise ValueError(
+                f"equilibrium {name!r} demand ({demand:.6f}/day) meets or "
+                f"exceeds capacity ({capacity:.6f}/day) in region "
+                f"{region.name!r}; the seeded circuit would not be stationary"
+            )
 
 
 def seeded_two_region_economy(
@@ -512,6 +692,8 @@ def seeded_two_region_economy(
                 LEAVES: "Dust psychoid fields",
                 CHEMFUEL: "Dust refinery",
                 MEALS: "Dust provisioners",
+                GARMENTS: "Dust tailors",
+                MEDICINE: "Dust herbalists",
             },
         ),
         _region(
@@ -523,6 +705,8 @@ def seeded_two_region_economy(
                 LEAVES: "River psychoid fields",
                 CHEMFUEL: "River refinery",
                 MEALS: "River provisioners",
+                GARMENTS: "River tailors",
+                MEDICINE: "River herbalists",
             },
         ),
     ]
@@ -578,21 +762,17 @@ def _assert_reference_full_utilization(economy: Economy) -> None:
     dropped below its full-utilization ratio at reference prices, which
     would silently break the stationary equilibrium.  Checked at seeding,
     raised at seeding.
+
+    The cost read here is exactly the one `Producer.utilization` compares
+    against, so the guard's threshold is the model's own.  It used to add
+    the wage a second time on top of `effective_unit_cost`, which already
+    carries it; the generous-basket scenario of docs/28 pushed a sector
+    into the gap between the two and exposed it.  Over-strict rather than
+    unsafe, but wrong either way.
     """
     for region in economy.regions.values():
-        wage_per_tick = region.wage_rate() / max(
-            region.ticks_per_worker_day, 1e-9
-        )
         for producer in region.producers:
-            wage_cost = (
-                producer.process.labor_per_unit(
-                    producer.commodity, economy.commodities
-                )
-                * wage_per_tick
-            )
-            effective = (
-                producer.effective_unit_cost(region.prices) + wage_cost
-            )
+            effective = producer.effective_unit_cost(region.prices)
             price = region.prices[producer.commodity]
             ratio = price / max(effective, 1e-9)
             if ratio < producer.full_utilization_price_ratio:
@@ -617,6 +797,32 @@ def equilibrium(
     )
     economy.step(days)
     return economy
+
+
+def generous_basket(
+    days: int = 240, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The equilibrium circuit with an indefensibly generous basket.
+
+    Three meals, half a garment and half a dose a day: a bundle nobody
+    could call stingy.  Its job is to bound the rate of surplus value from
+    above, so the conclusion in docs/29 is a range rather than one point
+    estimate (docs/28 section 3.5).
+
+    Capacities double alongside, because the point is to measure the
+    ratios under a larger basket rather than to measure a shortage.
+    """
+    parameters = parameters or ScenarioParameters()
+    generous = replace(
+        parameters,
+        meals_per_worker_day=parameters.generous_meals_per_worker_day,
+        garments_per_worker_day=parameters.generous_garments_per_worker_day,
+        medicine_per_worker_day=parameters.generous_medicine_per_worker_day,
+        meal_capacity_per_day=parameters.meal_capacity_per_day * 2.0,
+        garment_capacity_per_day=parameters.garment_capacity_per_day * 2.0,
+        medicine_capacity_per_day=parameters.medicine_capacity_per_day * 2.0,
+    )
+    return equilibrium(days, parameters=generous)
 
 
 def regional_glut(

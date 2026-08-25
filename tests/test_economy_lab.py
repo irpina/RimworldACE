@@ -12,14 +12,17 @@ from economy_lab.model import (
 from economy_lab.scenarios import (
     CHEMFUEL,
     DAYS_PER_YEAR,
+    GARMENTS,
     LEAVES,
     MEALS,
+    MEDICINE,
     YAYO,
     ScenarioParameters,
     arbitrage,
     circuit_processes,
     cost_competition,
     equilibrium,
+    generous_basket,
     input_shortage,
     producer_loss,
     regional_glut,
@@ -189,11 +192,15 @@ class ProcessAccountingTests(unittest.TestCase):
             produced * recipe.inputs[LEAVES],
             places=6,
         )
-        # Chemfuel is shared, so its draw is the sum over both consumers.
+        # Chemfuel is shared, so its draw is the sum over every consumer.
+        # Since docs/28 that includes the tailors, whose bench is powered —
+        # which is what makes chemfuel a basic commodity.
         farming = circuit_processes()[LEAVES]
+        tailoring = circuit_processes()[GARMENTS]
         expected_chemfuel = (
             produced * recipe.inputs[CHEMFUEL]
             + economy.ledger.production[LEAVES] * farming.inputs[CHEMFUEL]
+            + economy.ledger.production[GARMENTS] * tailoring.inputs[CHEMFUEL]
         )
         self.assertAlmostEqual(
             economy.ledger.intermediate_consumption[CHEMFUEL],
@@ -617,7 +624,12 @@ class LaborPowerTests(unittest.TestCase):
             # day-zero basket demand equals the daily wage), so the worker
             # cash pool ends where it started.
             self.assertAlmostEqual(paid, spent, places=6)
-            self.assertAlmostEqual(region.worker_cash, 900.0, places=9)
+            parameters = ScenarioParameters()
+            self.assertAlmostEqual(
+                region.worker_cash,
+                parameters.worker_initial_cash_days * parameters.basket_cost(),
+                places=9,
+            )
 
     def test_workers_consume_real_meals(self):
         economy = equilibrium(days=120)
@@ -630,13 +642,22 @@ class LaborPowerTests(unittest.TestCase):
         """s/v = (working day - basket labor) / basket labor, per docs/17.
 
         Since docs/23 the basket's labor content is the *endogenous* value
-        of a meal, which includes the fixed capital consumed making it, so
-        the closed form reads that rather than the raw direct-labor figure.
+        of each good, which includes the fixed capital consumed making it,
+        so the closed form reads that rather than the raw direct-labor
+        figure.  Since docs/28 it reads all three basket goods.
         """
         parameters = ScenarioParameters()
         economy = equilibrium(days=240)
-        basket_ticks = (
-            parameters.meals_per_worker_day * economy.labor_values[MEALS]
+        basket_ticks = sum(
+            quantity * economy.labor_values[name]
+            for name, quantity in sorted(
+                parameters.subsistence_basket.items()
+            )
+        )
+        self.assertAlmostEqual(
+            basket_ticks,
+            economy.basket_labor_value(economy.regions["Dust Basin"]),
+            places=9,
         )
         expected = (
             parameters.ticks_per_worker_day - basket_ticks
@@ -678,13 +699,39 @@ class LaborPowerTests(unittest.TestCase):
         self.assertAlmostEqual(constrained.cash_balance(), 0.0, places=7)
 
     def test_subsistence_shock_raises_meal_price_and_the_wage(self):
-        """The wage-push channel: meal scarcity raises every producer's cost."""
+        """The wage-push channel: meal scarcity raises every producer's cost.
+
+        Read at the peak rather than at the terminal day.  With the
+        enlarged basket (docs/28) the meal buffer is larger, so the run has
+        recovered further by day 240 — but the shock itself is deeper, not
+        shallower, and the peak is where the claim lives.
+        """
+        parameters = ScenarioParameters()
         economy = subsistence_shock()
         dust = economy.regions["Dust Basin"]
-        self.assertGreater(dust.prices[MEALS], 15.0 * 1.15)
-        self.assertGreater(dust.wage_rate(), 30.0 * 1.15)
+        meal_prices = economy.series("Dust Basin", MEALS)
+        self.assertGreater(max(meal_prices), 15.0 * 1.15)
+        wages = [
+            sum(
+                quantity * snapshot["regions"]["Dust Basin"]["price"][name]
+                for name, quantity in sorted(
+                    parameters.subsistence_basket.items()
+                )
+            )
+            for snapshot in economy.history
+        ]
+        self.assertGreater(max(wages), parameters.basket_cost() * 1.15)
+        # The wage push reaches the *other* wage goods, which only became
+        # observable when the basket grew past one commodity.
+        self.assertGreater(
+            max(economy.series("Dust Basin", GARMENTS)),
+            parameters.garment_reference_price,
+        )
         lab = next(p for p in dust.producers if p.commodity == YAYO)
-        self.assertGreater(lab.wage_cost_per_unit, 350.0 * (30.0 / 24000.0) / 1.0)
+        self.assertGreater(
+            lab.wage_cost_per_unit,
+            350.0 * (parameters.basket_cost() / 24000.0),
+        )
         # Workers who could not obtain the basket are visible, both as a
         # ledger shortfall and as unmet demand at some point in the history.
         self.assertGreater(
@@ -1064,9 +1111,18 @@ class RelativeSurplusValueTests(unittest.TestCase):
         # (docs/21 section 1), so a labor-saving technique moves value by an
         # order of magnitude more than it moves price.
         region = self.economy.regions["Dust Basin"]
-        value_fall = (610.0 - self.economy.basket_labor_value(region)) / 610.0
-        price_fall = (30.0 - region.wage_rate()) / 30.0
-        self.assertGreater(value_fall, 0.10)
+        before = self.before.regions["Dust Basin"]
+        base_value = self.before.basket_labor_value(before)
+        base_wage = before.wage_rate()
+        value_fall = (
+            base_value - self.economy.basket_labor_value(region)
+        ) / base_value
+        price_fall = (base_wage - region.wage_rate()) / base_wage
+        # Diluted since docs/28: only the meals part of the basket is
+        # cheapened by a provisioning technique, so the absolute fall is
+        # smaller than under a meals-only basket. The claim under test is
+        # the *ratio*, which is if anything sharper.
+        self.assertGreater(value_fall, 0.05)
         self.assertGreater(price_fall, 0.0)
         self.assertLess(price_fall, 0.05)
         self.assertGreater(value_fall, 5.0 * price_fall)
@@ -1235,7 +1291,10 @@ class CostCompetitionTests(unittest.TestCase):
         # The distinction the four ledgers exist to keep: the money form
         # of variable capital falls, its value does not.
         stable = equilibrium(240)
-        self.assertLess(self.region.wage_rate(), 30.0)
+        self.assertLess(
+            self.region.wage_rate(),
+            stable.regions["Dust Basin"].wage_rate(),
+        )
         self.assertAlmostEqual(
             self.economy.basket_labor_value(self.region),
             stable.basket_labor_value(stable.regions["Dust Basin"]),
@@ -1480,16 +1539,36 @@ class PriceDecompositionTests(unittest.TestCase):
         self.assertGreater(d["attributable_cost"], 16.0)
 
     def test_realized_and_produced_surplus_differ_by_sector(self):
-        # Money s/v against the uniform labor-time s/v. They agree for the
-        # wage good by construction and diverge elsewhere: a sector buying
+        # Money s/v against the uniform labor-time s/v: a sector buying
         # inputs whose prices contain surplus realizes less than it made.
         labor_rate = self.economy.rate_of_surplus_value(self.region)
-        meals = self.decomposition(MEALS)
         yayo = self.decomposition(YAYO)
-        meal_money_rate = meals["surplus_if_margin_is_surplus"] / meals["wages"]
         yayo_money_rate = yayo["surplus_if_margin_is_surplus"] / yayo["wages"]
-        self.assertAlmostEqual(meal_money_rate, labor_rate, delta=0.05)
         self.assertLess(yayo_money_rate, labor_rate / 2.0)
+
+    def test_the_wage_goods_money_rate_is_no_longer_an_identity(self):
+        """docs/24's caveat, dissolved by docs/28.
+
+        Under a meals-only basket the money and labor rates of surplus
+        value agreed for meals *by construction* — both were the same
+        expression in the same wage and the same basket — so the agreement
+        was evidence of nothing. With three goods in the basket that
+        derivation no longer closes, and the three wage goods disagree with
+        the labor rate in both directions.
+        """
+        labor_rate = self.economy.rate_of_surplus_value(self.region)
+        rates = {}
+        for commodity in (MEALS, GARMENTS, MEDICINE):
+            parts = self.decomposition(commodity)
+            rates[commodity] = (
+                parts["surplus_if_margin_is_surplus"] / parts["wages"]
+            )
+        self.assertGreater(rates[GARMENTS], labor_rate)
+        self.assertLess(rates[MEDICINE], labor_rate)
+        # Meals no longer land on the labor rate exactly, and the residual
+        # gap is a real (small) difference rather than a tautology.
+        self.assertNotAlmostEqual(rates[MEALS], labor_rate, places=6)
+        self.assertAlmostEqual(rates[MEALS], labor_rate, delta=0.6)
 
 
 class PriceOfProductionTests(unittest.TestCase):
@@ -1512,69 +1591,127 @@ class PriceOfProductionTests(unittest.TestCase):
         prices = self.system["prices"]
         return prices[commodity] / prices[MEALS]
 
-    def test_meals_is_the_only_basic_commodity(self):
-        # Meals enter every sector through the wage. Chemfuel enters leaves
-        # and yayo but not meals, whose process has no modelled inputs, so
-        # the whole material circuit is non-basic.
-        self.assertEqual(self.system["basics"], [MEALS])
+    def test_the_basics_are_the_wage_goods_and_what_feeds_them(self):
+        """Sraffa's basics, after the basket grew (docs/28).
 
-    def test_the_profit_rate_is_fixed_by_the_wage_good_alone(self):
-        """A single basic good made by labor alone is a corn model.
-
-        `r` then reduces to the working day over the basket's labor, which
-        is why the number lands where it does — and why every caveat on the
-        meals-only basket lands on `r` as well.
+        Every wage good is basic because every sector employs labor. What
+        changed is chemfuel: the tailors' bench is powered, so chemfuel now
+        enters a wage good, and through it every sector. Psychoid leaves
+        and yayo still enter nothing that enters everything.
         """
-        _, labor, _ = self.economy.social_technique()
-        expected = self.parameters.ticks_per_worker_day / (
-            self.parameters.meals_per_worker_day * labor[MEALS]
-        ) - 1.0
-        # Tight rather than exact: the eigenvalue arrives through an
-        # iteration and a normalization, so it lands within an ulp or two
-        # of the closed form rather than on it.
-        self.assertAlmostEqual(self.system["profit_rate"], expected, places=9)
+        self.assertEqual(
+            self.system["basics"], [CHEMFUEL, GARMENTS, MEDICINE, MEALS]
+        )
+        self.assertNotIn(LEAVES, self.system["basics"])
+        self.assertNotIn(YAYO, self.system["basics"])
 
-    def test_the_profit_rate_exceeds_the_rate_of_surplus_value_by_fixed_capital(self):
-        """r and s/v are the same magnitude here, and differ only by an omission.
+    def rank_one_profit_rate(self, economy):
+        """`T / Σ(b·l) − 1`: the rate if no wage good had material inputs.
 
-        When the wage good is produced without means of production, the
-        uniform profit rate *is* the rate of surplus value. The price
-        system omits fixed capital (docs/26 section 3.5) while the value
-        system carries it, so the whole of the small gap between them is
-        that omission — asserted rather than tolerated.
+        With pure-labor wage goods the augmented matrix restricted to the
+        basket is the outer product `(l/T)·bᵀ`, whose only non-zero
+        eigenvalue is `Σ b·l / T`. That rank-one structure is why `r` was
+        exactly the rate of surplus value however many wage goods there
+        were.
+        """
+        _, labor, _ = economy.social_technique()
+        basket = economy.regions["Dust Basin"].subsistence_basket
+        embodied = sum(
+            quantity * labor[name] for name, quantity in sorted(basket.items())
+        )
+        return self.parameters.ticks_per_worker_day / embodied - 1.0
+
+    def test_a_material_input_to_a_wage_good_breaks_the_rank_one_identity(self):
+        """The general Sraffa case, reached for the first time (docs/28).
+
+        One material input into one wage good is enough. The price system
+        marks that input up by `1 + r` and the value system does not, so
+        the profit rate falls below the rank-one figure — by 8%, not by a
+        rounding error.
+        """
+        rank_one = self.rank_one_profit_rate(self.economy)
+        self.assertAlmostEqual(rank_one, 26.826086956521738, places=9)
+        self.assertLess(self.system["profit_rate"], rank_one)
+        gap = (rank_one - self.system["profit_rate"]) / rank_one
+        self.assertGreater(gap, 0.07)
+        self.assertLess(gap, 0.09)
+
+    def test_removing_that_input_restores_the_identity_exactly(self):
+        """The control: the break is the chemfuel link and nothing else."""
+        control = equilibrium(
+            240,
+            parameters=replace(ScenarioParameters(), chemfuel_per_garment=0.0),
+        )
+        system = control.prices_of_production(numeraire=MEALS)
+        self.assertNotIn(CHEMFUEL, system["basics"])
+        self.assertAlmostEqual(
+            system["profit_rate"],
+            self.rank_one_profit_rate(control),
+            places=9,
+        )
+        # And with the identity back, `r` sits *above* s/v again by the
+        # fixed-capital term the price system omits (docs/27).
+        self.assertGreater(
+            system["profit_rate"], control.rate_of_surplus_value()
+        )
+
+    def test_the_profit_rate_now_falls_below_the_rate_of_surplus_value(self):
+        """Two magnitudes that were the same number, prised apart.
+
+        Until docs/28 the only thing separating `r` from s/v was the fixed
+        capital the price system omits — 0.12%, and in the direction that
+        made `r` the larger. A material input into a wage good reverses the
+        sign and multiplies the size: `r` is now nearly 8% *below* s/v, and
+        the omission is no longer the dominant term.
+        """
+        cumulative = self.economy.rate_of_surplus_value()
+        self.assertLess(self.system["profit_rate"], cumulative)
+        gap = (cumulative - self.system["profit_rate"]) / cumulative
+        self.assertGreater(gap, 0.06)
+        self.assertLess(gap, 0.09)
+
+    def test_the_basket_carries_plant_and_inputs_the_price_system_does_not(self):
+        """What separates the two baskets, itemized.
+
+        The value system's basket exceeds its direct-labor content by two
+        terms: the plant worn out making each good, which the price system
+        omits entirely (docs/26 section 3.5), and the material inputs
+        transferred into it, which the price system carries at a *marked
+        up* price instead. The second term now dominates the first.
         """
         region = self.economy.regions["Dust Basin"]
-        ticks = self.parameters.ticks_per_worker_day
         _, labor, _ = self.economy.social_technique()
-        _, capital = circuit_processes()[MEALS].capital_consumed_per_unit(
-            MEALS,
-            self.economy.capital_service_life_days,
-            self.economy.commodities,
-        )
+        processes = circuit_processes()
+        basket = region.subsistence_basket
+
+        def capital(commodity):
+            _, ticks = processes[commodity].capital_consumed_per_unit(
+                commodity,
+                self.economy.capital_service_life_days,
+                self.economy.commodities,
+            )
+            return ticks
 
         with_capital = self.economy.basket_labor_value(region)
-        without_capital = self.parameters.meals_per_worker_day * labor[MEALS]
-        # The whole difference between the two systems' baskets is the plant
-        # the price system has nowhere to put.
-        self.assertAlmostEqual(
-            with_capital - without_capital,
-            self.parameters.meals_per_worker_day * capital,
-            places=9,
+        without_capital = sum(
+            quantity * labor[name] for name, quantity in sorted(basket.items())
         )
-
-        self.assertAlmostEqual(
-            self.system["profit_rate"],
-            ticks / without_capital - 1.0,
-            places=9,
+        plant = sum(
+            quantity * capital(name)
+            for name, quantity in sorted(basket.items())
         )
-        # The ledger's s/v is cumulative over the run while the basket value
-        # is terminal, so the two agree closely rather than exactly; the
-        # claim under test is the ordering and the size of the gap.
-        cumulative = self.economy.rate_of_surplus_value()
-        self.assertAlmostEqual(cumulative, ticks / with_capital - 1.0, delta=1e-3)
-        gap = (self.system["profit_rate"] - cumulative) / cumulative
-        self.assertGreater(gap, 0.0)
-        self.assertLess(gap, 0.002)
+        transferred = sum(
+            quantity
+            * sum(
+                per_unit * self.economy.labor_values[other]
+                for other, per_unit in sorted(processes[name].inputs.items())
+            )
+            for name, quantity in sorted(basket.items())
+        )
+        self.assertAlmostEqual(
+            with_capital - without_capital, plant + transferred, places=9
+        )
+        self.assertGreater(transferred, plant)
 
     def test_a_pure_labor_good_prices_at_its_direct_labor_ratio(self):
         # Chemfuel and meals both have no modelled inputs, so each is
@@ -1631,9 +1768,11 @@ class PriceOfProductionTests(unittest.TestCase):
         authored = (
             self.parameters.reference_price / self.parameters.meal_reference_price
         )
-        self.assertGreater(self.relative(YAYO) / authored, 60.0)
-        # Leaves are one stage up and overshoot by about a factor of two.
-        self.assertGreater(self.relative(LEAVES), 1.8 * self.economy.labor_values[
+        # Down from 71.6x under the meals-only basket (docs/27) and still
+        # nowhere a price system could be used.
+        self.assertGreater(self.relative(YAYO) / authored, 30.0)
+        # Leaves are one stage up and overshoot by about two thirds.
+        self.assertGreater(self.relative(LEAVES), 1.5 * self.economy.labor_values[
             LEAVES
         ] / self.economy.labor_values[MEALS])
 
@@ -1836,6 +1975,193 @@ class PriceOfProductionTests(unittest.TestCase):
                     )
             self.assertEqual(region.cash, other.cash)
             self.assertEqual(region.worker_cash, other.worker_cash)
+
+
+class EnlargedBasketTests(unittest.TestCase):
+    """Clothing and medicine join meals, and what that does to the ratios.
+
+    Every quantity comes from the closed analysis and RimWorld's own
+    MarketValue (docs/28). The measurement this class protects is not that
+    the ratios improve — they do — but *how far*, because the answer is the
+    session's result: not far enough, and for a reason no basket can fix.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.parameters = ScenarioParameters()
+        cls.economy = equilibrium(240)
+        # The model as it stood before this session, reachable as a
+        # parameter override rather than as a memory. It is the control for
+        # every comparison below and a regression anchor on docs/24 and
+        # docs/27.
+        cls.meals_only = equilibrium(
+            240,
+            parameters=replace(
+                ScenarioParameters(),
+                garments_per_worker_day=0.0,
+                medicine_per_worker_day=0.0,
+            ),
+        )
+
+    def test_the_meals_only_control_reproduces_the_published_figures(self):
+        # docs/24 and docs/27, to the digits those documents printed.
+        self.assertAlmostEqual(
+            self.meals_only.rate_of_surplus_value(), 38.29814, places=5
+        )
+        self.assertAlmostEqual(
+            self.meals_only.organic_composition(), 20.66573, places=5
+        )
+        self.assertAlmostEqual(
+            self.meals_only.value_rate_of_profit(), 1.76768, places=5
+        )
+        self.assertAlmostEqual(
+            self.meals_only.prices_of_production()["profit_rate"],
+            38.344262,
+            places=6,
+        )
+
+    def test_the_wage_is_the_whole_basket_at_current_prices(self):
+        for region in self.economy.regions.values():
+            expected = sum(
+                quantity * region.prices[name]
+                for name, quantity in sorted(region.subsistence_basket.items())
+            )
+            self.assertAlmostEqual(region.wage_rate(), expected, places=12)
+            self.assertAlmostEqual(
+                region.wage_rate(), self.parameters.basket_cost(), places=12
+            )
+            self.assertEqual(len(region.subsistence_basket), 3)
+
+    def test_workers_actually_consume_clothing_and_medicine(self):
+        for commodity in (MEALS, GARMENTS, MEDICINE):
+            with self.subTest(commodity=commodity):
+                consumed = self.economy.ledger.consumption.get(commodity, 0.0)
+                produced = self.economy.ledger.production.get(commodity, 0.0)
+                self.assertGreater(consumed, 0.0)
+                # Nothing accumulates and nothing appears: the basket is
+                # made and eaten in the same period at equilibrium.
+                self.assertAlmostEqual(consumed, produced, places=6)
+        self.assertEqual(self.economy.ledger.basket_shortfall, {})
+
+    def test_the_basket_labor_value_is_its_three_components(self):
+        for region in self.economy.regions.values():
+            expected = sum(
+                quantity * self.economy.labor_values[name]
+                for name, quantity in sorted(region.subsistence_basket.items())
+            )
+            self.assertAlmostEqual(
+                self.economy.basket_labor_value(region), expected, places=9
+            )
+        # Necessary labor rises from 2.5% of the working day to 3.6%. That
+        # is the whole of what an honest basket buys, and it is the reason
+        # for the conclusion in docs/29.
+        share = self.economy.basket_labor_value(
+            self.economy.regions["Dust Basin"]
+        ) / self.parameters.ticks_per_worker_day
+        self.assertGreater(share, 0.035)
+        self.assertLess(share, 0.037)
+
+    def test_every_ratio_built_on_variable_capital_falls(self):
+        self.assertLess(
+            self.economy.rate_of_surplus_value(),
+            self.meals_only.rate_of_surplus_value(),
+        )
+        self.assertLess(
+            self.economy.organic_composition(),
+            self.meals_only.organic_composition(),
+        )
+        self.assertLess(
+            self.economy.value_rate_of_profit(),
+            self.meals_only.value_rate_of_profit(),
+        )
+
+    def test_the_value_rate_of_profit_barely_moves(self):
+        """The structurally interesting part of the result.
+
+        s/v and c/v are ratios *to* variable capital and fall with it. The
+        value rate of profit has constant capital in the denominator too,
+        and c is fourteen times v even after the enlargement, so a 42%
+        larger basket moves it by about 2%. Enlarging the basket fixes two
+        of the three headline ratios and does almost nothing to the third.
+        """
+
+        def move(current, before):
+            return abs(current - before) / before
+
+        surplus_move = move(
+            self.economy.rate_of_surplus_value(),
+            self.meals_only.rate_of_surplus_value(),
+        )
+        composition_move = move(
+            self.economy.organic_composition(),
+            self.meals_only.organic_composition(),
+        )
+        profit_move = move(
+            self.economy.value_rate_of_profit(),
+            self.meals_only.value_rate_of_profit(),
+        )
+        self.assertGreater(surplus_move, 0.25)
+        self.assertGreater(composition_move, 0.25)
+        self.assertLess(profit_move, 0.05)
+
+    def test_a_generous_basket_still_leaves_the_rate_an_order_of_magnitude_high(self):
+        """The bound from above (docs/28 section 3.5).
+
+        Three meals, half a garment and half a dose a day is a bundle
+        nobody could call stingy, and the rate of surplus value is still
+        above ten. No defensible basket brings it near the magnitudes the
+        literature works with, because the constraint is RimWorld's own
+        productivity and not the bundle.
+        """
+        generous = generous_basket(240)
+        self.assertLess(
+            generous.rate_of_surplus_value(),
+            self.economy.rate_of_surplus_value(),
+        )
+        self.assertGreater(generous.rate_of_surplus_value(), 10.0)
+        self.assertLess(generous.rate_of_surplus_value(), 12.0)
+        # And it is still exactly stationary, which is what makes it a
+        # measurement rather than a shortage.
+        for region_name in generous.regions:
+            for name in generous.commodities:
+                prices = generous.series(region_name, name)
+                self.assertEqual(min(prices), max(prices))
+
+    def test_the_working_day_is_what_actually_constrains_it(self):
+        """One provisioner feeds thirty-nine workers, on RimWorld's numbers.
+
+        This is the sentence the whole session comes down to. A rate of
+        surplus value near 1 needs a basket embodying half a working day;
+        in meals alone that is thirty-nine meals a worker a day.
+        """
+        parameters = self.parameters
+        meals_fed = parameters.ticks_per_worker_day / (
+            parameters.meals_per_worker_day * self.economy.labor_values[MEALS]
+        )
+        self.assertGreater(meals_fed, 39.0)
+        self.assertLess(meals_fed, 40.0)
+        half_a_day = parameters.ticks_per_worker_day / 2.0
+        meals_for_parity = half_a_day / self.economy.labor_values[MEALS]
+        self.assertGreater(meals_for_parity, 39.0)
+
+    def test_an_under_provisioned_basket_good_is_named_at_seeding(self):
+        with self.assertRaises(ValueError) as raised:
+            equilibrium(
+                1,
+                parameters=replace(
+                    ScenarioParameters(), garment_capacity_per_day=0.001
+                ),
+            )
+        message = str(raised.exception)
+        self.assertIn(GARMENTS, message)
+        self.assertIn("exceeds capacity", message)
+
+    def test_the_enlarged_circuit_still_closes_every_ledger(self):
+        for name, residual in self.economy.commodity_balances().items():
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(residual, 0.0, places=7)
+        self.assertAlmostEqual(self.economy.cash_balance(), 0.0, places=7)
+        self.assertAlmostEqual(self.economy.value_balance(), 0.0, places=3)
 
 
 if __name__ == "__main__":

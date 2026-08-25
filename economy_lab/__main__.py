@@ -9,6 +9,7 @@ from .scenarios import (
     arbitrage,
     cost_competition,
     equilibrium,
+    generous_basket,
     input_shortage,
     producer_loss,
     regional_glut,
@@ -29,6 +30,7 @@ SCENARIOS = {
     "subsistence-shock": subsistence_shock,
     "technique-change": technique_change,
     "cost-competition": cost_competition,
+    "generous-basket": generous_basket,
 }
 
 
