@@ -91,11 +91,17 @@ def failures():
         name for name in external
         if name.startswith("RimWorld.") or name.startswith("Verse.")
     )
+    # Measured, not predicted. The first version of this list was written
+    # from reading the source and missed StatModifier (the element type of
+    # the list StatListContains takes) and Verse.Def (the static type of
+    # StatRequest.Def). The check caught both, which is the point of it.
     expected = [
         "RimWorld.StatDef",
+        "RimWorld.StatModifier",
         "RimWorld.StatRequest",
         "RimWorld.StatUtility",
         "RimWorld.StatWorker",
+        "Verse.Def",
         "Verse.ThingDef",
         "Verse.ToStringNumberSense",
     ]
@@ -115,7 +121,7 @@ def main():
         raise SystemExit(1)
     print(
         "verified: {} overrides ValueToString and ShouldShowFor, separator "
-        "is U+00B7, binding surface is the six expected symbols".format(
+        "is U+00B7, binding surface is the eight expected symbols".format(
             WORKER.rsplit(".", 1)[1]
         )
     )
