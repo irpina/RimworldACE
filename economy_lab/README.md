@@ -182,7 +182,7 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 134 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 149 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
@@ -202,17 +202,21 @@ after the wage-good technique change), and twenty subsistence-basket
 observations (the basket's labor and money cost, its share of the
 working day, the workers one provisioner's day feeds, the two new wage
 goods' production prices and money rates, the rank-one profit rate the
-price system now departs from, and the generous-basket bound). The
-reporter remains observational; the invariant tests protect
-correctness.
+price system now departs from, and the generous-basket bound), and
+fifteen turnover observations (the profit rate per period beside the
+gross markup, the capital advanced itemised into commodity stock,
+installed plant and the wage advance, realized turnover against the
+turnover the price system assumes, the rate of profit on advances, and
+the perishable-meals scenario). The reporter remains observational;
+the invariant tests protect correctness.
 
-The current reference describes the model with an enlarged subsistence
-basket — food, clothing and medicine. Its design and results are in
-`docs/28-enlarged-subsistence-basket-design.md` and
-`docs/29-enlarged-subsistence-basket-results.md`; the layers beneath it
-are in docs/13–27. This is the first session in three to move a
-behavioral metric, and it moved 66 of them: the wage rises 39.9% and
-every ratio built on the value of labor-power falls about 30%.
+The current reference describes the model with profit charged against
+capital advanced rather than capital consumed. Its design and results
+are in `docs/30-turnover-design.md` and `docs/31-turnover-results.md`;
+the layers beneath it are in docs/13–29. Turnover moved no behavioral
+metric — it is a scalar on a price system that never fed back — but it
+renamed five, because the quantity those metrics held was the gross
+markup rather than a rate of profit.
 
 ## Intentionally absent from this slice
 
@@ -223,14 +227,12 @@ every ratio built on the value of labor-power falls about 30%.
   authored MarketValue while costs are built from a wage those prices
   never knew about (docs/24). Prices of production are now *computed*
   beside the authored ones but deliberately not adopted: the uniform
-  profit rate is 24.6 per production period and yayo prices at 38.7×
-  its authored ratio to meals. Enlarging the basket halved that and
-  did not fix it (docs/29);
-- turnover: profit is charged against one day's flow while the model
-  holds twenty days of stock, which is the leading explanation for the
-  profit rate's magnitude and the next thing to test;
+  markup is 24.6 over a 21-day turnover — a profit rate of 1.17 a day —
+  and yayo prices at 38.7× its authored ratio to meals. Enlarging the
+  basket halved that and did not fix it (docs/29);
 - a capital-goods sector: building capacity spends silver but consumes no
-  material;
+  material, and it is what would let fixed capital — 3.5% of the capital
+  advanced — into the price system (docs/31);
 - equalization of profit rates across sectors — computed, not adopted;
 - labor content of resource grades, so depletion moves value as well as
   cost and rent;

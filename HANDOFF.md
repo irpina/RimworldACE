@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `6d020b2` (the enlarged subsistence basket)
-**Behavioral baseline:** `20bf95a` (134 metrics: 66 refreshed + 20 new observations)
+**Latest Stage 0 model commit:** `e84787c` (turnover: profit on capital advanced)
+**Behavioral baseline:** `2537b38` (149 metrics: 15 new observations + 5 renames, nothing moved)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -73,7 +73,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
-| **Stage 0 lab** (`economy_lab/`) | 124 tests, 134 frozen metrics, three closing ledgers, a classical price system, six commodities and two regions | roughly three to five more economic sessions, then a scale test |
+| **Stage 0 lab** (`economy_lab/`) | 138 tests, 149 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions | **the scale test is now due**, then two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -101,16 +101,20 @@ rather than accounting, and neither has been started.
 
 ### Remaining phases
 
-**Phase A — finish the economics** (~3–5 sessions). Prices of production
-and the enlarged subsistence basket are both **done** (docs/27,
-docs/29). The basket turned out *not* to be what stood between the
-model and a usable price system — one provisioner's day feeds 39
-workers on RimWorld's own numbers, so no defensible bundle brings the
-profit rate near 1. The leading candidate is now **turnover**: the
-model charges profit against a daily flow while holding twenty days of
-stock. Then a capital-goods sector; exit and capacity depreciation;
-monopoly rent. Optionally credit and bankruptcy. Then re-run the stale
-sensitivity sweep.
+**Phase A — finish the economics** (~2–4 sessions). Prices of production,
+the enlarged subsistence basket and turnover are all **done** (docs/27,
+docs/29, docs/31). The two numbers the project reports as rates of
+profit are now rates: 1.17 per day for the basic sector's uniform rate
+and 0.0305 per day realized on capital advanced. What is left is a
+capital-goods sector; exit and capacity depreciation; recreation in the
+basket; monopoly rent. Optionally credit and bankruptcy. Then re-run
+the stale sensitivity sweep.
+
+**But Phase B should come first.** `docs/29` said "after turnover would
+be a defensible place to stop" and `docs/31` §9 says this is that
+place. The economics has three closing ledgers, an interpretable profit
+rate and six commodities, and nobody has checked whether any of it
+survives 654 defs and a hundred settlements.
 
 **Phase B — scale test** (~2 sessions, and genuinely risky). The lab is four
 commodities and two regions. RimWorld is ~654 producible defs and ~100
@@ -363,6 +367,14 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/30-turnover-design.md` — profit charged against capital
+  advanced rather than consumed, turnover read off each commodity's
+  own inventory life, and the correction of `docs/29`'s envelope
+  recorded before measuring;
+- `docs/31-turnover-results.md` — the rate is 1.17 per day and the old
+  number is the gross markup; realized turnover is 56.8 days because
+  the final product's stock is in no cost flow; three sections that
+  are corrections rather than results;
 - `docs/28-enlarged-subsistence-basket-design.md` — clothing and
   medicine from the closed analysis, the powered tailoring bench that
   makes chemfuel basic, and the prediction that this would *not* be
@@ -649,7 +661,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 124 tests pass;
+- all 138 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -932,12 +944,11 @@ Steps 1–10 are **done**.
     magnitudes are computable at last: organic composition 20.67, value
     rate of profit 1.77 (docs/24).
 
-**Scope note:** the steps below are the *economics* backlog only. For where
-they sit against the whole mod suite — the runtime port, the gameplay layer,
-and the untested scale question — see "Distance to the full suite" above.
-The scale test should jump the queue once the economics reaches a natural
-stopping point; after turnover (step 13) would be a defensible place to
-stop.
+**Scope note:** for where these sit against the whole mod suite — the
+runtime port, the gameplay layer, and the untested scale question — see
+"Distance to the full suite" above. Step 14 is no longer an economics step:
+turnover was the natural stopping point the roadmap kept pointing at, and
+the scale test is now the thing to do next.
 
 11. ~~Prices of production.~~ Done as an observation, and the result is
     negative in a way that reorders everything behind it. The classical
@@ -985,32 +996,57 @@ stop.
     leaves s/v above eleven. The rate of surplus value this project
     reports is roughly the game's own.
 
-13. **Next economic feature — turnover.** The leading candidate for the
-    price system's magnitude problem, and the one thing that changes `r`
-    by the right order for a defensible reason. `r` is a rate per
-    *production period* and the model's period is one day, but the
-    model's own inventory targets are twenty days of throughput — so the
-    capital actually tied up is roughly twenty times the daily flow the
-    price system charges profit against. A first-order correction puts
-    `1 + r` near `25.62 / 20`, so a profit rate around **0.28 per
-    turnover period** rather than 24.6 per day.
+13. ~~Turnover.~~ Done, and both of the project's rates of profit are now
+    rates. Capital is advanced for one production period plus the
+    commodity's own inventory life, so `p_i = (1 + r τ_i)(M_i · p)`. The
+    price system's rate is **1.1726 per day** and the number `docs/26`
+    through `docs/29` reported survives as the **gross markup**, 24.62.
+    The value ledger gains a rate of profit on capital *advanced* —
+    **0.0305 per day** — beside the flow ratio it has printed since
+    `docs/23`, and the two differ by the realized turnover.
 
-    That arithmetic is an envelope in `docs/29` §10, not a measurement.
-    It needs its own design document and its own scorecard, and it is
-    exactly the shape of estimate `docs/22` got wrong. But unlike the
-    basket it does not require inventing consumption nobody would
-    defend, and the distinction it rests on — capital *advanced* as a
-    stock against capital *consumed* as a flow — is one the model already
-    has both halves of.
+    **Uniform turnover moves no relative price.** `1 + rτ` is a scalar,
+    so it rescales the rate and redistributes nothing; the invariance is
+    asserted bit-exactly, which is why the uniform case is solved in
+    closed form rather than searched for. Only *differential* turnover
+    moves a price, and `perishable_meals` — RimWorld's simple meals rot
+    after four days — lifts the rate to 2.08 and widens every deviation,
+    yayo from 54 meals to 476 (docs/31).
 
-    Still open behind it:
+    Realized turnover is **56.8 days**, not the 21 the price system
+    assumes, because yayo is nobody's input: its finished stock is 63% of
+    all commodity capital and appears in no cost flow. Take it out and
+    the figure lands at 22.1.
+
+    Also: a **third seeding defect** of the `docs/29` family — stocks were
+    seeded from the global inventory target rather than the commodity's
+    own, invisible while they were equal. Caught only because the
+    stationarity invariant is exact rather than tolerance-based.
+
+14. **Next — the scale test, jumping the economics queue.** `docs/29`
+    said "after turnover would be a defensible place to stop" and
+    `docs/31` §9 says this is that place. The lab is six commodities and
+    two regions; RimWorld is ~654 producible defs and ~100 settlements.
+    Three solvers now iterate to fixed points — labor values, prices of
+    production, and the production-order plan — and nobody has checked
+    whether they survive a hundredfold more entities at an acceptable
+    tick cost, or whether the calibration holds when the process graph is
+    deep and wide rather than six nodes. The closed-default "unmodelled
+    commodity" policy exists for exactly this and has never been
+    exercised.
+
+    It is the cheapest large risk to retire and it has been deferred
+    three times. See "Distance to the full suite" above.
+
+    Still open in the economics behind it:
 
     *A capital-goods sector (Department I).* Machinery as a produced
     commodity that investment consumes materially. Building capacity still
     spends silver without consuming anything, which is the last place
     something appears from nothing. Since `docs/27` it has a second
     reason to exist: it is what would let fixed capital into the price
-    system and close the gap between `r` and s/v honestly.
+    system — now 3.5% of the capital advanced, where its depreciation was
+    0.05% of cost.
 
     *Capacity depreciation and mothballing*, so that competition is for
     survival and not only for orders. Today a producer that loses the
@@ -1082,9 +1118,11 @@ it is not intended for per-commit testing.
   freezes each sector's calibrated rate of profit rather than
   equalizing it. Enlarging the basket halved the deviations without
   making them usable (docs/29); turnover is the next candidate;
-- turnover: the price system charges profit against one day's flow
-  while the model holds twenty days of stock, so the uniform profit
-  rate is a daily rate on an advance that is not advanced for a day;
+- ~~turnover~~ — done (`docs/31`). Capital is advanced for one
+  production period plus the commodity's own inventory life, the price
+  system's rate is 1.17 per day against a gross markup of 24.62, and
+  the ledger reports a rate of profit on advances (0.0305/day) beside
+  the flow ratio it has printed since `docs/23`;
 - labor content of resource grades: a poorer deposit costs more silver but
   no more labor, so depletion moves cost and rent but not value;
 - joint products in an actual scenario — the mass apportionment rule is

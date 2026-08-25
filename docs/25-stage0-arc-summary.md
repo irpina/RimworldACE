@@ -6,7 +6,7 @@ exists, what is next, what not to break. This is the argument: what each layer
 was for, what it measured, and what it got wrong.
 
 The detailed record lives in the design/results pairs, `docs/06` through
-`docs/29`. Every feature was designed in a committed document *before* it was
+`docs/31`. Every feature was designed in a committed document *before* it was
 implemented, and every prediction was scored afterward whether or not it held.
 
 ---
@@ -53,6 +53,7 @@ Each layer removed something that was appearing from nothing.
 | 10 | fixed capital transferred nothing; the overhead was unexplained | capital depreciates into value; the overhead is measured and named | 23–24 |
 | 11 | the profit rate was frozen per sector by calibration | a uniform rate is solved from the technique and the real wage | 26–27 |
 | 12 | workers ate and wore and needed nothing else | the basket is food, clothing and medicine | 28–29 |
+| 13 | profit was charged against a day's flow | it is charged against the capital actually advanced | 30–31 |
 
 ---
 
@@ -271,6 +272,52 @@ within 1.5% as a small real difference rather than a tautology.
 
 ---
 
+## The last hole: profit was charged against the wrong thing
+
+`docs/31` closed the arc's final accounting gap, and it is the smallest-
+sounding and most embarrassing of them. **The model charged profit against a
+single day's flow while holding twenty days of stock.**
+
+Two numbers were printed as rates of profit and neither was one. The price
+system's `p = (1 + r)Mp` advances capital for exactly one production period,
+so its `r` was a *daily* rate — 38.34, then 24.62, magnitudes nobody could
+argue about. And `value_rate_of_profit` divided surplus by `c + v` as
+cumulative *flows*, making it profit per unit of capital consumed rather than
+per unit advanced.
+
+The correction is `p_i = (1 + r τ_i)(M_i · p)`, with turnover read off each
+commodity's own inventory life rather than a new parameter — inventing one
+would let turnover be tuned away from the stock the model actually holds,
+which is the whole point. The results:
+
+| quantity | before | after |
+|---|---:|---:|
+| price system, per period | 24.62/day | **1.1726/day** |
+| the same number, renamed | — | gross markup **24.62** |
+| ledger, flow ratio | 1.7326 | 1.7326 (kept) |
+| **ledger, on capital advanced** | — | **0.0305/day** |
+
+**Uniform turnover moves no relative price**, because `1 + rτ` is a scalar.
+That invariance is asserted bit-exactly, and it means only *differential*
+turnover redistributes anything — which `perishable_meals` demonstrates, since
+RimWorld's simple meals rot after four days: the rate rises to 2.08 and yayo
+goes from 54 meals to 476.
+
+The measurement that was worth the session is the turnover time itself.
+Capital is tied up for **56.8 days**, not the 21 the price system assumes,
+because **yayo is nobody's input** — its finished stock is 63% of all
+commodity capital and appears in no cost flow anywhere. Take it out and the
+figure lands at 22.1. A cost flow measures what is used up; an advance
+measures what is laid out; a final good waiting for a customer is laid out
+and never used up.
+
+The advance itemizes to 96.3% commodity stock, 3.5% installed plant, and
+**0.11% wages** — so the wage advance, which is what the old formulation
+effectively charged profit against for a pure-labor good, is one part in nine
+hundred of the capital in play.
+
+---
+
 ## Predictions that were wrong, and what they taught
 
 Kept because they are the most informative part of the record.
@@ -287,6 +334,17 @@ Kept because they are the most informative part of the record.
   because v is tiny, not because c is large. Necessary labor was 2.5% of the
   working day under the meals-only basket, and is 3.6% under the enlarged
   one, which brings c/v to 14.42 and no further.
+- **A turnover correction would put `r` near 0.28** (`docs/29` §10). It is
+  **1.17**, four times higher. The envelope compounded `r` over twenty
+  periods where the classical formulation charges it once on the advance.
+  `docs/30` §7.1 caught and corrected it before implementing anything, which
+  is what an envelope labelled as an envelope is for.
+- **The fixed-capital advance would be 16,795 ticks** (`docs/30` §7.3). It is
+  **17,073**, because the prediction computed it as depreciation flow times
+  service life while the implementation measures installed plant. Those agree
+  only when nothing is idle. A 1.65% miss, and it is the stock-versus-flow
+  confusion the session exists to fix, committed once more inside the design
+  document that fixes it.
 - **The enlarged basket would unblock the price system** (`docs/27`). It did
   not, and `docs/28` said so in advance rather than discovering it
   afterward. Recorded here as a wrong *reordering* rather than a wrong
@@ -316,33 +374,41 @@ create a wage-price loop through the commodity every scenario is measured on.
 So `v` is still understated, and every ratio built on it is still inflated —
 but by a bounded amount rather than an unknown one.
 
-**The profit rate is a rate per production period, and the period is a day.**
-`r = 24.62` cannot be compared to any empirical profit rate while the model
-advances capital for one day and holds twenty days of stock. This is now the
-largest single caveat the project carries, and the next thing to fix.
+**Three rates are easy to confuse, and all three are now reported.** The
+gross markup (24.62) is price over cost per turnover. The price system's `r`
+(1.17/day) is the uniform rate that system would pay, and it is fixed by the
+*basic* sector alone. The ledger's rate on advances (0.0305/day) is what this
+economy actually realizes at RimWorld's authored prices, across all its
+capital. The last two differ by a factor of 38 for Sraffa's reason: 96% of the
+advance is the yayo circuit's stock, and yayo is non-basic.
+
+**Fixed capital is still outside the price system.** It is 3.5% of the capital
+advanced, where as a depreciation flow it was 0.05% of cost — so the omission
+`docs/26` §3.5 bounded is more visible than it was. The fix is a capital-goods
+sector.
 
 ---
 
 ## Where it goes next
 
-**Turnover.** The model charges profit against one day's flow while holding
-twenty days of stock, so the capital actually tied up is roughly twenty times
-the advance the price system sees. A first-order correction puts `1 + r` near
-`25.62 / 20`, a profit rate around 0.28 per turnover period rather than 24.6
-per day. That is an envelope rather than a measurement — the shape of
-estimate `docs/22` got wrong — but it is the first candidate that moves `r`
-by the right order for a defensible reason, and the distinction it rests on,
-capital advanced as a stock against capital consumed as a flow, is one the
-model already has both halves of.
+**The scale test, jumping the economics queue.** The laboratory is six
+commodities and two regions; RimWorld is ~654 producible defs and ~100
+settlements. Three solvers now iterate to fixed points — labor values, prices
+of production, and the production-order plan — and nobody has checked whether
+they survive a hundredfold more entities at an acceptable tick cost, or
+whether the calibration holds when the process graph is deep and wide rather
+than six nodes. It is the cheapest large risk to retire and it has been
+deferred three times.
 
-Behind it: a capital-goods sector, which building capacity needs anyway —
-silver is still spent without consuming material — and which is what would
-let fixed capital into the price system and close the remaining gap between
-`r` and s/v honestly. Then capacity depreciation and exit, so competition is
-for survival and not only for orders. And recreation in the basket, which is
-worth doing on its own rather than alongside something else.
+Behind it, in the economics: a capital-goods sector, which building capacity
+needs anyway — silver is still spent without consuming material — and which
+is what would let fixed capital into the price system. Then capacity
+depreciation and exit, so competition is for survival and not only for
+orders. And recreation in the basket, which is worth doing on its own rather
+than alongside something else.
 
-**Current state:** 124 tests, 134 frozen metrics, six commodities, two
-regions, three closing ledgers, a classical price system computed beside the
-authored one, and an equilibrium that is still exactly stationary — a price
-range of exactly zero, in both regions, across four in-game years.
+**Current state:** 138 tests, 149 frozen metrics, six commodities, two
+regions, three closing ledgers, a classical price system with an
+interpretable profit rate computed beside the authored one, and an
+equilibrium that is still exactly stationary — a price range of exactly zero,
+in both regions, across four in-game years.

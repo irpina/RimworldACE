@@ -318,6 +318,17 @@ feeds 39.3 workers**, so necessary labor is 3.6% of the day and no defensible
 bundle changes that by an order of magnitude. The rate of surplus value this
 project reports is not a calibration artifact. It is the game's.
 
+**4. Two numbers that were not rates of profit, and now are.** The price
+system charged profit against a single day's flow while the model held twenty
+days of stock, and the value ledger divided surplus by capital *consumed*
+rather than capital *advanced*. Both are fixed: the uniform rate is 1.17 per
+day and the old figure survives as the gross markup, while the ledger reports
+a rate of profit on advances of 0.0305 per day beside the 1.73 flow ratio.
+Uniform turnover moves no relative price — it is a scalar — so the invariance
+is asserted bit-exactly, and the circuit turns out to tie its capital up for
+**56.8 days rather than 21**, because the finished stock of the final product
+appears in no cost flow at all.
+
 ### Design and results documents
 
 Each feature has a decision document written *before* implementation and a
@@ -337,19 +348,21 @@ results document scoring the predictions afterward.
 | [23](docs/23-constant-capital-and-the-overhead-design.md) · [24](docs/24-constant-capital-and-the-overhead-results.md) | Fixed capital, the value ledger, and what the operating overhead actually is |
 | [26](docs/26-prices-of-production-design.md) · [27](docs/27-prices-of-production-results.md) | Prices of production: Sraffa's basics, the corn-model profit rate, and the aggregate invariance failure |
 | [28](docs/28-enlarged-subsistence-basket-design.md) · [29](docs/29-enlarged-subsistence-basket-results.md) | Clothing and medicine in the basket, and why the constraint was never the basket |
+| [30](docs/30-turnover-design.md) · [31](docs/31-turnover-results.md) | Turnover: profit on capital advanced, and the two rates that were not rates |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 124 acceptance and invariant tests
+python -m unittest discover -s tests      # 138 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
 python -m economy_lab generous-basket     # the basket, pushed past defensible
-python -m economy_lab.baseline            # 134 frozen metrics vs current
+python -m economy_lab perishable-meals    # differential turnover: meals rot
+python -m economy_lab.baseline            # 149 frozen metrics vs current
 ```
 
-`behavior_baseline.json` freezes 134 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 149 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.
