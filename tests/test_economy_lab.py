@@ -9,6 +9,7 @@ from economy_lab.model import (
     ResourceGrade,
     ResourceReserve,
 )
+from economy_lab.scale import population, synthetic_economy
 from economy_lab.scenarios import (
     CHEMFUEL,
     DAYS_PER_YEAR,
@@ -2414,6 +2415,158 @@ class TurnoverTests(unittest.TestCase):
             with self.subTest(commodity=name):
                 self.assertAlmostEqual(residual, 0.0, places=7)
         self.assertAlmostEqual(self.perishable.cash_balance(), 0.0, places=7)
+
+
+class ThroughputBatchTests(unittest.TestCase):
+    """The one optimization docs/33 permitted, held to bit-equality.
+
+    `throughput_demands` computes in one pass what `throughput_demand`
+    computed once per commodity. The claim is not "close enough" — it is
+    that the two produce the identical float, because the derived terms
+    accumulate in the same producer order and the producers the batch skips
+    contribute exactly 0.0.
+    """
+
+    def assert_batch_matches(self, economy):
+        for name, region in economy.regions.items():
+            batch = region.throughput_demands()
+            self.assertEqual(sorted(batch), sorted(economy.commodities))
+            for commodity in sorted(economy.commodities):
+                with self.subTest(region=name, commodity=commodity):
+                    self.assertEqual(
+                        batch[commodity], region.throughput_demand(commodity)
+                    )
+
+    def test_it_matches_across_every_scenario(self):
+        for economy in (
+            equilibrium(240),
+            regional_glut(),
+            producer_loss(),
+            reserve_depletion(),
+            technique_change(180),
+            perishable_meals(120),
+        ):
+            with self.subTest(day=economy.day):
+                self.assert_batch_matches(economy)
+
+    def test_it_matches_after_capacity_is_destroyed(self):
+        # The invalidation case: capacity moves between steps, and the
+        # daily rebuild has to pick it up.
+        economy = seeded_two_region_economy()
+        economy.step(30)
+        economy.destroy_capacity("Dust Basin", LEAVES, 0.60)
+        economy.step(1)
+        self.assert_batch_matches(economy)
+
+    def test_the_daily_rebuild_agrees_with_the_regions(self):
+        economy = equilibrium(120)
+        for name, region in economy.regions.items():
+            for commodity in sorted(economy.commodities):
+                with self.subTest(region=name, commodity=commodity):
+                    self.assertEqual(
+                        economy.throughput(name, commodity),
+                        region.throughput_demand(commodity),
+                    )
+
+
+class ScaleHarnessTests(unittest.TestCase):
+    """The generator that answers the size question (docs/32, docs/33).
+
+    Sizes here are deliberately small — the harness itself is measured by
+    `python -m economy_lab.scale`, and these tests protect the properties
+    the measurement rests on rather than repeating it.
+    """
+
+    def test_the_generator_is_deterministic(self):
+        first = synthetic_economy(commodities=80, regions=3)
+        second = synthetic_economy(commodities=80, regions=3)
+        first.step(5)
+        second.step(5)
+        self.assertEqual(first.history, second.history)
+
+    def test_a_generated_economy_closes_its_ledgers(self):
+        economy = synthetic_economy(commodities=120, regions=2)
+        economy.step(20)
+        for name, residual in economy.commodity_balances().items():
+            with self.subTest(commodity=name):
+                # Relative rather than absolute: these are RimWorld's own
+                # magnitudes, and a 400,000-tick commodity does not close
+                # to 1e-9 in absolute terms just because a 25-tick one does.
+                produced = max(economy.ledger.production.get(name, 0.0), 1.0)
+                self.assertLess(abs(residual) / produced, 1e-9)
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=4)
+
+    def test_no_stock_goes_negative_at_width(self):
+        economy = synthetic_economy(commodities=120, regions=2)
+        economy.step(30)
+        for region in economy.regions.values():
+            for name, held in region.inventory.items():
+                with self.subTest(commodity=name):
+                    self.assertGreaterEqual(held, -1e-6)
+
+    def test_the_value_solve_reproduces_the_closed_analysis_at_width(self):
+        """The docs/20 validation, six hundred commodities wide.
+
+        `docs/20` checked the solver against `FINDINGS.md` on four
+        commodities. Here it is checked on 611, and every commodity whose
+        synthetic wiring did not contradict the real figures — where the
+        inputs already carried more labor than the def does, so direct
+        labor floored at one tick — reproduces the closed analysis's
+        embodied labor exactly.
+        """
+        economy = synthetic_economy(commodities=653, regions=2)
+        economy.step(1)
+        record = economy.scale_record
+        floored = set(record["floored"])
+        processes = {
+            producer.commodity: producer.process
+            for producer in economy.regions["region_000"].producers
+        }
+
+        def tainted(name, seen=None):
+            seen = set() if seen is None else seen
+            if name in seen:
+                return False
+            seen.add(name)
+            return any(
+                other in floored or tainted(other, seen)
+                for other in processes[name].inputs
+            )
+
+        exact = 0
+        for name, authored in sorted(record["labor"].items()):
+            if name in floored or authored <= 0.0:
+                continue
+            error = abs(economy.labor_values[name] - authored) / authored
+            if tainted(name):
+                continue
+            with self.subTest(commodity=name):
+                self.assertLess(error, 1e-9)
+            exact += 1
+        self.assertGreater(exact, 400)
+
+    def test_iteration_counts_do_not_grow_with_width(self):
+        """Depth 3, so the fixed points settle in a handful of passes.
+
+        If this ever fails, the generator has produced cycles the real
+        data does not have — a bug in the harness rather than a finding
+        about the model.
+        """
+        narrow = synthetic_economy(commodities=60, regions=2)
+        wide = synthetic_economy(commodities=480, regions=2)
+        narrow.step(2)
+        wide.step(2)
+        narrow_iterations = narrow.prices_of_production()["iterations"]
+        wide_iterations = wide.prices_of_production()["iterations"]
+        self.assertLess(wide_iterations, 3 * narrow_iterations + 5)
+
+    def test_the_population_is_the_real_one(self):
+        rows = population(40)
+        self.assertEqual(len(rows), 40)
+        self.assertEqual(len(population()), 647)
+        # Sampled with a stride so a small run keeps the depth mix rather
+        # than taking every shallow def first.
+        self.assertGreater(len({row["depth"] for row in rows}), 2)
 
 
 if __name__ == "__main__":

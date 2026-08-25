@@ -398,6 +398,45 @@ class Region:
             )
         return total
 
+    def throughput_demands(self) -> Dict[str, float]:
+        """Every commodity's throughput demand, in one pass over producers.
+
+        `throughput_demand` is O(producers) and was being called once per
+        commodity, inside a fixed point — O(commodities x producers) per
+        iteration, which the scale test measured at 84% of a simulated day
+        (docs/33).  This computes the same numbers by walking each
+        producer's *inputs* instead of scanning every producer for each
+        commodity, which is O(producers x inputs).
+
+        Bit-identical to calling `throughput_demand` for each commodity.
+        The terms are collected in producer order and handed to `sum`, not
+        accumulated with `+=`: CPython's `sum` compensates its float error
+        and a running total does not, so the two disagree in the last bit
+        wherever a commodity has several consumers.  The equivalence test
+        found that; the argument had missed it.
+        """
+        terms: Dict[str, List[float]] = {}
+        for producer in self.producers:
+            if not producer.active:
+                continue
+            runs = producer.process.runs_for(producer.capacity_per_day)
+            for name, per_run in producer.process.inputs.items():
+                if per_run > 0:
+                    terms.setdefault(name, []).append(runs * per_run)
+        workers = self.full_capacity_labor_ticks() / max(
+            self.ticks_per_worker_day, EPSILON
+        )
+        totals: Dict[str, float] = {}
+        for name in self.prices:
+            total = self.base_daily_demand.get(name, 0.0) + sum(
+                terms.get(name, ())
+            )
+            quantity = self.subsistence_basket.get(name, 0.0)
+            if quantity > 0.0:
+                total += quantity * workers
+            totals[name] = total
+        return totals
+
     def full_capacity_labor_ticks(self) -> float:
         """Work-ticks demanded per day if every producer ran at capacity."""
         return sum(
@@ -610,6 +649,12 @@ class Economy:
             )
         )
         self.history: List[dict] = []
+        #: Throughput demand per region, refreshed once a day.  Capacity
+        #: cannot change between the refresh and the end of the day — only
+        #: `_complete_projects` and `destroy_capacity` move it, and both
+        #: run before it — so this is a rebuild rather than a cache with
+        #: an invalidation rule to get wrong.
+        self._throughput: Dict[str, Dict[str, float]] = {}
 
         # Remembered so replacement capacity can be built for a commodity
         # whose every producer has since been destroyed.
@@ -642,6 +687,7 @@ class Economy:
                 region.exported_total.setdefault(commodity.name, 0.0)
         # Nothing has been produced yet, so the first solve weights the
         # installed structure rather than realized output (docs/19).
+        self._refresh_throughput()
         self._update_labor_values(use_capacity=True)
         # The seeded sector cost each price anchor is measured against
         # (docs/21).  Recorded once, from the same capacity weights.
@@ -664,6 +710,7 @@ class Economy:
             self.day += 1
             self._arrive_shipments()
             self._complete_projects()
+            self._refresh_throughput()
             self._produce()
             # Solved from the day's realized runs.  The wage just paid used
             # the value prevailing when the day opened, which keeps the
@@ -681,6 +728,17 @@ class Economy:
             if self.day % self.investment_interval_days == 0:
                 self._invest()
             self._record_history()
+
+    def _refresh_throughput(self) -> None:
+        """Recompute every region's throughput demand for the day."""
+        self._throughput = {
+            name: region.throughput_demands()
+            for name, region in self.regions.items()
+        }
+
+    def throughput(self, region: str, commodity: str) -> float:
+        """Today's throughput demand, from the daily rebuild."""
+        return self._throughput[region][commodity]
 
     def inject(self, region: str, commodity: str, quantity: float) -> None:
         if quantity < 0:
@@ -2058,7 +2116,7 @@ class Economy:
             requested_output: Dict[str, float] = {}
             for name, commodity in self.commodities.items():
                 target = (
-                    region.throughput_demand(name)
+                    self._throughput[region.name][name]
                     * commodity.target_inventory_days
                 )
                 correction = self.replenishment_rate * (
@@ -2194,7 +2252,7 @@ class Economy:
         for region in self.regions.values():
             for commodity in self.commodities.values():
                 name = commodity.name
-                throughput = region.throughput_demand(name)
+                throughput = self._throughput[region.name][name]
                 if throughput <= EPSILON:
                     # Neither consumed nor used as an input here. That is "not
                     # traded in this region", not "infinitely oversupplied",
@@ -2265,10 +2323,11 @@ class Economy:
 
                 commodity = self.commodities[name]
                 source_target = (
-                    source.throughput_demand(name) * commodity.target_inventory_days
+                    self._throughput[source.name][name]
+                    * commodity.target_inventory_days
                 )
                 destination_target = (
-                    destination.throughput_demand(name)
+                    self._throughput[destination.name][name]
                     * commodity.target_inventory_days
                 )
                 exportable = max(0.0, source.inventory[name] - source_target)
@@ -2330,7 +2389,7 @@ class Economy:
                 # Throughput, not final demand: otherwise an intermediate good
                 # would never attract replacement capacity, because nobody
                 # eats it.
-                demand = region.throughput_demand(name)
+                demand = self._throughput[region.name][name]
                 if demand <= 0 or name not in self.known_processes:
                     continue
                 existing = region.capacity(name)
