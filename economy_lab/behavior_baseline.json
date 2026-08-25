@@ -42,6 +42,26 @@
       "unit": "silver",
       "value": 21.349351
     },
+    "equilibrium.advance.commodity_share": {
+      "unit": "fraction",
+      "value": 0.96344
+    },
+    "equilibrium.advance.fixed_share": {
+      "unit": "fraction",
+      "value": 0.035419
+    },
+    "equilibrium.advance.total_ticks": {
+      "unit": "ticks",
+      "value": 482019.746528
+    },
+    "equilibrium.advance.wage_share": {
+      "unit": "fraction",
+      "value": 0.001141
+    },
+    "equilibrium.advance.yayo_share_of_stock": {
+      "unit": "fraction",
+      "value": 0.633919
+    },
     "equilibrium.basket.commodities": {
       "unit": "count",
       "value": 3.0
@@ -94,6 +114,10 @@
       "unit": "silver",
       "value": 0.0
     },
+    "equilibrium.production.assumed_turnover_days": {
+      "unit": "days",
+      "value": 21.0
+    },
     "equilibrium.production.basic_count": {
       "unit": "commodities",
       "value": 4.0
@@ -114,6 +138,10 @@
       "unit": "ratio",
       "value": 7.25577
     },
+    "equilibrium.production.gross_markup": {
+      "unit": "ratio",
+      "value": 24.623882
+    },
     "equilibrium.production.herbal_medicine_over_value_ratio": {
       "unit": "ratio",
       "value": 1.001128
@@ -126,13 +154,13 @@
       "unit": "count",
       "value": 13.0
     },
-    "equilibrium.production.profit_rate": {
-      "unit": "ratio",
-      "value": 24.623882
-    },
-    "equilibrium.production.profit_rate_over_rank_one": {
+    "equilibrium.production.markup_over_rank_one": {
       "unit": "ratio",
       "value": 0.917908
+    },
+    "equilibrium.production.profit_rate_per_period": {
+      "unit": "ratio",
+      "value": 1.172566
     },
     "equilibrium.production.psychoid_leaves_over_value_ratio": {
       "unit": "ratio",
@@ -142,7 +170,7 @@
       "unit": "ratio",
       "value": 0.256491
     },
-    "equilibrium.production.rank_one_profit_rate": {
+    "equilibrium.production.rank_one_gross_markup": {
       "unit": "ratio",
       "value": 26.826087
     },
@@ -194,6 +222,10 @@
       "unit": "ratio",
       "value": 7.706928
     },
+    "equilibrium.turnover.realized_days": {
+      "unit": "days",
+      "value": 56.84504
+    },
     "equilibrium.value.chemfuel_ticks": {
       "unit": "ticks",
       "value": 25.044852
@@ -225,6 +257,10 @@
     "equilibrium.value_ledger.organic_composition": {
       "unit": "ratio",
       "value": 14.415262
+    },
+    "equilibrium.value_ledger.rate_of_profit_on_advances": {
+      "unit": "ratio",
+      "value": 0.030479
     },
     "equilibrium.value_ledger.surplus_labor": {
       "unit": "ticks",
@@ -262,7 +298,7 @@
       "unit": "ratio",
       "value": 6.149661
     },
-    "generous_basket.production.profit_rate": {
+    "generous_basket.production.gross_markup": {
       "unit": "ratio",
       "value": 10.651479
     },
@@ -389,6 +425,30 @@
     "glut.local_trough_price": {
       "unit": "silver",
       "value": 14.372385
+    },
+    "perishable_meals.local.meals.settled_inventory": {
+      "unit": "units",
+      "value": 2.720595
+    },
+    "perishable_meals.production.garments_relative_to_meals": {
+      "unit": "ratio",
+      "value": 34.098923
+    },
+    "perishable_meals.production.gross_markup": {
+      "unit": "ratio",
+      "value": 43.646662
+    },
+    "perishable_meals.production.profit_rate_per_period": {
+      "unit": "ratio",
+      "value": 2.079222
+    },
+    "perishable_meals.production.yayo_relative_to_meals": {
+      "unit": "ratio",
+      "value": 475.822547
+    },
+    "perishable_meals.value_ledger.rate_of_profit_on_advances": {
+      "unit": "ratio",
+      "value": 0.030905
     },
     "producer_loss.capacity_recovery_days": {
       "unit": "days",
@@ -518,11 +578,11 @@
       "unit": "silver",
       "value": 41.771099
     },
-    "technique_change.production.profit_rate": {
+    "technique_change.production.gross_markup": {
       "unit": "ratio",
       "value": 26.750606
     },
-    "technique_change.production.profit_rate_gain": {
+    "technique_change.production.gross_markup_gain": {
       "unit": "ratio",
       "value": 1.086368
     },

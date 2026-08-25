@@ -18,6 +18,7 @@ from .scenarios import (
     GARMENTS,
     generous_basket,
     MEDICINE,
+    perishable_meals,
     producer_loss,
     regional_glut,
     reserve_depletion,
@@ -198,7 +199,69 @@ def collect_behavioral_metrics(
         _price_of_production_metrics(stable=stable, technique=technique)
     )
     metrics.update(_subsistence_basket_metrics(stable=stable))
+    metrics.update(_turnover_metrics(stable=stable))
     return metrics
+
+
+def _turnover_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
+    """Observe capital advanced against capital consumed (docs/30).
+
+    The two that carry the session's result are `realized_days` — how long
+    the circuit actually ties its capital up, against the 21 the price
+    system assumes — and `rate_of_profit_on_advances`, which is the rate of
+    profit the flow ratio beside it is not.
+    """
+    advanced = stable.capital_advanced()
+    held = {
+        name: sum(region.inventory[name] for region in stable.regions.values())
+        * stable.labor_values[name]
+        for name in stable.commodities
+    }
+    perishable = perishable_meals()
+    system = perishable.prices_of_production(numeraire=MEALS)
+    base = system["prices"][MEALS]
+    return {
+        "equilibrium.turnover.realized_days": _metric(
+            stable.realized_turnover_days(), "days"
+        ),
+        "equilibrium.advance.total_ticks": _metric(advanced["total"], "ticks"),
+        "equilibrium.advance.commodity_share": _metric(
+            advanced["commodity_capital"] / advanced["total"], "fraction"
+        ),
+        "equilibrium.advance.fixed_share": _metric(
+            advanced["fixed_capital"] / advanced["total"], "fraction"
+        ),
+        "equilibrium.advance.wage_share": _metric(
+            advanced["wage_advance"] / advanced["total"], "fraction"
+        ),
+        # Yayo is nobody's input, so its stock is capital advanced that no
+        # cost flow ever sees. It is also the largest block of it.
+        "equilibrium.advance.yayo_share_of_stock": _metric(
+            held[YAYO] / sum(held.values()), "fraction"
+        ),
+        "equilibrium.value_ledger.rate_of_profit_on_advances": _metric(
+            stable.value_rate_of_profit_on_advances(), "ratio"
+        ),
+        # Differential turnover, which is the only kind that moves a price.
+        "perishable_meals.production.profit_rate_per_period": _metric(
+            system["profit_rate"], "ratio"
+        ),
+        "perishable_meals.production.gross_markup": _metric(
+            system["gross_markup"], "ratio"
+        ),
+        "perishable_meals.production.yayo_relative_to_meals": _metric(
+            system["prices"][YAYO] / base, "ratio"
+        ),
+        "perishable_meals.production.garments_relative_to_meals": _metric(
+            system["prices"][GARMENTS] / base, "ratio"
+        ),
+        "perishable_meals.local.meals.settled_inventory": _metric(
+            perishable.regions[LOCAL_REGION].inventory[MEALS], "units"
+        ),
+        "perishable_meals.value_ledger.rate_of_profit_on_advances": _metric(
+            perishable.value_rate_of_profit_on_advances(), "ratio"
+        ),
+    }
 
 
 def _subsistence_basket_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
@@ -243,8 +306,8 @@ def _subsistence_basket_metrics(*, stable: Economy) -> Dict[str, Dict[str, objec
         "generous_basket.value_rate_of_profit": _metric(
             generous.value_rate_of_profit(), "ratio"
         ),
-        "generous_basket.production.profit_rate": _metric(
-            generous.prices_of_production()["profit_rate"], "ratio"
+        "generous_basket.production.gross_markup": _metric(
+            generous.prices_of_production()["gross_markup"], "ratio"
         ),
         "generous_basket.basket.share_of_working_day": _metric(
             generous.basket_labor_value(generous.regions[LOCAL_REGION])
@@ -288,8 +351,17 @@ def _price_of_production_metrics(
         )
 
     return {
-        "equilibrium.production.profit_rate": _metric(
+        # Renamed at docs/30: this is the factor by which price exceeds
+        # cost, not a rate of profit. The rate is the markup spread over
+        # the turnover time, and is reported beside it.
+        "equilibrium.production.gross_markup": _metric(
+            system["gross_markup"], "ratio"
+        ),
+        "equilibrium.production.profit_rate_per_period": _metric(
             system["profit_rate"], "ratio"
+        ),
+        "equilibrium.production.assumed_turnover_days": _metric(
+            system["turnover_days"][MEALS], "days"
         ),
         "equilibrium.production.basic_count": _metric(
             float(len(system["basics"])), "commodities"
@@ -320,11 +392,11 @@ def _price_of_production_metrics(
         ),
         # The rank-one rate: what r would be if no wage good had material
         # inputs. It did until docs/28, which is why r was exactly s/v.
-        "equilibrium.production.rank_one_profit_rate": _metric(
-            _rank_one_profit_rate(stable), "ratio"
+        "equilibrium.production.rank_one_gross_markup": _metric(
+            _rank_one_gross_markup(stable), "ratio"
         ),
-        "equilibrium.production.profit_rate_over_rank_one": _metric(
-            system["profit_rate"] / _rank_one_profit_rate(stable), "ratio"
+        "equilibrium.production.markup_over_rank_one": _metric(
+            system["gross_markup"] / _rank_one_gross_markup(stable), "ratio"
         ),
         "equilibrium.production.yayo_relative_to_meals": _metric(
             relative(YAYO), "ratio"
@@ -347,11 +419,11 @@ def _price_of_production_metrics(
         # The wage good's technique is the only one that can move r, so a
         # cheaper meal raises the uniform profit rate exactly as it raises
         # the rate of surplus value (docs/20).
-        "technique_change.production.profit_rate": _metric(
-            changed["profit_rate"], "ratio"
+        "technique_change.production.gross_markup": _metric(
+            changed["gross_markup"], "ratio"
         ),
-        "technique_change.production.profit_rate_gain": _metric(
-            changed["profit_rate"] / system["profit_rate"], "ratio"
+        "technique_change.production.gross_markup_gain": _metric(
+            changed["gross_markup"] / system["gross_markup"], "ratio"
         ),
     }
 
@@ -563,8 +635,8 @@ def _labor_metrics(
     }
 
 
-def _rank_one_profit_rate(economy: Economy) -> float:
-    """`T / sum(b*l) - 1`: the profit rate with pure-labor wage goods.
+def _rank_one_gross_markup(economy: Economy) -> float:
+    """`T / sum(b*l) - 1`: the gross markup with pure-labor wage goods.
 
     With no material inputs to any wage good the augmented matrix
     restricted to the basket is the outer product `(l/T) . b`, whose only
