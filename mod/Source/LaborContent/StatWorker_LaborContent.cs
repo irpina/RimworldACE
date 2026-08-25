@@ -39,6 +39,24 @@ namespace SocialProduction.LaborContent
         private const float TicksPerInGameHour = 2500f;
 
         private static StatDef extractionStat;
+        private static StatDef workToMakeStat;
+        private static StatDef workToBuildStat;
+        private static bool statsResolved;
+
+        private static void ResolveStats()
+        {
+            if (statsResolved)
+            {
+                return;
+            }
+            statsResolved = true;
+            extractionStat = DefDatabase<StatDef>.GetNamedSilentFail(
+                "SNLT_ExtractionLabor");
+            workToMakeStat = DefDatabase<StatDef>.GetNamedSilentFail(
+                "WorkToMake");
+            workToBuildStat = DefDatabase<StatDef>.GetNamedSilentFail(
+                "WorkToBuild");
+        }
 
         /// <summary>
         /// Add the labor in the stuff the thing is actually made of.
@@ -58,28 +76,63 @@ namespace SocialProduction.LaborContent
             StatRequest req, bool applyPostProcess)
         {
             float value = base.GetValueUnfinalized(req, applyPostProcess);
-            if (extractionStat == null)
-            {
-                extractionStat = DefDatabase<StatDef>.GetNamedSilentFail(
-                    "SNLT_ExtractionLabor");
-            }
-            if (stat != extractionStat)
-            {
-                return value;
-            }
+            ResolveStats();
             ThingDef stuff = req.StuffDef;
-            if (stuff == null)
-            {
-                return value;
-            }
             ThingDef thing = req.Def as ThingDef;
-            if (thing == null || thing.costStuffCount <= 0)
+            if (stuff == null || thing == null)
             {
                 return value;
             }
-            return value
-                + thing.costStuffCount
-                    * stuff.GetStatValueAbstract(extractionStat);
+
+            if (stat == extractionStat)
+            {
+                // The material the thing is actually made of.
+                if (thing.costStuffCount <= 0)
+                {
+                    return value;
+                }
+                return value
+                    + thing.costStuffCount
+                        * stuff.GetStatValueAbstract(extractionStat);
+            }
+
+            // Fabrication: RimWorld scales the work itself by the stuff, so
+            // a plasteel knife really does take 2.2x the labor of a steel
+            // one. Leaving this unscaled while extraction *is* stuff-aware
+            // would make the two rows disagree with each other and with
+            // "Work to make" three lines above them.
+            StatDef workStat = WorkStatFor(thing);
+            if (workStat == null
+                || stuff.stuffProps == null
+                || stuff.stuffProps.statFactors == null)
+            {
+                return value;
+            }
+            return value * StatUtility.GetStatFactorFromList(
+                stuff.stuffProps.statFactors, workStat);
+        }
+
+        /// <summary>
+        /// Which work stat this thing's fabrication labor was measured in.
+        ///
+        /// The offline solver takes whichever of WorkToMake and WorkToBuild
+        /// the def declares, so the stuff factor has to be read from the
+        /// same one or a stuffed wall would be scaled by a factor meant for
+        /// a weapon.
+        /// </summary>
+        private static StatDef WorkStatFor(ThingDef thing)
+        {
+            if (workToMakeStat != null
+                && StatUtility.StatListContains(thing.statBases, workToMakeStat))
+            {
+                return workToMakeStat;
+            }
+            if (workToBuildStat != null
+                && StatUtility.StatListContains(thing.statBases, workToBuildStat))
+            {
+                return workToBuildStat;
+            }
+            return null;
         }
 
         /// <summary>

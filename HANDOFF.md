@@ -353,10 +353,40 @@ stuff-free extraction is **0.0** — a knife's extraction labor *is* its
 metal — so a plasteel knife should read `3 in-game h · 125 work-s · 7,500
 ticks` where it read `18.8 work-s · 1,125 ticks`.
 
-Fabrication is deliberately *not* stuff-scaled. RimWorld multiplies
-`WorkToMake` by a stuff factor (the plasteel knife shows 66 against a base
-30), and matching that is a separate refinement; folding it in alongside the
-material change would have made neither verifiable.
+**Fabrication is stuff-scaled too**, added right after, once the material
+change was confirmed in game. RimWorld multiplies the work itself by a stuff
+factor — Plasteel's `WorkToMake` factor is 2.2 — so a plasteel knife really
+does take 2.2× the labor of a steel one. Leaving it unscaled while
+extraction *was* stuff-aware made the two rows disagree with each other and
+with "Work to make" three lines above them. The factor is read from
+whichever of `WorkToMake` / `WorkToBuild` the def actually declares, so a
+stuffed wall is not scaled by a factor meant for a weapon.
+
+The payoff is that **the card now checks against itself**: a plasteel knife
+reads 66 work-s of fabrication, and "Work to make" on the same card reads
+66.
+
+### Verifying the numbers: `check_labor.py`
+
+`python check_labor.py <defName> [stuff ...]` prints the working behind any
+info-card row — the ingredient breakdown, the thing's own work, the shipped
+stuff-free base, and what the card should read for each stuff. It renders
+through the same precision and two-unit rules as the StatWorker, so its
+output is directly comparable to the screen.
+
+```
+$ python check_labor.py Gun_BoltActionRifle
+      60 x Steel                 ext  2,850   fab       0
+       3 x ComponentIndustrial   ext  1,710   fab  15,000
+                        subtotal ext  4,560   fab  15,000
+this thing's own work: 12,000 ticks = 200 work-s
+  Extraction labor    1.82 in-game h · 76 work-s
+  Fabrication labor   10.8 in-game h · 450 work-s
+```
+
+Two identities make a card self-checking, and both hold on the rifle: the
+extraction row is the ingredients' extraction, and fabrication minus the
+ingredients' fabrication is the card's own "Work to make".
 
 **The 104 generated meat defs are reached.** They have no XML node, so no
 patch can touch them. `LaborContentTableDef` ships the solved figures and a
