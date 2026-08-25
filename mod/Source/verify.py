@@ -46,18 +46,27 @@ def failures():
         for _, r in asm.iter_table(2)
         if asm.string(r["Name"]) != "<Module>"
     }
-    if WORKER not in types:
-        problems.append(
-            "the StatDefs' workerClass is missing from the assembly: "
-            "{} not in {}".format(WORKER, sorted(types))
-        )
+    for required in (
+        WORKER,
+        # Named by mod/Defs/LaborContent/GeneratedDefs.xml; a rename here
+        # silently drops the 104 defs no patch can reach.
+        "SocialProduction.LaborContent.LaborContentTableDef",
+        "SocialProduction.LaborContent.LaborContentEntry",
+        "SocialProduction.LaborContent.LaborContentStartup",
+    ):
+        if required not in types:
+            problems.append(
+                "type missing from the assembly: {} not in {}".format(
+                    required, sorted(types)
+                )
+            )
 
     methods = {
         asm.string(r["Name"]): r["Flags"]
         for mi, r in asm.iter_table(6)
         if asm._owner_of_method(mi) == WORKER
     }
-    for required in ("ValueToString", "ShouldShowFor"):
+    for required in ("ValueToString", "ShouldShowFor", "GetValueUnfinalized"):
         if required not in methods:
             problems.append(
                 "{} is not defined; nothing would be overridden".format(required)
@@ -97,11 +106,16 @@ def failures():
     # StatRequest.Def). The check caught both, which is the point of it.
     expected = [
         "RimWorld.StatDef",
+        "RimWorld.StatExtension",
         "RimWorld.StatModifier",
         "RimWorld.StatRequest",
         "RimWorld.StatUtility",
         "RimWorld.StatWorker",
+        "Verse.BuildableDef",
         "Verse.Def",
+        "Verse.DefDatabase`1",
+        "Verse.Log",
+        "Verse.StaticConstructorOnStartup",
         "Verse.ThingDef",
         "Verse.ToStringNumberSense",
     ]
@@ -120,8 +134,8 @@ def main():
             print("FAIL: " + problem)
         raise SystemExit(1)
     print(
-        "verified: {} overrides ValueToString and ShouldShowFor, separator "
-        "is U+00B7, binding surface is the eight expected symbols".format(
+        "verified: {} overrides its three methods, separator "
+        "is U+00B7, binding surface is the 13 expected symbols".format(
             WORKER.rsplit(".", 1)[1]
         )
     )

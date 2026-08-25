@@ -194,11 +194,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Beret"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.292</SNLT_ExtractionLabor><SNLT_FabricationLabor>66.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>66.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Beret"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.292</SNLT_ExtractionLabor><SNLT_FabricationLabor>66.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>66.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -206,11 +206,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Coronet"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>133.333</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>133.333</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Coronet"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>133.333</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>133.333</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -218,11 +218,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Corset"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Corset"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -230,11 +230,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Crown"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>46.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_Crown"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>46.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -242,11 +242,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CrownStellic"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>53.125</SNLT_ExtractionLabor><SNLT_FabricationLabor>0.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>0.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CrownStellic"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>53.125</SNLT_ExtractionLabor><SNLT_FabricationLabor>0.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>0.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -266,11 +266,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_HatLadies"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.417</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_HatLadies"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.417</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -278,11 +278,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_HatTop"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.417</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_HatTop"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.417</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -302,11 +302,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_RobeRoyal"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.833</SNLT_ExtractionLabor><SNLT_FabricationLabor>333.333</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>333.333</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_RobeRoyal"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.833</SNLT_ExtractionLabor><SNLT_FabricationLabor>333.333</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>333.333</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -314,11 +314,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_ShirtRuffle"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.542</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_ShirtRuffle"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.542</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>100.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -326,11 +326,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_VestRoyal"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_VestRoyal"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>200.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -350,11 +350,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Brazier"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Brazier"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -398,11 +398,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="DarklightBrazier"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="DarklightBrazier"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>31.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>16.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -422,11 +422,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Drape"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>20.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>18.75</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Drape"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>20.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>18.75</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -482,11 +482,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrandThrone"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>246.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>666.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>59.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>666.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrandThrone"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>246.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>666.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>59.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>666.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -626,11 +626,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="MeleeWeapon_Axe"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>18.75</SNLT_ExtractionLabor><SNLT_FabricationLabor>116.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>116.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="MeleeWeapon_Axe"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>18.75</SNLT_ExtractionLabor><SNLT_FabricationLabor>116.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>116.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -638,11 +638,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="MeleeWeapon_Warhammer"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>56.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>300.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>300.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="MeleeWeapon_Warhammer"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>56.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>300.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>300.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -662,11 +662,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="NatureShrine_Large"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>112.5</SNLT_ExtractionLabor><SNLT_FabricationLabor>500.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>500.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="NatureShrine_Large"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>112.5</SNLT_ExtractionLabor><SNLT_FabricationLabor>500.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>500.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -674,11 +674,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="NatureShrine_Small"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>56.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>250.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>250.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="NatureShrine_Small"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>56.25</SNLT_ExtractionLabor><SNLT_FabricationLabor>250.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>250.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -758,11 +758,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Throne"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>46.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>166.667</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>166.667</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Throne"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>46.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>166.667</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>166.667</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">

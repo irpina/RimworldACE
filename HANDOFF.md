@@ -328,19 +328,44 @@ header between Basics and Weapon; the multi-unit line is right and matches
 separator renders rather than mojibake; the line fits at low resolution; and
 a `0` row is wanted rather than hidden. No errors in the log.
 
-### Known limitation, now visible: the stat is stuff-independent
+### Stuff-awareness and generated defs: both done
 
-A patch writes one value onto a ThingDef, so a plasteel knife and a wooden
-knife report identical labor content — while RimWorld's own Market Value and
-Work to Make, on the same card, vary by stuff. The plasteel knife above
-reads $285 and 66 work to make against a flat 30 work-s of fabrication.
+**The stat is stuff-aware.** `solver.py` treats stuff as a substitutable
+input and picks the cheapest, so the knife's solved 1,125 ticks of
+extraction is *obsidian's* — a plasteel knife was under-reporting its
+material by 6.7×. The patches now ship a **stuff-free base** and
+`GetValueUnfinalized` adds `costStuffCount ×` the stuff's own extraction
+labor, which is already patched onto Steel, Plasteel, Obsidian and the
+rest.
 
-**176 of 653 defs (27%) are stuffable**, so this is not a corner case. It is
-inherent to the XML-patch approach: `statBases` has no notion of stuff.
-Fixing it means computing the stat at request time from
-`req.Thing.Stuff` — a `StatWorker` job, and the assembly that would host it
-already exists. It belongs with the 104 generated meat defs as work the
-assembly newly makes cheap.
+The subtraction has to reproduce the solver's choice exactly, so
+`make_mod.py` recomputes it and the identity was checked across all **174**
+stuffable defs with a `costStuffCount`: none went negative. A knife's
+stuff-free extraction is **0.0** — a knife's extraction labor *is* its
+metal — so a plasteel knife should read `3 in-game h · 125 work-s · 7,500
+ticks` where it read `18.8 work-s · 1,125 ticks`.
+
+Fabrication is deliberately *not* stuff-scaled. RimWorld multiplies
+`WorkToMake` by a stuff factor (the plasteel knife shows 66 against a base
+30), and matching that is a separate refinement; folding it in alongside the
+material change would have made neither verifiable.
+
+**The 104 generated meat defs are reached.** They have no XML node, so no
+patch can touch them. `LaborContentTableDef` ships the solved figures and a
+`[StaticConstructorOnStartup]` writes them onto the defs, logging how many
+applied. Shipping the numbers rather than re-deriving them keeps generated
+and patched defs from drifting apart.
+
+### The expansion gating is correct, and here is the proof
+
+`PatchOperationFindMod` calls `ModLister.HasActiveModWithName`, which
+compares against `ModMetaData.Name` — and for official DLC that returns
+`ExpansionDef.label`, not the About.xml name (the DLCs have no `<name>` at
+all). Those labels are exactly `Royalty`, `Ideology`, `Biotech`, `Anomaly`,
+`Odyssey`, which is what the patches ask for.
+
+One caveat: `label` is translatable, so a non-English install may not match.
+Untested.
 
 ### The expansion split never loaded, and why nothing caught it
 

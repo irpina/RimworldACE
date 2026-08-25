@@ -13,6 +13,12 @@
 # source by hash. What can be checked is its *content*, which is what
 # verify.py does and what this script runs afterwards.
 #
+# CS1684 is suppressed and nothing else is. RimWorld's assembly
+# references System.Span<T>, which the .NET Framework mscorlib this
+# compiler binds against does not define. We never touch those types;
+# the warning is about a reference we do not follow. Everything else
+# is still an error.
+#
 # Usage:  sh mod/Source/build.sh  [path to RimWorld]
 set -e
 
@@ -42,10 +48,12 @@ mkdir -p "$ROOT/mod/Assemblies"
     -optimize+ \
     -nologo \
     -warnaserror+ \
+    -nowarn:1684 \
     -out:"$(cygpath -w "$ROOT/mod/Assemblies/SocialProduction.LaborContent.dll")" \
     -reference:"$(cygpath -w "$MANAGED/Assembly-CSharp.dll")" \
     -reference:"$(cygpath -w "$MANAGED/UnityEngine.CoreModule.dll")" \
-    "$(cygpath -w "$ROOT/mod/Source/LaborContent/StatWorker_LaborContent.cs")"
+    "$(cygpath -w "$ROOT/mod/Source/LaborContent/StatWorker_LaborContent.cs")" \
+    "$(cygpath -w "$ROOT/mod/Source/LaborContent/GeneratedDefs.cs")"
 
 echo "built mod/Assemblies/SocialProduction.LaborContent.dll"
 

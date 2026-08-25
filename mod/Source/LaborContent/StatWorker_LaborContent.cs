@@ -36,6 +36,50 @@ namespace SocialProduction.LaborContent
         private const float TicksPerWorkSecond = 60f;
         private const float TicksPerInGameHour = 2500f;
 
+        private static StatDef extractionStat;
+
+        /// <summary>
+        /// Add the labor in the stuff the thing is actually made of.
+        ///
+        /// The patches ship a *stuff-free* base, because the offline solver
+        /// treats stuff as a substitutable input and picks the cheapest —
+        /// so a knife's solved figure is obsidian's, and a plasteel knife
+        /// would otherwise report material costs 6.7x too low. statBases
+        /// has no notion of stuff, so the arithmetic has to happen here.
+        ///
+        /// Only extraction is stuff-dependent: fabrication is the thing's
+        /// own work, which the solver already reports stuff-free. Stuffs
+        /// are not themselves stuffable, so reading a stuff's own
+        /// extraction labor cannot recurse.
+        /// </summary>
+        public override float GetValueUnfinalized(
+            StatRequest req, bool applyPostProcess)
+        {
+            float value = base.GetValueUnfinalized(req, applyPostProcess);
+            if (extractionStat == null)
+            {
+                extractionStat = DefDatabase<StatDef>.GetNamedSilentFail(
+                    "SNLT_ExtractionLabor");
+            }
+            if (stat != extractionStat)
+            {
+                return value;
+            }
+            ThingDef stuff = req.StuffDef;
+            if (stuff == null)
+            {
+                return value;
+            }
+            ThingDef thing = req.Def as ThingDef;
+            if (thing == null || thing.costStuffCount <= 0)
+            {
+                return value;
+            }
+            return value
+                + thing.costStuffCount
+                    * stuff.GetStatValueAbstract(extractionStat);
+        }
+
         /// <summary>
         /// Decide visibility ourselves, because the base cannot.
         ///

@@ -26,11 +26,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CeremonialCultistMask"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>27.888</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>15.555</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CeremonialCultistMask"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>27.888</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>15.555</SNLT_ExtractionLabor><SNLT_FabricationLabor>33.333</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -38,11 +38,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CultistMask"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>38.888</SNLT_ExtractionLabor><SNLT_FabricationLabor>50.0</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.013</SNLT_ExtractionLabor><SNLT_FabricationLabor>50.0</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_CultistMask"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>38.888</SNLT_ExtractionLabor><SNLT_FabricationLabor>50.0</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.013</SNLT_ExtractionLabor><SNLT_FabricationLabor>50.0</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -62,11 +62,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_LabCoat"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>0.583</SNLT_ExtractionLabor><SNLT_FabricationLabor>83.333</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>83.333</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="Apparel_LabCoat"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>0.583</SNLT_ExtractionLabor><SNLT_FabricationLabor>83.333</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>83.333</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -182,11 +182,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrayDoor"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>9.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>14.167</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>14.167</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrayDoor"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>9.375</SNLT_ExtractionLabor><SNLT_FabricationLabor>14.167</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>14.167</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
@@ -194,11 +194,11 @@
           <success>Always</success>
           <match Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrayWall"]/statBases</xpath>
-            <value><SNLT_ExtractionLabor>1.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>2.25</SNLT_FabricationLabor></value>
+            <value><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>2.25</SNLT_FabricationLabor></value>
           </match>
           <nomatch Class="PatchOperationAdd">
             <xpath>/Defs/ThingDef[defName="GrayWall"]</xpath>
-            <value><statBases><SNLT_ExtractionLabor>1.875</SNLT_ExtractionLabor><SNLT_FabricationLabor>2.25</SNLT_FabricationLabor></statBases></value>
+            <value><statBases><SNLT_ExtractionLabor>0.0</SNLT_ExtractionLabor><SNLT_FabricationLabor>2.25</SNLT_FabricationLabor></statBases></value>
           </nomatch>
         </li>
         <li Class="PatchOperationConditional">
