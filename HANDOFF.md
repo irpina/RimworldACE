@@ -229,7 +229,9 @@ Constraints:
 Validated scope:
 
 - 543 XML-backed defs can be patched;
-- all 543 XPath targets were previously validated;
+- all 543 XPath targets were validated against the def database — note that
+  this is an *ownership* check, not a load check, and the distinction cost
+  three weeks (see below);
 - 104 generated meat defs have no XML node, so no patch can reach them.
   This was a v1.1 gap while the mod was XML-only; now that it carries an
   assembly it is a short `StaticConstructorOnStartup` that writes the two
@@ -244,7 +246,8 @@ Stage 0 commits. Preserve them:
 - the old combined `mod/Patches/SNLT_LaborContent.xml` is removed;
 - six generated patch files replace it;
 - expansion files use `PatchOperationFindMod` with expansion display names;
-- all six patch files contain 543 unique operations in total;
+- all six patch files contain 543 unique operations in total, and
+  `make_mod.py` now refuses to write them if they are not load-shaped;
 - `About.xml` now uses the public name **Labor Content** and a parka-led
   description;
 - the fabrication stat description says “several times,” not an unqualified
@@ -324,6 +327,35 @@ kind of thing. With the header carrying the context the labels shortened to
 Still open: whether the *multi-unit* rendering is right, which has never
 actually been seen (see "Deployment" below), and whether the expansion-split
 patches load cleanly under every combination of official expansions.
+
+### The expansion split never loaded, and why nothing caught it
+
+The five expansion patch files applied **nothing** from the day they were
+generated until 2026-08-25. Only Core's 281 defs were ever patched; the 262
+defs belonging to Royalty, Ideology, Biotech, Anomaly and Odyssey were not.
+
+The cause is one element name. A direct child of `<Patch>` must be
+`<Operation>`, but an entry in a `PatchOperationSequence`'s `<operations>`
+list is an ordinary list item and must be `<li>`. The generator emitted
+`<Operation>` in both places. Core has no `PatchOperationFindMod` wrapper,
+so Core was correct by accident and the bug was invisible in the only file
+anybody looked at closely.
+
+RimWorld says so plainly — *"List item found with name Operation that is not
+`<li>`"*, five errors, counts 27/55/63/50/67, exactly the five files' def
+counts — but only in the log, and only at load.
+
+**Everything the project checked was true and none of it was the right
+check.** The XML parsed. The XPaths resolved against the def database. The
+def counts reconciled to 543. All of that can hold while the file applies
+nothing, because the failure is in how RimWorld deserializes a list, which
+no amount of parsing or counting can see.
+
+`make_mod.py` now validates structure after every write and refuses to ship:
+root must be `<Patch>`, its children must be `<Operation>`, `<operations>`
+entries must be `<li>` carrying a `Class`, and plain string lists like
+`<mods><li>Anomaly</li></mods>` are deliberately exempt. Reintroducing the
+exact shipped bug makes it refuse.
 
 ### Deployment: junction, not a copy
 
