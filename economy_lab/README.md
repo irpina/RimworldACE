@@ -182,7 +182,7 @@ These are provisional gameplay targets, not empirical elasticity claims.
 
 ## Scope of the frozen baseline
 
-`behavior_baseline.json` freezes 114 metrics: the original thirteen yayo
+`behavior_baseline.json` freezes 134 metrics: the original thirteen yayo
 metrics, forty upstream observations of chemfuel and psychoid leaves during
 the glut and producer-loss shocks, twelve labor/subsistence observations
 (equilibrium employment, wage, rate of surplus value, meal settlement, and
@@ -198,16 +198,21 @@ uniform labor-time rate), and fourteen price-of-production observations
 (the uniform profit rate, the basics count, each commodity's production
 price against meals, against its labor value and against its authored
 price, the aggregate profit-over-surplus ratio, and the profit rate
-after the wage-good technique change). The reporter remains
-observational; the invariant tests protect correctness.
+after the wage-good technique change), and twenty subsistence-basket
+observations (the basket's labor and money cost, its share of the
+working day, the workers one provisioner's day feeds, the two new wage
+goods' production prices and money rates, the rank-one profit rate the
+price system now departs from, and the generous-basket bound). The
+reporter remains observational; the invariant tests protect
+correctness.
 
-The current reference describes the model with the classical price system
-computed beside it. Its design and results are in
-`docs/26-prices-of-production-design.md` and
-`docs/27-prices-of-production-results.md`; the layers beneath it are in
-docs/13–24. Neither of the last two sessions moved a behavioral metric:
-fixed capital was carved out of the operating overhead rather than added
-to it, and prices of production are an observation with no feedback.
+The current reference describes the model with an enlarged subsistence
+basket — food, clothing and medicine. Its design and results are in
+`docs/28-enlarged-subsistence-basket-design.md` and
+`docs/29-enlarged-subsistence-basket-results.md`; the layers beneath it
+are in docs/13–27. This is the first session in three to move a
+behavioral metric, and it moved 66 of them: the wage rises 39.9% and
+every ratio built on the value of labor-power falls about 30%.
 
 ## Intentionally absent from this slice
 
@@ -217,9 +222,13 @@ to it, and prices of production are an observation with no feedback.
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices
   never knew about (docs/24). Prices of production are now *computed*
-  beside the authored ones but deliberately not adopted: a meals-only
-  basket puts the uniform profit rate at 38 and the derived prices are
-  unusable until the basket is enlarged (docs/27);
+  beside the authored ones but deliberately not adopted: the uniform
+  profit rate is 24.6 per production period and yayo prices at 38.7×
+  its authored ratio to meals. Enlarging the basket halved that and
+  did not fix it (docs/29);
+- turnover: profit is charged against one day's flow while the model
+  holds twenty days of stock, which is the leading explanation for the
+  profit rate's magnitude and the next thing to test;
 - a capital-goods sector: building capacity spends silver but consumes no
   material;
 - equalization of profit rates across sectors — computed, not adopted;
@@ -230,7 +239,7 @@ to it, and prices of production are an observation with no feedback.
 - credit and bankruptcy;
 - capacity depreciation or mothballing;
 - individual producer cash accounts and transfer pricing;
-- more than four commodities or two regions;
+- more than six commodities or two regions;
 - RimWorld runtime integration.
 
 The next slice should derive prices of production from the technical

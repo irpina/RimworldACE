@@ -4,8 +4,8 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `e2e2cae` (prices of production, observation only)
-**Behavioral baseline:** `0b96285` (114 metrics: 14 new observations, nothing refreshed)
+**Latest Stage 0 model commit:** `6d020b2` (the enlarged subsistence basket)
+**Behavioral baseline:** `20bf95a` (134 metrics: 66 refreshed + 20 new observations)
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -73,7 +73,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 patch operations across six files, XML-only, validated | the in-game visual pass (display units, info-card ordering) — needs a human looking at real items; 104 generated meat defs need C# to reach |
-| **Stage 0 lab** (`economy_lab/`) | 111 tests, 114 frozen metrics, three closing ledgers, a classical price system, four commodities and two regions | roughly three to five more economic sessions, then a scale test |
+| **Stage 0 lab** (`economy_lab/`) | 124 tests, 134 frozen metrics, three closing ledgers, a classical price system, six commodities and two regions | roughly three to five more economic sessions, then a scale test |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -102,12 +102,15 @@ rather than accounting, and neither has been started.
 ### Remaining phases
 
 **Phase A — finish the economics** (~3–5 sessions). Prices of production
-is **done** (docs/27) and reordered what follows it: the enlarged
-subsistence basket is now a prerequisite rather than a caveat, because
-a meals-only basket makes the uniform profit rate 38 and the derived
-prices unusable. Then a capital-goods sector; exit and capacity
-depreciation; monopoly rent. Optionally credit and bankruptcy. Then
-re-run the stale sensitivity sweep.
+and the enlarged subsistence basket are both **done** (docs/27,
+docs/29). The basket turned out *not* to be what stood between the
+model and a usable price system — one provisioner's day feeds 39
+workers on RimWorld's own numbers, so no defensible bundle brings the
+profit rate near 1. The leading candidate is now **turnover**: the
+model charges profit against a daily flow while holding twenty days of
+stock. Then a capital-goods sector; exit and capacity depreciation;
+monopoly rent. Optionally credit and bankruptcy. Then re-run the stale
+sensitivity sweep.
 
 **Phase B — scale test** (~2 sessions, and genuinely risky). The lab is four
 commodities and two regions. RimWorld is ~654 producible defs and ~100
@@ -360,6 +363,14 @@ Locations:
 - `docs/17-labor-power-and-surplus-design.md` — the wage relation: subsistence
   basket, labor supply, surplus ledger, treatment of the old unit cost, and
   the exact-stationarity floating-point engineering;
+- `docs/28-enlarged-subsistence-basket-design.md` — clothing and
+  medicine from the closed analysis, the powered tailoring bench that
+  makes chemfuel basic, and the prediction that this would *not* be
+  enough, recorded before it was measured;
+- `docs/29-enlarged-subsistence-basket-results.md` — every ratio built
+  on v falls 30% and the value rate of profit 2%; the rank-one identity
+  breaks; and the constraint is RimWorld's productivity, not the
+  bundle;
 - `docs/26-prices-of-production-design.md` — the classical eigen-system,
   the physical wage closure, the omission of fixed capital, and the
   hand-derived predictions recorded before any code existed;
@@ -638,7 +649,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 111 tests pass;
+- all 124 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -736,7 +747,7 @@ Current frozen headline metrics include:
 - arbitrage exports: **11 units**;
 - producer-loss peak: **38.630290** on day 119;
 - 80% capacity recovery: **75 days / 5 quadrums**;
-- equilibrium price range: **0** in both regions, all four commodities.
+- equilibrium price range: **0** in both regions, all six commodities.
 
 Current upstream headline observations include:
 
@@ -923,9 +934,10 @@ Steps 1–10 are **done**.
 
 **Scope note:** the steps below are the *economics* backlog only. For where
 they sit against the whole mod suite — the runtime port, the gameplay layer,
-and the untested scale question — see "Distance to the full suite" above,
-which also recommends running the scale test immediately after prices of
-production rather than working through the rest of this list first.
+and the untested scale question — see "Distance to the full suite" above.
+The scale test should jump the queue once the economics reaches a natural
+stopping point; after turnover (step 13) would be a defensible place to
+stop.
 
 11. ~~Prices of production.~~ Done as an observation, and the result is
     negative in a way that reorders everything behind it. The classical
@@ -944,21 +956,52 @@ production rather than working through the rest of this list first.
     Nothing feeds back. Prices, costs and the order book are untouched and
     the frozen reference did not move by a digit.
 
-12. **Next economic feature — an enlarged subsistence basket.** Promoted
-    from third place by `docs/27`. It was already the single largest
-    caveat on every headline number: s/v 38.30, c/v 20.67 and the value
-    rate of profit 1.77 are all inflated because the basket is meals-only
-    and the value of labor-power is understated. It is now also the thing
-    blocking the price system, since `r = T / (b · l) − 1` makes the
-    profit rate the reciprocal of the basket's share of the working day —
-    2.5% here, hence 38. A defensible `r` near 1 would need a basket
-    embodying half a working day, which is 39 meals unless the basket
-    holds shelter, clothing, medicine and recreation as `docs/17`
-    intended.
+12. ~~An enlarged subsistence basket.~~ Done, and it settled the question
+    `docs/27` opened by answering it in the negative. Clothing
+    (`Apparel_BasicShirt`, 1620 ticks) and medicine (`MedicineHerbal`,
+    400) join meals, every figure from the closed analysis. Necessary
+    labor rises from 2.5% to **3.6%** of the working day; s/v falls
+    **38.30 → 26.71**, c/v **20.67 → 14.42**, and the value rate of profit
+    only **1.768 → 1.733**, because `c` is fourteen times `v` either way.
+    The uniform profit rate falls **38.34 → 24.62** and yayo's deviation
+    from its authored price **71.6× → 38.7×** — halved, and still
+    unusable (docs/29).
 
-    It is also the cheapest of the remaining items and the only one that
-    makes every existing number more trustworthy rather than adding a new
-    mechanism.
+    Two structural gains beyond the numbers. The tailors' bench is
+    powered, which makes **chemfuel a basic commodity** and breaks the
+    rank-one identity that had kept `r` exactly equal to s/v; the model
+    has reached the general Sraffa case, with a control scenario that
+    restores the identity when the link is removed. And `docs/24`'s
+    refusal to read the money/labor agreement for meals as evidence can
+    be **retired**: with three goods in the basket that identity
+    dissolves and the wage goods straddle the labor-time rate instead.
+
+    **The caveat this was meant to remove is only partly removed, and the
+    reason is a finding rather than a shortfall.** `r ≈ T / (basket
+    labor) − 1`, and one provisioner's working day feeds **39.3 workers**
+    on RimWorld's own numbers. A profit rate near 1 needs a basket
+    embodying half a working day — 39 meals a day. The
+    `generous_basket` scenario bounds it: an indefensible bundle still
+    leaves s/v above eleven. The rate of surplus value this project
+    reports is roughly the game's own.
+
+13. **Next economic feature — turnover.** The leading candidate for the
+    price system's magnitude problem, and the one thing that changes `r`
+    by the right order for a defensible reason. `r` is a rate per
+    *production period* and the model's period is one day, but the
+    model's own inventory targets are twenty days of throughput — so the
+    capital actually tied up is roughly twenty times the daily flow the
+    price system charges profit against. A first-order correction puts
+    `1 + r` near `25.62 / 20`, so a profit rate around **0.28 per
+    turnover period** rather than 24.6 per day.
+
+    That arithmetic is an envelope in `docs/29` §10, not a measurement.
+    It needs its own design document and its own scorecard, and it is
+    exactly the shape of estimate `docs/22` got wrong. But unlike the
+    basket it does not require inventing consumption nobody would
+    defend, and the distinction it rests on — capital *advanced* as a
+    stock against capital *consumed* as a flow — is one the model already
+    has both halves of.
 
     Still open behind it:
 
@@ -967,7 +1010,7 @@ production rather than working through the rest of this list first.
     spends silver without consuming anything, which is the last place
     something appears from nothing. Since `docs/27` it has a second
     reason to exist: it is what would let fixed capital into the price
-    system and close the 0.12% gap between `r` and s/v honestly.
+    system and close the gap between `r` and s/v honestly.
 
     *Capacity depreciation and mothballing*, so that competition is for
     survival and not only for orders. Today a producer that loses the
@@ -978,10 +1021,11 @@ production rather than working through the rest of this list first.
     resting at the mix average. Time-based depreciation belongs here too,
     since idle capacity is its subject.
 
-    *A turnover period.* `docs/27` reports `r` as a rate per production
-    period, and the model's period is one day, so a daily 38 cannot be
-    compared to any empirical profit rate at all. Any profit rate shown
-    to a player needs an explicit turnover time first.
+    *Recreation in the basket*, deliberately deferred in `docs/28` §2.2.
+    The obvious candidate is yayo, which would make the model's own final
+    good basic and create a wage-price loop through the commodity every
+    scenario is measured on. Worth doing on its own, not alongside
+    something else.
 
     Other candidates: labor content of resource grades; wage deviations
     from the value of labor-power; absolute rent; credit and bankruptcy.
@@ -1036,8 +1080,11 @@ it is not intended for per-commit testing.
 - equalization of profit rates across sectors: *computed* as an
   observation since `docs/27`, but not adopted — the cost anchor still
   freezes each sector's calibrated rate of profit rather than
-  equalizing it, and the derived prices are not usable until the
-  subsistence basket is enlarged;
+  equalizing it. Enlarging the basket halved the deviations without
+  making them usable (docs/29); turnover is the next candidate;
+- turnover: the price system charges profit against one day's flow
+  while the model holds twenty days of stock, so the uniform profit
+  rate is a daily rate on an advance that is not advanced for a day;
 - labor content of resource grades: a poorer deposit costs more silver but
   no more labor, so depletion moves cost and rent but not value;
 - joint products in an actual scenario — the mass apportionment rule is
@@ -1046,9 +1093,12 @@ it is not intended for per-commit testing.
   absolute (monopoly) rent is still absent;
 - ~~labor supply and wages~~ — done: fixed regional pool, wage at the value
   of labor-power, surplus ledger;
-- ~~the subsistence basket~~ — done as the meals commodity; the basket is
-  deliberately minimal (meals only), so the value of labor-power is
-  understated and s/v overstated (docs/17 §5);
+- ~~the subsistence basket~~ — done, and enlarged to food, clothing and
+  medicine (docs/29). Necessary labor is 3.6% of the working day rather
+  than 2.5%, so the value of labor-power is still understated but the
+  remaining understatement is small: shelter is under 20 ticks a
+  worker-day and recreation was deferred deliberately. s/v is 26.71 and
+  the honest reading is that it is roughly RimWorld's own figure;
 - wage deviations from value: bargaining, the reserve army, worker mobility;
 - credit, bankruptcy, and liquidity-constrained consumption (workers are
   cash-constrained on the basket, but nothing else is);
@@ -1057,7 +1107,7 @@ it is not intended for per-commit testing.
 - individual producer cash accounts and transfer pricing (wages are paid
   from the regional pool; producer-level exploitation accounts need
   producer-level cash);
-- more than four commodities or two regions;
+- more than six commodities or two regions;
 - RimWorld save/UI/runtime integration.
 
 Production consumes accounted inventory and pays a cost floor that now

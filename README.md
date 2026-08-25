@@ -230,9 +230,9 @@ designed in a committed document before it was implemented, measured against
 a frozen behavioral reference afterward, and the predictions were scored
 honestly whether or not they held.
 
-The circuit is four commodities across two regional markets — three goods in
-a forking production chain, plus the subsistence good that reproduces the
-workers who make them:
+The circuit is six commodities across two regional markets — three goods in
+a forking production chain, plus the food, clothing and medicine that
+reproduce the workers who make them:
 
 ```
 chemfuel ──┬──> psychoid farm ──> psychoid leaves ──> drug lab ──> yayo
@@ -276,9 +276,9 @@ provisioning technique with half the living labor lowers the social value of
 the wage good, and **s/v rises to 43.944 in both regions — including the one
 that adopted nothing** — with the working day and the basket held fixed and
 asserted in tests. That is relative surplus value, emerging from the graph
-rather than from a parameter. The magnitude carries a stated caveat: the
-basket is meals-only, so the value of labor-power is understated and s/v
-correspondingly overstated.
+rather than from a parameter. (Both figures are from the meals-only basket
+the model carried until `docs/29`; with clothing and medicine in it, s/v is
+26.71 and rises to 28.70.)
 
 **3. The overhead is the seam, measured from the inside.** RimWorld's
 authored price for a meal is 15 silver. Inputs, wages, and the depreciation
@@ -305,12 +305,18 @@ between RimWorld's `MarketValue` and anything the model can account for.
 
 The classical answer to that wedge is now computed. Folding the subsistence
 basket into the input matrix and solving `p = (1 + r)Mp` gives a price system
-with no authored magnitude anywhere in it — and the result is that **meals is
-the only basic commodity**, so the uniform profit rate reduces to a corn model
-at **38.34** and yayo prices at **71.6×** its authored ratio to meals. The
-blocker is not the price theory but the meals-only subsistence basket, which
-makes necessary labor 2.5% of the working day. It has stopped being a caveat
-and become the next piece of work.
+with no authored magnitude anywhere in it — a uniform profit rate that is an
+outcome rather than a coefficient, and Sraffa's basics theorem deciding which
+sector's technique can move it.
+
+It was blamed on the meals-only basket, and that was **wrong**. Enlarging the
+basket to food, clothing and medicine — every figure from the closed analysis
+— cut the rate of surplus value from 38.30 to 26.71 and yayo's deviation from
+its authored price from 71.6× to 38.7×, and left both unusable. The real
+constraint is RimWorld's own productivity: **one provisioner's working day
+feeds 39.3 workers**, so necessary labor is 3.6% of the day and no defensible
+bundle changes that by an order of magnitude. The rate of surplus value this
+project reports is not a calibration artifact. It is the game's.
 
 ### Design and results documents
 
@@ -330,18 +336,20 @@ results document scoring the predictions afterward.
 | [21](docs/21-competitive-transmission-design.md) · [22](docs/22-competitive-transmission-results.md) | Competitive transmission: the cost-aware price anchor and the cost-weighted order book |
 | [23](docs/23-constant-capital-and-the-overhead-design.md) · [24](docs/24-constant-capital-and-the-overhead-results.md) | Fixed capital, the value ledger, and what the operating overhead actually is |
 | [26](docs/26-prices-of-production-design.md) · [27](docs/27-prices-of-production-results.md) | Prices of production: Sraffa's basics, the corn-model profit rate, and the aggregate invariance failure |
+| [28](docs/28-enlarged-subsistence-basket-design.md) · [29](docs/29-enlarged-subsistence-basket-results.md) | Clothing and medicine in the basket, and why the constraint was never the basket |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 111 acceptance and invariant tests
+python -m unittest discover -s tests      # 124 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
-python -m economy_lab.baseline            # 114 frozen metrics vs current
+python -m economy_lab generous-basket     # the basket, pushed past defensible
+python -m economy_lab.baseline            # 134 frozen metrics vs current
 ```
 
-`behavior_baseline.json` freezes 114 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 134 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

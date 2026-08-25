@@ -6,7 +6,7 @@ exists, what is next, what not to break. This is the argument: what each layer
 was for, what it measured, and what it got wrong.
 
 The detailed record lives in the design/results pairs, `docs/06` through
-`docs/27`. Every feature was designed in a committed document *before* it was
+`docs/29`. Every feature was designed in a committed document *before* it was
 implemented, and every prediction was scored afterward whether or not it held.
 
 ---
@@ -52,6 +52,7 @@ Each layer removed something that was appearing from nothing.
 | 9 | cost could not reach price | cost-aware anchor; the order book goes to the cheaper producer | 21–22 |
 | 10 | fixed capital transferred nothing; the overhead was unexplained | capital depreciates into value; the overhead is measured and named | 23–24 |
 | 11 | the profit rate was frozen per sector by calibration | a uniform rate is solved from the technique and the real wage | 26–27 |
+| 12 | workers ate and wore and needed nothing else | the basket is food, clothing and medicine | 28–29 |
 
 ---
 
@@ -192,10 +193,11 @@ two-stage input chain twice, pricing a unit of yayo at **a hundred meals**
 where RimWorld says one and a half.
 
 Nothing is wrong with the arithmetic. The input to it is. `r` is the
-reciprocal of the basket's share of the working day, and the basket is meals
-only, so necessary labor is 2.5% of the day. **The caveat that has been
-attached to every headline number since `docs/17` has stopped being a caveat
-and become a prerequisite.**
+reciprocal of the basket's share of the working day, and the basket was meals
+only, so necessary labor was 2.5% of the day. That looked like the
+prerequisite, and `docs/27` reordered the backlog to fix it first.
+
+**It was not the prerequisite.** See the next section.
 
 The same session measured the transformation problem at the aggregate level,
 beside `docs/24`'s sectoral version. Normalized so that total price equals
@@ -213,6 +215,62 @@ rate *bit-identical*.
 
 ---
 
+## What the basket turned out not to be
+
+`docs/29` enlarged the basket to food, clothing and medicine, with every
+figure from the closed analysis: `Apparel_BasicShirt` at 1,620 embodied
+ticks, `MedicineHerbal` at 400, quantities from a cold-biome wardrobe
+replaced annually and 7.5 doses a year.
+
+Necessary labor rose from 2.5% to 3.6% of the working day. Every ratio
+built on the value of labor-power fell by about 30%:
+
+| quantity | meals only | enlarged |
+|---|---:|---:|
+| rate of surplus value s/v | 38.30 | **26.71** |
+| organic composition c/v | 20.67 | **14.42** |
+| **value rate of profit s/(c+v)** | 1.768 | **1.733** |
+| uniform profit rate r | 38.34 | **24.62** |
+| yayo against its authored price | 71.6× | **38.7×** |
+
+Two things to read off that table. The value rate of profit moved **2%**
+where the other ratios moved 30%, because it has constant capital in the
+denominator too and `c` is fourteen times `v` either way — enlarging the
+basket repairs two of the three headline ratios and barely touches the
+third. And halving yayo's deviation still leaves a unit of yayo pricing at
+fifty-four meals where RimWorld says one and a half.
+
+**The constraint was never the basket.** `r ≈ T / (basket labor) − 1`, so a
+profit rate near 1 needs a bundle embodying half a working day. One
+provisioner's day feeds **39.3 workers** on RimWorld's own numbers, which
+means closing that gap in meals alone takes thirty-nine meals a day. A
+deliberately indefensible `generous_basket` scenario — three meals, half a
+garment and half a dose — still lands at s/v 11.4.
+
+So the rate of surplus value this project reports is not a calibration
+artifact to tune away. **It is RimWorld's**, and the colony that accumulates
+wealth implausibly fast does so because its labor is implausibly productive.
+That is a statement about the game rather than about the laboratory, and it
+is the closest thing the arc has produced to a claim about the artifact
+under study.
+
+The session also reached the **general Sraffa case** for the first time. The
+tailors' bench is powered, so chemfuel enters a wage good and becomes basic —
+and that one material input breaks the identity that had made the uniform
+profit rate exactly the rate of surplus value. `r` falls 8% below the
+rank-one figure, because the price system marks material inputs up by `1 + r`
+and the value system does not. A control scenario removing the link restores
+the identity exactly.
+
+And one caveat could finally be **retired**. `docs/24` reported that the
+money and labor rates of surplus value agreed for meals, and refused to call
+it evidence, since under a meals-only basket both were the same expression in
+the same wage. With three goods the derivation no longer closes: garments
+realize 28.5 against a labor rate of 26.7, medicine 13.3, and meals land
+within 1.5% as a small real difference rather than a tautology.
+
+---
+
 ## Predictions that were wrong, and what they taught
 
 Kept because they are the most informative part of the record.
@@ -226,8 +284,14 @@ Kept because they are the most informative part of the record.
   arrives 56 days later, during the leaf *overshoot*. The anchor amplifies
   the cycle rather than damping the peak.
 - **Organic composition would be 2–4** (`docs/24`). It is **20.67** — high
-  because v is tiny, not because c is large. Necessary labor is 2.5% of the
-  working day, since the basket is meals-only.
+  because v is tiny, not because c is large. Necessary labor was 2.5% of the
+  working day under the meals-only basket, and is 3.6% under the enlarged
+  one, which brings c/v to 14.42 and no further.
+- **The enlarged basket would unblock the price system** (`docs/27`). It did
+  not, and `docs/28` said so in advance rather than discovering it
+  afterward. Recorded here as a wrong *reordering* rather than a wrong
+  number: the reasoning identified a real understatement and then assumed,
+  without checking the magnitude, that removing it would be enough.
 - **Upstream troughs would shallow** with the wage (`docs/18`). Unchanged:
   the farms were already fully idle before the trough. The cost floor moves
   *when idling begins*, not the floor of the overshoot.
@@ -241,35 +305,44 @@ Kept because they are the most informative part of the record.
 
 ---
 
-## The standing caveat on every headline number
+## The standing caveats
 
-The subsistence basket is **meals only**. A real reproduction bundle includes
-shelter, clothing, medicine, and recreation. So the value of labor-power is
-understated, and every ratio built on `v` — s/v 38.30, c/v 20.67, the value
-rate of profit 1.77 — is inflated by the same mechanism. Flagged since
-`docs/17`, and it remains the single largest caveat the project carries.
+**The basket is still not complete**, but the gap is now small and measured.
+Food, clothing and medicine are in; shelter is out because a bed and a room
+amortize to under 20 ticks a worker-day, an order of magnitude below the
+smallest component that *is* modelled; recreation is out because the obvious
+candidate is the model's own final good and putting it in the basket would
+create a wage-price loop through the commodity every scenario is measured on.
+So `v` is still understated, and every ratio built on it is still inflated —
+but by a bounded amount rather than an unknown one.
+
+**The profit rate is a rate per production period, and the period is a day.**
+`r = 24.62` cannot be compared to any empirical profit rate while the model
+advances capital for one day and holds twenty days of stock. This is now the
+largest single caveat the project carries, and the next thing to fix.
 
 ---
 
 ## Where it goes next
 
-**An enlarged subsistence basket**, promoted from third place by the price
-system's failure. It is the cheapest remaining item and the only one that
-makes every existing number more trustworthy rather than adding a new
-mechanism: s/v, c/v, the value rate of profit and now `r` all come down to
-defensible magnitudes in one change. A profit rate near 1 needs a basket
-embodying half a working day, which is 39 meals unless the basket holds
-shelter, clothing, medicine and recreation as `docs/17` intended it to.
+**Turnover.** The model charges profit against one day's flow while holding
+twenty days of stock, so the capital actually tied up is roughly twenty times
+the advance the price system sees. A first-order correction puts `1 + r` near
+`25.62 / 20`, a profit rate around 0.28 per turnover period rather than 24.6
+per day. That is an envelope rather than a measurement — the shape of
+estimate `docs/22` got wrong — but it is the first candidate that moves `r`
+by the right order for a defensible reason, and the distinction it rests on,
+capital advanced as a stock against capital consumed as a flow, is one the
+model already has both halves of.
 
 Behind it: a capital-goods sector, which building capacity needs anyway —
 silver is still spent without consuming material — and which is what would
-let fixed capital into the price system and close the 0.12% gap between `r`
-and s/v honestly. Then capacity depreciation and exit, so competition is for
-survival and not only for orders. And a turnover period, because `r` is a
-rate *per production period* and the model's period is one day, so a daily
-38 is not comparable to any empirical profit rate at all.
+let fixed capital into the price system and close the remaining gap between
+`r` and s/v honestly. Then capacity depreciation and exit, so competition is
+for survival and not only for orders. And recreation in the basket, which is
+worth doing on its own rather than alongside something else.
 
-**Current state:** 111 tests, 114 frozen metrics, four commodities, two
+**Current state:** 124 tests, 134 frozen metrics, six commodities, two
 regions, three closing ledgers, a classical price system computed beside the
 authored one, and an equilibrium that is still exactly stationary — a price
 range of exactly zero, in both regions, across four in-game years.
