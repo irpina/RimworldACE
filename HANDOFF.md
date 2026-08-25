@@ -6,7 +6,9 @@
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `7643fc4` (_allocate_orders tightened to the bit-identical limit)
 **Behavioral baseline:** `29e4627` (154 metrics: 5 structural scale observations, no timings)
-**Latest Labor Content commit:** `b3727f1` (multi-unit stat worker; packaging work committed)
+**Latest Labor Content commit:** `db769fd` (stuff-aware stats, generated defs, dendrovore graze fix)
+**Closed-analysis correction:** `db769fd` — `animals.py` `can_graze` now accepts `Dendrovore`;
+one def of 653 moved, `Meat_Alphabeaver` 717.7 → 5.2 ticks. `out/embodied_labor.csv` regenerated.
 **Sensitivity harness:** `f2c490c`  
 **Pre-process predictions:** `cae1ba2`  
 **Process design decisions:** `863ee42`  
@@ -318,18 +320,28 @@ five expansions loaded), and a second pass verified the chain arithmetic on a
 bolt-action rifle against the card's own rows: extraction 4,560 ticks is
 60 steel x 47.5 + 3 components x 570, and fabrication 27,000 ticks is the
 components' own 15,000 plus the rifle's 12,000 — which is the 200 shown in
-"Work to make". Verified earlier on a plasteel knife:
+"Work to make".
+
+**Everything below is confirmed in game**, on the final build:
 
 ```
-Labor content
-  Extraction labor     18.8 work-s · 1,125 ticks
-  Fabrication labor    30 work-s · 1,800 ticks
+Plasteel knife                        Alpha thrumbo meat
+  Extraction labor   3 in-game h · 125 work-s      0.5 ticks
+  Fabrication labor  1.58 in-game h · 66 work-s    0
 ```
 
-Confirmed in game: the `SNLT_LaborContent` section renders with its own
-header between Basics and Weapon; the values match the solve exactly; the
-U+00B7 separator renders rather than mojibake; and a `0` row is wanted
-rather than hidden. No errors in the log.
+- the `SNLT_LaborContent` section renders with its own header, between
+  Basics and the item's own category;
+- the U+00B7 separator renders rather than mojibake;
+- stuff-awareness works: the plasteel knife reads 125 work-s of extraction
+  where the flat figure was 18.8, and its fabrication of 66 matches "Work
+  to make: 66" on the same card — **both self-check identities close**;
+- the 104 generated meat defs carry values, including expansion ones
+  (alpha thrumbo is Odyssey);
+- the corrected Alphabeaver figure is right;
+- a `0` row is wanted rather than hidden, and the line fits at low
+  resolution;
+- no errors in the log.
 
 **At most two units are shown**, because three wrapped onto a second row on
 a rifle at 1080p. The unit dropped is always the least useful one present —
@@ -365,6 +377,56 @@ stuffed wall is not scaled by a factor meant for a weapon.
 The payoff is that **the card now checks against itself**: a plasteel knife
 reads 66 work-s of fabrication, and "Work to make" on the same card reads
 66.
+
+### What the two rows mean, and how to check one against the card
+
+The two stats are **disjoint and additive**; neither contains the other.
+
+- **Extraction labor** — all upstream mining, harvesting and butchery.
+  Vanilla shows this *nowhere*.
+- **Fabrication labor** — this thing's own work **plus all upstream
+  fabrication**. Cumulative up the chain.
+- RimWorld's **"Work to make"** is bench time for the final step only.
+
+So the identity that makes a card self-checking is:
+
+```
+fabrication row  −  ingredients' fabrication  =  "Work to make"
+```
+
+| | fabrication row | ingredients' fab | "Work to make" |
+|---|---:|---:|---:|
+| plasteel knife | 66 | 0 (plasteel is mined) | **66** ✓ |
+| bolt-action rifle | 450 | 250 (3 components) | **200** ✓ |
+
+The knife's two figures coincide only because plasteel requires no
+fabrication; the rifle shows the general case, where the row is more than
+double the card's number because someone had to make the components first.
+A plasteel knife's *total* embodied labor is 125 + 66 = **191 work-s**,
+against the 66 vanilla admits to.
+
+### How much vanilla hides — the mod's case, quantified
+
+Across all 653 solved defs:
+
+| | |
+|---|---:|
+| share of all embodied labor that is extraction | **22.0%** |
+| defs where extraction **exceeds** fabrication | **250 of 653 (38%)** |
+| defs that are pure extraction (`Work to make` absent or 0) | **175** |
+
+The average understates it. `ToolCabinet` says "Work to make 30" and
+embodies 188 work-s — **84% extraction**; `WaterproofConduit` is 93%;
+`SunLamp` 85%. The clean counter-example is stone blocks at 0% extraction,
+because chunks are free to pick up, so vanilla's figure there really is the
+whole story.
+
+This is the same seam `FINDINGS.md` measured from the other side. Vanilla
+shows **work** for the last step and **value** for everything, and
+`MarketValue` *does* recursively carry ingredient costs — so the price
+system prices extraction's contribution while the interface never shows the
+labor behind it. Putting the two rows side by side is what makes the split
+visible, and on 38% of items the hidden half is the larger half.
 
 ### Verifying the numbers: `check_labor.py`
 

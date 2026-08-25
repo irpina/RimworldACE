@@ -20,7 +20,11 @@ Adds two read-only stats to the info card of every producible thing: labor embod
 
 Each is shown three ways at once - in-game hours, work-seconds, and raw ticks - because embodied labor spans five orders of magnitude and no single unit reads well at both ends.
 
-The numbers are precomputed from the full production chain, from extraction outward. Market value never enters the calculation. Put the two side by side and a hidden seam becomes visible: RimWorld prices extraction labor several times above fabrication labor.
+The numbers are precomputed from the full production chain, from extraction outward. Market value never enters the calculation.
+
+Vanilla shows you "Work to make", which is bench time for the last step only - the mining and harvesting behind it appears nowhere. That is 22% of all the labor in the game, and on 250 of 653 producible things it is the larger half. A tool cabinet says "Work to make 30" and embodies 188 work-seconds.
+
+Put the two stats side by side and a hidden seam becomes visible: RimWorld prices extraction labor several times above fabrication labor.
 
 No gameplay changes, no Harmony, no save impact. Read-only throughout: nothing here alters a def, a price, or a recipe. One small assembly, whose entire job is rendering a number in three units, because RimWorld's XML can only format one.
 
