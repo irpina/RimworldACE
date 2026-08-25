@@ -66,6 +66,54 @@
       "unit": "silver",
       "value": 0.0
     },
+    "equilibrium.production.basic_count": {
+      "unit": "commodities",
+      "value": 1.0
+    },
+    "equilibrium.production.chemfuel_over_value_ratio": {
+      "unit": "ratio",
+      "value": 0.999383
+    },
+    "equilibrium.production.chemfuel_relative_to_meals": {
+      "unit": "ratio",
+      "value": 0.081967
+    },
+    "equilibrium.production.iterations": {
+      "unit": "count",
+      "value": 5.0
+    },
+    "equilibrium.production.profit_rate": {
+      "unit": "ratio",
+      "value": 38.344262
+    },
+    "equilibrium.production.psychoid_leaves_over_value_ratio": {
+      "unit": "ratio",
+      "value": 2.010609
+    },
+    "equilibrium.production.psychoid_leaves_relative_to_meals": {
+      "unit": "ratio",
+      "value": 0.312722
+    },
+    "equilibrium.production.total_profit_over_surplus": {
+      "unit": "ratio",
+      "value": 1.525917
+    },
+    "equilibrium.production.wage_per_tick": {
+      "unit": "silver",
+      "value": 0.00125
+    },
+    "equilibrium.production.yayo_over_authored_ratio": {
+      "unit": "ratio",
+      "value": 71.587987
+    },
+    "equilibrium.production.yayo_over_value_ratio": {
+      "unit": "ratio",
+      "value": 41.582978
+    },
+    "equilibrium.production.yayo_relative_to_meals": {
+      "unit": "ratio",
+      "value": 100.223182
+    },
     "equilibrium.rate_of_surplus_value": {
       "unit": "ratio",
       "value": 38.298137
@@ -389,6 +437,14 @@
     "technique_change.local.wage_rate": {
       "unit": "silver",
       "value": 29.857795
+    },
+    "technique_change.production.profit_rate": {
+      "unit": "ratio",
+      "value": 44.061921
+    },
+    "technique_change.production.profit_rate_gain": {
+      "unit": "ratio",
+      "value": 1.149114
     },
     "technique_change.value.meals_adopter_ticks": {
       "unit": "ticks",

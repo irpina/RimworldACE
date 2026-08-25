@@ -191,7 +191,92 @@ def collect_behavioral_metrics(
             depletion=depletion,
         )
     )
+    metrics.update(
+        _price_of_production_metrics(stable=stable, technique=technique)
+    )
     return metrics
+
+
+def _price_of_production_metrics(
+    *, stable: Economy, technique: Economy
+) -> Dict[str, Dict[str, object]]:
+    """Observe the classical price system (docs/26).
+
+    Newly observed quantities, not changed behavior: nothing here feeds
+    back into prices.  Relative to the wage good, because the eigenvector
+    fixes only relative prices.
+
+    Two of these are the session's result rather than its bookkeeping.
+    `yayo_over_authored_ratio` is how far a uniform profit rate carries a
+    two-stage input chain away from RimWorld's authored price, and
+    `total_profit_over_surplus` is how far Marx's second invariance
+    postulate misses once the first is imposed.
+    """
+    system = stable.prices_of_production(numeraire=MEALS)
+    aggregates = stable.production_price_aggregates()
+    prices = system["prices"]
+    values = stable.labor_values
+    changed = technique.prices_of_production(numeraire=MEALS)
+
+    def relative(commodity: str) -> float:
+        return prices[commodity] / prices[MEALS]
+
+    def value_ratio(commodity: str) -> float:
+        return values[commodity] / values[MEALS]
+
+    def authored_ratio(commodity: str) -> float:
+        return (
+            stable.commodities[commodity].reference_price
+            / stable.commodities[MEALS].reference_price
+        )
+
+    return {
+        "equilibrium.production.profit_rate": _metric(
+            system["profit_rate"], "ratio"
+        ),
+        "equilibrium.production.basic_count": _metric(
+            float(len(system["basics"])), "commodities"
+        ),
+        "equilibrium.production.iterations": _metric(
+            float(system["iterations"]), "count"
+        ),
+        "equilibrium.production.wage_per_tick": _metric(
+            system["wage"], "silver"
+        ),
+        "equilibrium.production.chemfuel_relative_to_meals": _metric(
+            relative(CHEMFUEL), "ratio"
+        ),
+        "equilibrium.production.psychoid_leaves_relative_to_meals": _metric(
+            relative(LEAVES), "ratio"
+        ),
+        "equilibrium.production.yayo_relative_to_meals": _metric(
+            relative(YAYO), "ratio"
+        ),
+        "equilibrium.production.chemfuel_over_value_ratio": _metric(
+            relative(CHEMFUEL) / value_ratio(CHEMFUEL), "ratio"
+        ),
+        "equilibrium.production.psychoid_leaves_over_value_ratio": _metric(
+            relative(LEAVES) / value_ratio(LEAVES), "ratio"
+        ),
+        "equilibrium.production.yayo_over_value_ratio": _metric(
+            relative(YAYO) / value_ratio(YAYO), "ratio"
+        ),
+        "equilibrium.production.yayo_over_authored_ratio": _metric(
+            relative(YAYO) / authored_ratio(YAYO), "ratio"
+        ),
+        "equilibrium.production.total_profit_over_surplus": _metric(
+            aggregates["total_profit"] / aggregates["total_surplus"], "ratio"
+        ),
+        # The wage good's technique is the only one that can move r, so a
+        # cheaper meal raises the uniform profit rate exactly as it raises
+        # the rate of surplus value (docs/20).
+        "technique_change.production.profit_rate": _metric(
+            changed["profit_rate"], "ratio"
+        ),
+        "technique_change.production.profit_rate_gain": _metric(
+            changed["profit_rate"] / system["profit_rate"], "ratio"
+        ),
+    }
 
 
 def _employment_series(economy: Economy, region: str) -> list:
