@@ -10,6 +10,7 @@ from .scenarios import (
     cost_competition,
     equilibrium,
     generous_basket,
+    perishable_meals,
     input_shortage,
     producer_loss,
     regional_glut,
@@ -31,6 +32,7 @@ SCENARIOS = {
     "technique-change": technique_change,
     "cost-competition": cost_competition,
     "generous-basket": generous_basket,
+    "perishable-meals": perishable_meals,
 }
 
 

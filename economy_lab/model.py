@@ -550,6 +550,7 @@ class Economy:
         capital_service_life_days: float = 600.0,
         production_price_tolerance: float = 1e-12,
         production_price_max_iterations: int = 1000,
+        production_period_days: float = 1.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -587,6 +588,11 @@ class Economy:
         self.capital_service_life_days = capital_service_life_days
         self.production_price_tolerance = production_price_tolerance
         self.production_price_max_iterations = production_price_max_iterations
+        if production_period_days <= 0.0:
+            raise ValueError("production_period_days must be positive")
+        #: How long one run occupies its capital before the product
+        #: exists.  One `step()`, which is what the runtime does.
+        self.production_period_days = production_period_days
         #: Social labor values in work-ticks, solved from the process graph.
         #: Distinct from ``Commodity.labor_value``, which stays the authored
         #: FINDINGS.md figure.  See docs/19.
@@ -1087,46 +1093,79 @@ class Economy:
                     f"{missing}, which nothing produced"
                 )
 
-        prices = {
+        # Turnover: capital is advanced for one production period plus the
+        # commodity's own inventory life, not for a single day (docs/30).
+        turnover = {
+            name: self.production_period_days
+            + self.commodities[name].target_inventory_days
+            for name in priced
+        }
+        longest = max(turnover.values())
+
+        seed = {
             name: max(self.labor_values.get(name, 0.0), EPSILON)
             for name in priced
         }
-        scale = sum(output[name] * prices[name] for name in priced)
-        prices = {name: value / scale for name, value in prices.items()}
+        scale = sum(output[name] * seed[name] for name in priced)
+        seed = {name: value / scale for name, value in seed.items()}
 
-        eigenvalue = 0.0
-        iterations = 0
-        for iterations in range(1, self.production_price_max_iterations + 1):
-            advanced = {
-                name: sum(
-                    quantity * prices[other]
-                    for other, quantity in matrix[name].items()
-                )
-                for name in priced
-            }
-            step = sum(output[name] * advanced[name] for name in priced)
-            if step <= EPSILON:
-                raise RuntimeError(
-                    "price of production solve degenerated: nothing is "
-                    "advanced to produce anything, so no rate of profit is "
-                    "defined"
-                )
-            revised = {name: advanced[name] / step for name in priced}
-            converged = abs(step - eigenvalue) <= self.production_price_tolerance and all(
-                abs(revised[name] - prices[name]) <= self.production_price_tolerance
-                for name in priced
+        def root(rate: float) -> Tuple[float, Dict[str, float], int]:
+            factor = {name: 1.0 + rate * turnover[name] for name in priced}
+            return self._perron_root(matrix, output, priced, seed, factor)
+
+        # Bisect on the rate at which the system exactly reproduces itself:
+        # the Perron root of diag(1 + r*tau) M is non-decreasing in r, since
+        # every entry is, so the root is unique where it exists.
+        if longest == min(turnover.values()):
+            # Uniform turnover is a scalar, not a diagonal: diag(1 + r*tau)
+            # factors out and the system is exactly the pre-turnover
+            # eigenproblem with r = (k - 1)/tau (docs/30 section 3.2).
+            # Solved in closed form rather than searched for, so that the
+            # invariance is bit-exact instead of bisection-exact.
+            eigenvalue, prices, iterations = self._perron_root(
+                matrix, output, priced, seed, {name: 1.0 for name in priced}
             )
-            prices, eigenvalue = revised, step
-            if converged:
-                break
+            profit_rate = (1.0 / eigenvalue - 1.0) / longest
+            low = high = profit_rate
         else:
-            raise RuntimeError(
-                "price of production solve did not converge; the augmented "
-                "input matrix has no single dominant price vector, which "
-                "happens when a subsystem exchanges in a closed cycle that "
-                "nothing else enters, so its relative prices oscillate "
-                "instead of settling"
-            )
+            low, high = 0.0, 1.0
+        if low != high and root(0.0)[0] > 1.0:
+            # The system cannot replace its advances even for nothing, so
+            # the rate is negative.  Searched for rather than refused: a
+            # negative rate is a finding about the technique.  The floor
+            # keeps every sector's outlay at half its cost, well clear of
+            # the point where the markup would turn an advance into a
+            # rebate.
+            low, high = -0.5 / longest, 0.0
+            if root(low)[0] > 1.0:
+                raise RuntimeError(
+                    "no rate of profit reproduces this technique: the "
+                    "system cannot replace its advances even at the lowest "
+                    "rate that keeps every sector's outlay positive"
+                )
+        elif low != high:
+            for _ in range(64):
+                if root(high)[0] >= 1.0:
+                    break
+                high *= 2.0
+            else:
+                raise RuntimeError(
+                    "no rate of profit reproduces this technique: the "
+                    "Perron root stays below one at every rate tried"
+                )
+        if low != high:
+            for _ in range(200):
+                middle = 0.5 * (low + high)
+                if root(middle)[0] < 1.0:
+                    low = middle
+                else:
+                    high = middle
+                if high - low <= self.production_price_tolerance * max(
+                    1.0, abs(high)
+                ):
+                    break
+            profit_rate = 0.5 * (low + high)
+            eigenvalue, prices, iterations = root(profit_rate)
 
         if numeraire == "labor_value":
             target = sum(
@@ -1151,8 +1190,28 @@ class Economy:
             raise ValueError(f"unknown numeraire {numeraire!r}")
         prices = {name: value * target for name, value in prices.items()}
 
+        # The aggregate markup of the solved system: gross output at its
+        # production price over gross output at cost.  Scale-invariant, and
+        # exactly ``r * turnover`` where the turnover time is uniform.
+        cost = sum(
+            output[name]
+            * sum(
+                quantity * prices[other]
+                for other, quantity in matrix[name].items()
+            )
+            for name in priced
+        )
+        revenue = sum(output[name] * prices[name] for name in priced)
+
         return {
-            "profit_rate": 1.0 / eigenvalue - 1.0,
+            # Profit per period on capital *advanced* (docs/30).
+            "profit_rate": profit_rate,
+            # The factor by which price exceeds cost: the quantity docs/26
+            # through docs/29 reported as the profit rate, kept under an
+            # honest name.  Equal to r times the turnover time where that
+            # time is uniform.
+            "gross_markup": revenue / cost - 1.0 if cost > EPSILON else 0.0,
+            "turnover_days": turnover,
             "prices": prices,
             "wage": sum(
                 per_tick * prices[name]
@@ -1162,6 +1221,149 @@ class Economy:
             "basics": self._basic_commodities(matrix, priced),
             "iterations": iterations,
         }
+
+    def _perron_root(
+        self,
+        matrix: Dict[str, Dict[str, float]],
+        output: Dict[str, float],
+        priced: List[str],
+        seed: Dict[str, float],
+        factor: Dict[str, float],
+    ) -> Tuple[float, Dict[str, float], int]:
+        """Dominant eigenvalue and eigenvector of ``diag(factor) . matrix``.
+
+        Power iteration normalized by gross output, so the scale factor is
+        the eigenvalue directly.  Always started from the same seed, so the
+        answer does not depend on how many times it has been called.
+        """
+        prices = dict(seed)
+        eigenvalue = 0.0
+        for iterations in range(1, self.production_price_max_iterations + 1):
+            advanced = {
+                name: factor[name]
+                * sum(
+                    quantity * prices[other]
+                    for other, quantity in matrix[name].items()
+                )
+                for name in priced
+            }
+            step = sum(output[name] * advanced[name] for name in priced)
+            if step <= EPSILON:
+                raise RuntimeError(
+                    "price of production solve degenerated: nothing is "
+                    "advanced to produce anything, so no rate of profit is "
+                    "defined"
+                )
+            revised = {name: advanced[name] / step for name in priced}
+            converged = abs(
+                step - eigenvalue
+            ) <= self.production_price_tolerance and all(
+                abs(revised[name] - prices[name])
+                <= self.production_price_tolerance
+                for name in priced
+            )
+            prices, eigenvalue = revised, step
+            if converged:
+                return eigenvalue, prices, iterations
+        raise RuntimeError(
+            "price of production solve did not converge; the augmented "
+            "input matrix has no single dominant price vector, which "
+            "happens when a subsystem exchanges in a closed cycle that "
+            "nothing else enters, so its relative prices oscillate "
+            "instead of settling"
+        )
+
+    def capital_advanced(self, region: Optional[str] = None) -> Dict[str, float]:
+        """Capital tied up in the circuit, in work-ticks (docs/30).
+
+        Measured rather than assumed: the model holds the stock, so this
+        reads it.  Three parts, itemized because their sizes are the
+        result — commodity capital dominates, and the wage advance the old
+        formulation effectively charged profit against is a rounding error
+        beside it.
+
+        Commodity capital is attributed once, to whichever region holds it,
+        which is also how the price system avoids double counting: each
+        unit is somebody's unsold output for exactly its inventory life
+        (docs/30 section 2.3).
+        """
+        names = [region] if region is not None else sorted(self.regions)
+        commodity_capital = sum(
+            self.regions[name].inventory.get(commodity, 0.0)
+            * self.labor_values.get(commodity, 0.0)
+            for name in names
+            for commodity in sorted(self.commodities)
+        )
+        in_transit = sum(
+            shipment.quantity * self.labor_values.get(shipment.commodity, 0.0)
+            for shipment in self.shipments
+            if region is None or shipment.destination == region
+        )
+        # Installed plant, not depreciation times service life: the machines
+        # exist whether or not they ran today.
+        fixed = sum(
+            producer.process.capital_labor_per_capacity
+            * producer.capacity_per_day
+            for name in names
+            for producer in self.regions[name].producers
+            if producer.active
+        )
+        wage_advance = self.production_period_days * sum(
+            self.ledger.necessary_labor.get(name, 0.0) for name in names
+        ) / max(float(self.day), 1.0)
+        return {
+            "commodity_capital": commodity_capital,
+            "in_transit": in_transit,
+            "fixed_capital": fixed,
+            "wage_advance": wage_advance,
+            "total": commodity_capital + in_transit + fixed + wage_advance,
+        }
+
+    def value_rate_of_profit_on_advances(
+        self, region: Optional[str] = None
+    ) -> Optional[float]:
+        """Surplus per period over capital advanced: the rate of profit.
+
+        Distinct from ``value_rate_of_profit``, which divides by capital
+        *consumed* and is therefore profit per unit of throughput rather
+        than a rate.  The two differ by the turnover time, and in this model
+        that is a factor of nearly sixty (docs/30).
+        """
+        if self.day <= 0:
+            return None
+        names = [region] if region is not None else sorted(self.regions)
+        necessary = sum(
+            self.ledger.necessary_labor.get(name, 0.0) for name in names
+        )
+        if necessary <= EPSILON:
+            return None
+        surplus = sum(self.ledger.surplus_labor(name) for name in names)
+        advanced = self.capital_advanced(region)["total"]
+        if advanced <= EPSILON:
+            return None
+        return (surplus / float(self.day)) / advanced
+
+    def realized_turnover_days(
+        self, region: Optional[str] = None
+    ) -> Optional[float]:
+        """Capital advanced divided by capital consumed per period.
+
+        How long the circuit actually ties its capital up, against the
+        ``1 + target_inventory_days`` the price system assumes.  The gap is
+        the finished-goods stock of anything nobody uses as an input, which
+        no cost flow accounts for.
+        """
+        if self.day <= 0:
+            return None
+        names = [region] if region is not None else sorted(self.regions)
+        consumed = sum(
+            self.ledger.constant_capital(name)
+            + self.ledger.necessary_labor.get(name, 0.0)
+            for name in names
+        ) / float(self.day)
+        if consumed <= EPSILON:
+            return None
+        return self.capital_advanced(region)["total"] / consumed
 
     def production_price_aggregates(
         self, *, use_capacity: bool = False
@@ -1186,14 +1388,16 @@ class Economy:
         _, labor, output = self.social_technique(use_capacity=use_capacity)
         bundle = self.social_wage_bundle(use_capacity=use_capacity)
         prices = system["prices"]
-        rate = system["profit_rate"]
 
         total_price = sum(output[name] * prices[name] for name in output)
         total_value = sum(
             output[name] * self.labor_values.get(name, 0.0) for name in output
         )
-        # Advances = total price / (1 + r), since every sector marks up by r.
-        total_profit = total_price - total_price / (1.0 + rate)
+        # Profit is what price exceeds cost.  Read off the gross markup
+        # rather than the profit rate, since with turnover the two differ
+        # by the turnover time and only the markup is per unit of cost.
+        markup = system["gross_markup"]
+        total_profit = total_price - total_price / (1.0 + markup)
 
         living = sum(output[name] * labor[name] for name in output)
         basket_value = sum(

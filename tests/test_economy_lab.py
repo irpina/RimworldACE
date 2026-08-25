@@ -24,6 +24,7 @@ from economy_lab.scenarios import (
     equilibrium,
     generous_basket,
     input_shortage,
+    perishable_meals,
     producer_loss,
     regional_glut,
     reserve_depletion,
@@ -1605,8 +1606,8 @@ class PriceOfProductionTests(unittest.TestCase):
         self.assertNotIn(LEAVES, self.system["basics"])
         self.assertNotIn(YAYO, self.system["basics"])
 
-    def rank_one_profit_rate(self, economy):
-        """`T / Σ(b·l) − 1`: the rate if no wage good had material inputs.
+    def rank_one_gross_markup(self, economy):
+        """`T / Σ(b·l) − 1`: the markup if no wage good had material inputs.
 
         With pure-labor wage goods the augmented matrix restricted to the
         basket is the outer product `(l/T)·bᵀ`, whose only non-zero
@@ -1629,10 +1630,10 @@ class PriceOfProductionTests(unittest.TestCase):
         the profit rate falls below the rank-one figure — by 8%, not by a
         rounding error.
         """
-        rank_one = self.rank_one_profit_rate(self.economy)
+        rank_one = self.rank_one_gross_markup(self.economy)
         self.assertAlmostEqual(rank_one, 26.826086956521738, places=9)
-        self.assertLess(self.system["profit_rate"], rank_one)
-        gap = (rank_one - self.system["profit_rate"]) / rank_one
+        self.assertLess(self.system["gross_markup"], rank_one)
+        gap = (rank_one - self.system["gross_markup"]) / rank_one
         self.assertGreater(gap, 0.07)
         self.assertLess(gap, 0.09)
 
@@ -1645,14 +1646,14 @@ class PriceOfProductionTests(unittest.TestCase):
         system = control.prices_of_production(numeraire=MEALS)
         self.assertNotIn(CHEMFUEL, system["basics"])
         self.assertAlmostEqual(
-            system["profit_rate"],
-            self.rank_one_profit_rate(control),
+            system["gross_markup"],
+            self.rank_one_gross_markup(control),
             places=9,
         )
-        # And with the identity back, `r` sits *above* s/v again by the
-        # fixed-capital term the price system omits (docs/27).
+        # And with the identity back, the markup sits *above* s/v again by
+        # the fixed-capital term the price system omits (docs/27).
         self.assertGreater(
-            system["profit_rate"], control.rate_of_surplus_value()
+            system["gross_markup"], control.rate_of_surplus_value()
         )
 
     def test_the_profit_rate_now_falls_below_the_rate_of_surplus_value(self):
@@ -1665,8 +1666,8 @@ class PriceOfProductionTests(unittest.TestCase):
         the omission is no longer the dominant term.
         """
         cumulative = self.economy.rate_of_surplus_value()
-        self.assertLess(self.system["profit_rate"], cumulative)
-        gap = (cumulative - self.system["profit_rate"]) / cumulative
+        self.assertLess(self.system["gross_markup"], cumulative)
+        gap = (cumulative - self.system["gross_markup"]) / cumulative
         self.assertGreater(gap, 0.06)
         self.assertLess(gap, 0.09)
 
@@ -1798,7 +1799,9 @@ class PriceOfProductionTests(unittest.TestCase):
 
     # -- Sraffa's basics theorem, on a purpose-built three-good economy ------
 
-    def three_good_economy(self, *, bread_labor=500.0, tool_labor=30.0):
+    def three_good_economy(
+        self, *, bread_labor=500.0, tool_labor=30.0, inventory_days=30.0
+    ):
         """Bread feeds the workers; ore makes tools; tools feed nobody.
 
         Bread is the only basic commodity, so the profit rate must answer
@@ -1807,9 +1810,13 @@ class PriceOfProductionTests(unittest.TestCase):
         from economy_lab.model import Economy, Region
 
         commodities = [
-            Commodity("bread", reference_price=10.0, labor_value=1.0),
-            Commodity("ore", reference_price=10.0, labor_value=1.0),
-            Commodity("tool", reference_price=10.0, labor_value=1.0),
+            Commodity(
+                name,
+                reference_price=10.0,
+                labor_value=1.0,
+                target_inventory_days=inventory_days,
+            )
+            for name in ("bread", "ore", "tool")
         ]
         region = Region(
             "Plain",
@@ -1853,17 +1860,34 @@ class PriceOfProductionTests(unittest.TestCase):
     def test_the_three_good_system_solves_to_the_hand_computed_prices(self):
         system = self.three_good_economy()
         self.assertEqual(system["basics"], ["bread"])
-        # r = 1000 ticks per worker-day / 500 ticks of bread - 1.
-        self.assertAlmostEqual(system["profit_rate"], 1.0, places=9)
+        # markup = 1000 ticks per worker-day / 500 ticks of bread - 1.
+        self.assertAlmostEqual(system["gross_markup"], 1.0, places=9)
+        # And the rate is that markup spread over the turnover time: one
+        # production period plus the bare Commodity's 30-day inventory life.
+        self.assertAlmostEqual(system["profit_rate"], 1.0 / 31.0, places=9)
         # w = 10 silver of bread / 1000 ticks; ore is 2 * (0.01 * 20).
         self.assertAlmostEqual(system["wage"], 0.01, places=12)
         self.assertAlmostEqual(system["prices"]["ore"], 0.4, places=9)
         # tool = 2 * (2 ore + 0.01 * 30)
         self.assertAlmostEqual(system["prices"]["tool"], 2.2, places=9)
 
+    def test_instant_turnover_reduces_to_the_pre_turnover_system(self):
+        """The compatibility property of docs/30 section 2.1.
+
+        With one production period and no inventory life, capital is
+        advanced for exactly one period and the rate *is* the markup. This
+        is the boundary case the turnover term has to reproduce exactly, or
+        it is not a generalization.
+        """
+        system = self.three_good_economy(inventory_days=0.0)
+        self.assertEqual(system["turnover_days"]["bread"], 1.0)
+        self.assertEqual(system["profit_rate"], system["gross_markup"])
+        self.assertAlmostEqual(system["profit_rate"], 1.0, places=9)
+
     def test_a_non_basic_technique_change_leaves_the_profit_rate_untouched(self):
         base = self.three_good_economy()
         doubled = self.three_good_economy(tool_labor=60.0)
+        self.assertEqual(doubled["gross_markup"], base["gross_markup"])
         self.assertEqual(doubled["profit_rate"], base["profit_rate"])
         self.assertEqual(doubled["prices"]["ore"], base["prices"]["ore"])
         self.assertEqual(doubled["prices"]["bread"], base["prices"]["bread"])
@@ -1872,7 +1896,7 @@ class PriceOfProductionTests(unittest.TestCase):
 
     def test_a_basic_technique_change_moves_the_profit_rate(self):
         cheaper = self.three_good_economy(bread_labor=400.0)
-        self.assertAlmostEqual(cheaper["profit_rate"], 1.5, places=9)
+        self.assertAlmostEqual(cheaper["gross_markup"], 1.5, places=9)
         # And it moves every price with it, the wage good's included.
         self.assertAlmostEqual(cheaper["prices"]["ore"], 0.5, places=9)
         self.assertAlmostEqual(cheaper["prices"]["tool"], 3.25, places=9)
@@ -2014,8 +2038,10 @@ class EnlargedBasketTests(unittest.TestCase):
         self.assertAlmostEqual(
             self.meals_only.value_rate_of_profit(), 1.76768, places=5
         )
+        # Read as the gross markup since docs/30: the same number under
+        # the name that survives turnover.
         self.assertAlmostEqual(
-            self.meals_only.prices_of_production()["profit_rate"],
+            self.meals_only.prices_of_production()["gross_markup"],
             38.344262,
             places=6,
         )
@@ -2162,6 +2188,232 @@ class EnlargedBasketTests(unittest.TestCase):
                 self.assertAlmostEqual(residual, 0.0, places=7)
         self.assertAlmostEqual(self.economy.cash_balance(), 0.0, places=7)
         self.assertAlmostEqual(self.economy.value_balance(), 0.0, places=3)
+
+
+class TurnoverTests(unittest.TestCase):
+    """Profit charged against capital advanced rather than capital consumed.
+
+    Two quantities the project printed as rates of profit were not rates:
+    the price system's was per production period with the period a day, and
+    the ledger's divided by capital consumed. Both are fixed here, and the
+    fix is mostly a matter of dividing by a number the model already knew
+    (docs/30).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.parameters = ScenarioParameters()
+        cls.economy = equilibrium(240)
+        cls.system = cls.economy.prices_of_production(numeraire=MEALS)
+        cls.perishable = perishable_meals(240)
+
+    # -- the price system ----------------------------------------------------
+
+    def test_turnover_is_the_production_period_plus_the_inventory_life(self):
+        for name, days in self.system["turnover_days"].items():
+            with self.subTest(commodity=name):
+                self.assertEqual(
+                    days,
+                    self.parameters.production_period_days
+                    + self.economy.commodities[name].target_inventory_days,
+                )
+
+    def test_the_rate_is_the_markup_spread_over_the_turnover(self):
+        # Exact to floating point, because uniform turnover is solved in
+        # closed form rather than searched for.
+        self.assertAlmostEqual(
+            self.system["profit_rate"] * 21.0,
+            self.system["gross_markup"],
+            places=9,
+        )
+        self.assertAlmostEqual(self.system["profit_rate"], 1.1725658, places=6)
+        self.assertAlmostEqual(self.system["gross_markup"], 24.623882, places=6)
+
+    def test_uniform_turnover_moves_no_relative_price(self):
+        """The invariance of docs/30 section 3.2, asserted bit-exactly.
+
+        `1 + r*tau` is one constant when turnover is uniform, so the price
+        vector is the pre-turnover one and only the reported rate changes.
+        These are the docs/29 figures, unrounded.
+        """
+        prices = self.system["prices"]
+        inputs, labor, _ = self.economy.social_technique()
+        bundle = self.economy.social_wage_bundle()
+        wage = sum(per_tick * prices[name] for name, per_tick in bundle.items())
+
+        # Every sector's price over its own cost is the same constant, which
+        # is exactly what "the diagonal factors out" means. Asserted rather
+        # than compared against remembered digits.
+        markups = {}
+        for name in prices:
+            cost = (
+                sum(
+                    quantity * prices[other]
+                    for other, quantity in inputs.get(name, {}).items()
+                )
+                + labor[name] * wage
+            )
+            markups[name] = prices[name] / cost
+        for name, markup in sorted(markups.items()):
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(
+                    markup, 1.0 + self.system["gross_markup"], places=9
+                )
+
+        # And the price vector is still the one docs/29 published, to the
+        # decimals that document printed.
+        base = prices[MEALS]
+        for name, expected in (
+            (CHEMFUEL, 0.08197),
+            (MEDICINE, 1.31148),
+            (GARMENTS, 7.25577),
+            (LEAVES, 0.25649),
+            (YAYO, 54.14603),
+        ):
+            with self.subTest(commodity=name, published=expected):
+                self.assertAlmostEqual(prices[name] / base, expected, places=5)
+
+    # -- the ledger ----------------------------------------------------------
+
+    def test_capital_advanced_itemizes_into_positive_parts(self):
+        advanced = self.economy.capital_advanced()
+        self.assertGreater(advanced["commodity_capital"], 0.0)
+        self.assertGreater(advanced["fixed_capital"], 0.0)
+        self.assertGreater(advanced["wage_advance"], 0.0)
+        self.assertGreaterEqual(advanced["in_transit"], 0.0)
+        self.assertAlmostEqual(
+            advanced["total"],
+            advanced["commodity_capital"]
+            + advanced["in_transit"]
+            + advanced["fixed_capital"]
+            + advanced["wage_advance"],
+            places=9,
+        )
+        # The wage advance is what the pre-turnover system effectively
+        # charged profit against for a pure-labor good. It is a thousandth
+        # of the capital actually tied up.
+        self.assertLess(
+            advanced["wage_advance"] / advanced["total"], 0.002
+        )
+
+    def test_the_advance_is_dominated_by_the_final_product_awaiting_sale(self):
+        """Why realized turnover is three times what the price system assumes.
+
+        Yayo is nobody's input, so its inventory never appears in any cost
+        flow — and it is the largest single block of capital in the circuit.
+        """
+        held = {
+            name: sum(
+                region.inventory[name] for region in self.economy.regions.values()
+            )
+            * self.economy.labor_values[name]
+            for name in self.economy.commodities
+        }
+        total = sum(held.values())
+        self.assertGreater(held[YAYO] / total, 0.60)
+        self.assertGreater((held[YAYO] + held[LEAVES]) / total, 0.95)
+
+    def test_realized_turnover_far_exceeds_the_assumed_turnover(self):
+        realized = self.economy.realized_turnover_days()
+        self.assertGreater(realized, 50.0)
+        self.assertLess(realized, 60.0)
+        # And the excess is the final product's stock: take yayo out of the
+        # advance and the figure lands near the 21 days the price system
+        # assumes.
+        yayo_stock = (
+            sum(
+                region.inventory[YAYO]
+                for region in self.economy.regions.values()
+            )
+            * self.economy.labor_values[YAYO]
+        )
+        advanced = self.economy.capital_advanced()["total"]
+        consumed = advanced / realized
+        self.assertLess((advanced - yayo_stock) / consumed, 25.0)
+        self.assertGreater((advanced - yayo_stock) / consumed, 18.0)
+
+    def test_the_rate_of_profit_is_far_below_the_flow_ratio(self):
+        """The two quantities, kept apart and both reported.
+
+        `value_rate_of_profit` divides by capital consumed and is profit per
+        unit of throughput; the rate of profit divides by capital advanced.
+        They differ by the realized turnover time, which is what makes one
+        of them a rate.
+        """
+        flow = self.economy.value_rate_of_profit()
+        rate = self.economy.value_rate_of_profit_on_advances()
+        self.assertLess(rate, flow / 40.0)
+        self.assertAlmostEqual(rate, 0.030479, places=6)
+        self.assertAlmostEqual(
+            flow / rate, self.economy.realized_turnover_days(), delta=0.5
+        )
+
+    def test_a_model_that_has_not_run_has_no_rate_on_advances(self):
+        self.assertIsNone(equilibrium(0).value_rate_of_profit_on_advances())
+        self.assertIsNone(equilibrium(0).realized_turnover_days())
+
+    # -- differential turnover -----------------------------------------------
+
+    def test_perishable_meals_turn_over_faster_than_everything_else(self):
+        turnover = self.perishable.prices_of_production()["turnover_days"]
+        self.assertEqual(turnover[MEALS], 5.0)
+        for name in (CHEMFUEL, GARMENTS, MEDICINE, LEAVES, YAYO):
+            with self.subTest(commodity=name):
+                self.assertEqual(turnover[name], 21.0)
+
+    def test_a_faster_wage_good_raises_the_uniform_rate(self):
+        # Capital released from the meal circuit has to earn the same rate
+        # somewhere, and there is less of it tied up in total.
+        system = self.perishable.prices_of_production(numeraire=MEALS)
+        self.assertGreater(system["profit_rate"], self.system["profit_rate"])
+        self.assertAlmostEqual(system["profit_rate"], 2.079222, places=6)
+
+    def test_differential_turnover_widens_the_price_deviations(self):
+        """The result differential turnover was added to test.
+
+        Uniform turnover is a scalar and moves nothing. Non-uniform
+        turnover redistributes: meals carry five periods of markup while
+        everything else carries twenty-one, at a rate that is itself higher.
+        """
+        system = self.perishable.prices_of_production(numeraire=MEALS)
+        base = system["prices"][MEALS]
+        self.assertGreater(
+            system["prices"][YAYO] / base,
+            8.0 * self.system["prices"][YAYO] / self.system["prices"][MEALS],
+        )
+        for name in (CHEMFUEL, GARMENTS, MEDICINE, LEAVES):
+            with self.subTest(commodity=name):
+                self.assertGreater(
+                    system["prices"][name] / base,
+                    self.system["prices"][name]
+                    / self.system["prices"][MEALS],
+                )
+
+    def test_perishable_meals_is_still_exactly_stationary(self):
+        # The seeded stock has to be the commodity's own inventory life, not
+        # the global default; they were the same number until meals rotted.
+        for region_name in self.perishable.regions:
+            for name in self.perishable.commodities:
+                with self.subTest(region=region_name, commodity=name):
+                    prices = self.perishable.series(region_name, name)
+                    stocks = self.perishable.series(
+                        region_name, name, field="inventory"
+                    )
+                    self.assertEqual(min(prices), max(prices))
+                    self.assertEqual(min(stocks), max(stocks))
+        dust = self.perishable.regions["Dust Basin"]
+        self.assertAlmostEqual(
+            dust.inventory[MEALS],
+            dust.throughput_demand(MEALS)
+            * self.parameters.perishable_meal_days,
+            places=9,
+        )
+
+    def test_the_perishable_circuit_still_closes_every_ledger(self):
+        for name, residual in self.perishable.commodity_balances().items():
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(residual, 0.0, places=7)
+        self.assertAlmostEqual(self.perishable.cash_balance(), 0.0, places=7)
 
 
 if __name__ == "__main__":

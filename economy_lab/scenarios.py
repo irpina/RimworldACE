@@ -199,6 +199,17 @@ class ScenarioParameters:
     generous_garments_per_worker_day: float = 0.5
     generous_medicine_per_worker_day: float = 0.5
 
+    # --- turnover (docs/30) ---------------------------------------------------
+    #: How long one run occupies its capital before the product exists.  One
+    #: `step()`, which is what the runtime does.  Capital is advanced for
+    #: this plus the commodity's own inventory life.
+    production_period_days: float = 1.0
+    #: Meals keep as long as everything else by default.  They do not, in
+    #: RimWorld: a simple meal starts to rot after four days, which is the
+    #: only differential turnover the current commodity set justifies.
+    meal_target_inventory_days: float = 20.0
+    perishable_meal_days: float = 4.0
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -316,13 +327,18 @@ def _commodity(
     reference_price: float,
     labor_value: float,
     mass: float,
+    target_inventory_days: float | None = None,
 ) -> Commodity:
     return Commodity(
         name,
         reference_price=reference_price,
         labor_value=labor_value,
         demand_elasticity=parameters.demand_elasticity,
-        target_inventory_days=parameters.target_inventory_days,
+        target_inventory_days=(
+            parameters.target_inventory_days
+            if target_inventory_days is None
+            else target_inventory_days
+        ),
         price_adjustment_speed=parameters.price_adjustment_speed,
         inventory_price_sensitivity=parameters.inventory_price_sensitivity,
         minimum_price_factor=parameters.minimum_price_factor,
@@ -357,6 +373,7 @@ def circuit_commodities(
             parameters.meal_reference_price,
             parameters.meal_labor_value,
             parameters.meal_mass,
+            parameters.meal_target_inventory_days,
         ),
         _commodity(
             parameters,
@@ -570,10 +587,13 @@ def _region(
     region.worker_days_due = equilibrium_days
     region.worker_days_earned = equilibrium_days
     # Seed every stock at its own target, so the circuit opens stationary
-    # rather than working off an arbitrary initial imbalance.
+    # rather than working off an arbitrary initial imbalance.  The target is
+    # the *commodity's* inventory life, not the global default: they were
+    # the same number until meals started rotting (docs/30).
     for key in commodities:
         region.inventory[key] = (
-            region.throughput_demand(key) * parameters.target_inventory_days
+            region.throughput_demand(key)
+            * commodities[key].target_inventory_days
         )
     return region
 
@@ -750,6 +770,7 @@ def seeded_two_region_economy(
         production_price_max_iterations=(
             parameters.production_price_max_iterations
         ),
+        production_period_days=parameters.production_period_days,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -823,6 +844,29 @@ def generous_basket(
         medicine_capacity_per_day=parameters.medicine_capacity_per_day * 2.0,
     )
     return equilibrium(days, parameters=generous)
+
+
+def perishable_meals(
+    days: int = 240, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The wage good rots, so the circuit cannot hold twenty days of it.
+
+    RimWorld's simple meals start to rot after four days. That is a fact
+    about the game rather than a knob, and it is the only *differential*
+    turnover the current commodity set justifies — which makes it the one
+    scenario that can show turnover moving relative prices, since a uniform
+    turnover time only rescales the profit rate (docs/30 section 3.2).
+
+    It changes two things at once: the price system's turnover for meals,
+    and the model's actual meal buffer. Both are real and the results
+    document reports them apart.
+    """
+    parameters = parameters or ScenarioParameters()
+    perishable = replace(
+        parameters,
+        meal_target_inventory_days=parameters.perishable_meal_days,
+    )
+    return equilibrium(days, parameters=perishable)
 
 
 def regional_glut(
