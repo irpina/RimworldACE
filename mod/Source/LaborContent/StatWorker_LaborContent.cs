@@ -36,6 +36,37 @@ namespace SocialProduction.LaborContent
         private const float TicksPerWorkSecond = 60f;
         private const float TicksPerInGameHour = 2500f;
 
+        /// <summary>
+        /// Decide visibility ourselves, because the base cannot.
+        ///
+        /// StatWorker.ShouldShowFor is a chain of equality tests against
+        /// hardcoded StatCategoryDefOf members and falls through to
+        /// Log.Error("Unhandled case: ...") plus `return false` for any
+        /// category it does not recognise. So a *custom* StatCategoryDef —
+        /// which is what puts these two stats in their own info-card
+        /// section — cannot work unless the worker owns this method too.
+        ///
+        /// The rule is simply: show the stat on things that carry it. The
+        /// patches write it onto exactly the 543 defs it was solved for,
+        /// so membership in statBases is the whole question.
+        /// </summary>
+        public override bool ShouldShowFor(StatRequest req)
+        {
+            if (stat.alwaysHide)
+            {
+                return false;
+            }
+            if (!stat.CanShowWithLoadedMods())
+            {
+                return false;
+            }
+            if (stat.showIfUndefined)
+            {
+                return req.Def is ThingDef;
+            }
+            return StatUtility.StatListContains(req.StatBases, stat);
+        }
+
         public override string ValueToString(
             float val, bool finalized, ToStringNumberSense numberSense)
         {

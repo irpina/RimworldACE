@@ -26,6 +26,15 @@ if [ ! -f "$MANAGED/Assembly-CSharp.dll" ]; then
     exit 1
 fi
 
+# RimWorld memory-maps the assembly while it runs, so csc cannot replace
+# it and reports CS0016 "user-mapped section open", which reads like a
+# permissions problem and is not one.
+if tasklist 2>/dev/null | grep -qi "RimWorldWin64"; then
+    echo "RimWorld is running; it holds the assembly open." >&2
+    echo "Close the game and run this again." >&2
+    exit 1
+fi
+
 mkdir -p "$ROOT/mod/Assemblies"
 
 "$CSC" \

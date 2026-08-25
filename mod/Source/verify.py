@@ -57,15 +57,18 @@ def failures():
         for mi, r in asm.iter_table(6)
         if asm._owner_of_method(mi) == WORKER
     }
-    if "ValueToString" not in methods:
-        problems.append("ValueToString is not defined; nothing would be overridden")
-    elif methods["ValueToString"] != EXPECTED_FLAGS:
-        problems.append(
-            "ValueToString is not a public virtual override "
-            "(flags {:#06x}, expected {:#06x})".format(
-                methods["ValueToString"], EXPECTED_FLAGS
+    for required in ("ValueToString", "ShouldShowFor"):
+        if required not in methods:
+            problems.append(
+                "{} is not defined; nothing would be overridden".format(required)
             )
-        )
+        elif methods[required] != EXPECTED_FLAGS:
+            problems.append(
+                "{} is not a public virtual override "
+                "(flags {:#06x}, expected {:#06x})".format(
+                    required, methods[required], EXPECTED_FLAGS
+                )
+            )
 
     data = DLL.read_bytes()
     if " · ".encode("utf-16-le") not in data:
@@ -88,9 +91,18 @@ def failures():
         name for name in external
         if name.startswith("RimWorld.") or name.startswith("Verse.")
     )
-    if rimworld != ["RimWorld.StatWorker", "Verse.ToStringNumberSense"]:
+    expected = [
+        "RimWorld.StatDef",
+        "RimWorld.StatRequest",
+        "RimWorld.StatUtility",
+        "RimWorld.StatWorker",
+        "Verse.ThingDef",
+        "Verse.ToStringNumberSense",
+    ]
+    if rimworld != expected:
         problems.append(
-            "the assembly's RimWorld binding surface grew: {}".format(rimworld)
+            "the assembly's RimWorld binding surface changed: {} "
+            "(expected {})".format(rimworld, expected)
         )
     return problems
 
@@ -102,8 +114,8 @@ def main():
             print("FAIL: " + problem)
         raise SystemExit(1)
     print(
-        "verified: {} overrides ValueToString, separator is U+00B7, "
-        "binds only to RimWorld.StatWorker and Verse.ToStringNumberSense".format(
+        "verified: {} overrides ValueToString and ShouldShowFor, separator "
+        "is U+00B7, binding surface is the six expected symbols".format(
             WORKER.rsplit(".", 1)[1]
         )
     )
