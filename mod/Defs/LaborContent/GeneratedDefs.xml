@@ -8,110 +8,110 @@
   <SocialProduction.LaborContent.LaborContentTableDef>
     <defName>SNLT_GeneratedDefs</defName>
     <entries>
-      <li><defName>Meat_Alligator</defName><extraction>0.338</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Alpaca</defName><extraction>0.042</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_AlphaThrumbo</defName><extraction>0.008</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Alphabeaver</defName><extraction>11.962</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Armadillo</defName><extraction>0.097</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Badger</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Bear_Grizzly</defName><extraction>0.492</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Bear_Polar</defName><extraction>0.492</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Bison</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Alligator</defName><extraction>0.338333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Alpaca</defName><extraction>0.041667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_AlphaThrumbo</defName><extraction>0.008333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Alphabeaver</defName><extraction>11.961667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Armadillo</defName><extraction>0.096667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Badger</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Bear_Grizzly</defName><extraction>0.491667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Bear_Polar</defName><extraction>0.491667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Bison</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Bluebird</defName><extraction>0.29</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_BogHound</defName><extraction>0.57</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Boomalope</defName><extraction>0.02</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Boomrat</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Bullfrog</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Boomrat</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Bullfrog</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Capybara</defName><extraction>0.055</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Caribou</defName><extraction>0.042</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Cassowary</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Cat</defName><extraction>1.107</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Caribou</defName><extraction>0.041667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Cassowary</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Cat</defName><extraction>1.106667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Cat_Scimitar</defName><extraction>0.6</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Chicken</defName><extraction>0.178</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Chinchilla</defName><extraction>0.108</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Cobra</defName><extraction>0.867</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_ColossusToad</defName><extraction>0.052</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Chicken</defName><extraction>0.178333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Chinchilla</defName><extraction>0.108333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Cobra</defName><extraction>0.866667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_ColossusToad</defName><extraction>0.051667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Cougar</defName><extraction>0.61</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Cow</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Cow</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Deer</defName><extraction>0.035</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Donkey</defName><extraction>0.03</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Dromedary</defName><extraction>0.02</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Duck</defName><extraction>0.178</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Duck</defName><extraction>0.178333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Elephant</defName><extraction>0.01</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Elk</defName><extraction>0.02</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Emu</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Flamingo</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Emu</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Flamingo</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Fox_Arctic</defName><extraction>0.415</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Fox_Fennec</defName><extraction>0.415</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Fox_Red</defName><extraction>0.415</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Gazelle</defName><extraction>0.058</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Gazelle</defName><extraction>0.058333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Goat</defName><extraction>0.055</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Goose</defName><extraction>0.068</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Goose</defName><extraction>0.068333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Gorilla</defName><extraction>0.02</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_GuineaPig</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Hare</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_HermitCrab</defName><extraction>0.242</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Heron</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_GuineaPig</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Hare</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_HermitCrab</defName><extraction>0.241667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Heron</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Hippo</defName><extraction>0.015</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Horse</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Horse</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Husky</defName><extraction>1.495</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Ibex</defName><extraction>0.042</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Iguana</defName><extraction>0.097</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Ibex</defName><extraction>0.041667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Iguana</defName><extraction>0.096667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_LabradorRetriever</defName><extraction>1.37</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_LavaSnail</defName><extraction>0.06</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Locust</defName><extraction>0.53</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Lynx</defName><extraction>0.647</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Macaw</defName><extraction>0.153</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Lynx</defName><extraction>0.646667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Macaw</defName><extraction>0.153333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Mastodon</defName><extraction>0.01</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Megascarab</defName><extraction>1.037</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Megascarab</defName><extraction>1.036667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Megasloth</defName><extraction>0.01</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Megaspider</defName><extraction>0.285</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Megavole</defName><extraction>0.052</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Megavole</defName><extraction>0.051667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Mink</defName><extraction>0.46</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_MonitorLizard</defName><extraction>0.532</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Monkey</defName><extraction>0.108</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Moose</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Muffalo</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Muskox</defName><extraction>0.017</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Ostrich</defName><extraction>0.042</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Otter</defName><extraction>0.097</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Panda</defName><extraction>0.028</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_MonitorLizard</defName><extraction>0.531667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Monkey</defName><extraction>0.108333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Moose</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Muffalo</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Muskox</defName><extraction>0.016667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Ostrich</defName><extraction>0.041667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Otter</defName><extraction>0.096667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Panda</defName><extraction>0.028333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Panther</defName><extraction>0.61</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Peacock</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Penguin</defName><extraction>0.513</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Peacock</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Penguin</defName><extraction>0.513333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Pig</defName><extraction>0.025</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Porcupine</defName><extraction>0.108</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_PrairieDog</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Quail</defName><extraction>0.207</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Raccoon</defName><extraction>0.097</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Rat</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Rhinoceros</defName><extraction>0.013</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Porcupine</defName><extraction>0.108333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_PrairieDog</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Quail</defName><extraction>0.206667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Raccoon</defName><extraction>0.096667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Rat</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Rhinoceros</defName><extraction>0.013333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_SeaLion</defName><extraction>0.485</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_SeaTurtle</defName><extraction>0.078</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Seal</defName><extraction>0.728</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_SeaTurtle</defName><extraction>0.078333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Seal</defName><extraction>0.728333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Sheep</defName><extraction>0.055</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Snowhare</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Snowhare</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Sparrow</defName><extraction>0.33</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Spelopede</defName><extraction>0.325</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Squirrel</defName><extraction>0.158</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_StoneCrab</defName><extraction>0.178</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Swan</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Squirrel</defName><extraction>0.158333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_StoneCrab</defName><extraction>0.178333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Swan</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Thrumbo</defName><extraction>0.01</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Tiger</defName><extraction>0.435</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Tortoise</defName><extraction>0.078</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Tortoise</defName><extraction>0.078333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Toxalope</defName><extraction>0.03</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Turkey</defName><extraction>0.067</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Vulture</defName><extraction>0.493</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Turkey</defName><extraction>0.066667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Vulture</defName><extraction>0.493333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Walrus</defName><extraction>0.525</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Warg</defName><extraction>0.485</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_WasteRat</defName><extraction>0.123</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_WildBoar</defName><extraction>0.048</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Wolf_Arctic</defName><extraction>0.588</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Wolf_Great</defName><extraction>0.707</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_Wolf_Timber</defName><extraction>0.588</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_WasteRat</defName><extraction>0.123333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_WildBoar</defName><extraction>0.048333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Wolf_Arctic</defName><extraction>0.588333</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Wolf_Great</defName><extraction>0.706667</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_Wolf_Timber</defName><extraction>0.588333</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Wolverine</defName><extraction>0.5</extraction><fabrication>0.0</fabrication></li>
       <li><defName>Meat_Yak</defName><extraction>0.02</extraction><fabrication>0.0</fabrication></li>
-      <li><defName>Meat_YorkshireTerrier</defName><extraction>0.913</extraction><fabrication>0.0</fabrication></li>
+      <li><defName>Meat_YorkshireTerrier</defName><extraction>0.913333</extraction><fabrication>0.0</fabrication></li>
     </entries>
   </SocialProduction.LaborContent.LaborContentTableDef>
 

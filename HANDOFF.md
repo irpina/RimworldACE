@@ -388,6 +388,21 @@ Two identities make a card self-checking, and both hold on the rifle: the
 extraction row is the ingredients' extraction, and fabrication minus the
 ingredients' fabrication is the card's own "Work to make".
 
+**Precision is six decimal places, not three.** Values ship in
+work-seconds, and a sub-tick figure like alpha thrumbo meat — 0.5 ticks =
+0.008333 work-s — rounded to 0.008 and displayed as **0.48 ticks**, a 4%
+error. The smallest values are exactly the ones with no headroom, and they
+are all in the generated-meat table. Caught by comparing a card against
+`out/embodied_labor.csv`, which is the check `check_labor.py` exists to make
+routine.
+
+**Worth a look, not introduced here:** meat extraction labor should track
+inversely with body size, since butchery work is flat against a size-scaled
+yield. It broadly does — Thrumbo 0.5 ticks, Elephant 0.6, median 6.5 — but
+**Alphabeaver is 717.7**, ten times Cat's 66.4 despite a larger body (0.45
+against 0.32). That is closed-analysis output rather than anything this work
+changed, so it is flagged rather than re-derived.
+
 **The 104 generated meat defs are reached.** They have no XML node, so no
 patch can touch them. `LaborContentTableDef` ships the solved figures and a
 `[StaticConstructorOnStartup]` writes them onto the defs, logging how many

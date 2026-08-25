@@ -22,6 +22,12 @@ from defs import DefDb
 from animals import inject_generated_meat
 
 TICKS_PER_SECOND = 60.0
+# Six decimals, not three. Values are stored in work-seconds, and a
+# sub-tick figure like alpha thrumbo meat (0.5 ticks = 0.008333
+# work-s) rounds to 0.008 at three places and displays as 0.48
+# ticks - a 4% error on the smallest values, which are exactly the
+# ones with no headroom.
+PLACES = 6
 NEWLINE = chr(10)
 OUT_DIR = os.path.join("mod", "Patches")
 TABLE_DIR = os.path.join("mod", "Defs", "LaborContent")
@@ -216,8 +222,8 @@ def main():
             if ext_ticks > 0 or fab_ticks > 0:
                 generated_rows.append((
                     dn,
-                    round(ext_ticks / TICKS_PER_SECOND, 3),
-                    round(fab_ticks / TICKS_PER_SECOND, 3),
+                    round(ext_ticks / TICKS_PER_SECOND, PLACES),
+                    round(fab_ticks / TICKS_PER_SECOND, PLACES),
                 ))
             skipped_gen.append(dn)
             continue
@@ -244,7 +250,7 @@ def main():
         if package not in ops:
             skipped_missing.append(dn)
             continue
-        ops[package].append((dn, round(ext, 3), round(fab, 3)))
+        ops[package].append((dn, round(ext, PLACES), round(fab, PLACES)))
 
     os.makedirs(OUT_DIR, exist_ok=True)
     old_combined = os.path.join(OUT_DIR, "SNLT_LaborContent.xml")
