@@ -200,7 +200,58 @@ def collect_behavioral_metrics(
     )
     metrics.update(_subsistence_basket_metrics(stable=stable))
     metrics.update(_turnover_metrics(stable=stable))
+    metrics.update(_scale_metrics())
     return metrics
+
+
+def _scale_metrics() -> Dict[str, Dict[str, object]]:
+    """Structural facts about the scale harness (docs/32, docs/33).
+
+    Timings are deliberately *not* frozen: they are machine-dependent and a
+    reference that moves with the hardware is a reference nobody trusts.
+    What is frozen is what the harness proves — that the value solve, run
+    at six hundred commodities rather than four, still reproduces the
+    closed analysis exactly wherever the generator did not contradict it.
+    """
+    from .scale import population, synthetic_economy
+
+    economy = synthetic_economy(commodities=653, regions=2)
+    economy.step(1)
+    record = economy.scale_record
+    floored = set(record["floored"])
+    processes = {
+        producer.commodity: producer.process
+        for producer in economy.regions["region_000"].producers
+    }
+
+    def tainted(name, seen=None):
+        seen = set() if seen is None else seen
+        if name in seen:
+            return False
+        seen.add(name)
+        return any(
+            other in floored or tainted(other, seen)
+            for other in processes[name].inputs
+        )
+
+    exact = comparable = 0
+    for name, authored in sorted(record["labor"].items()):
+        if name in floored or authored <= 0.0 or tainted(name):
+            continue
+        comparable += 1
+        if abs(economy.labor_values[name] - authored) / authored < 1e-9:
+            exact += 1
+    return {
+        "scale.population_commodities": _metric(
+            float(len(population())), "commodities"
+        ),
+        "scale.floored_direct_labor": _metric(float(len(floored)), "commodities"),
+        "scale.value_solve_comparable": _metric(float(comparable), "commodities"),
+        "scale.value_solve_exact": _metric(float(exact), "commodities"),
+        "scale.value_solve_exact_share": _metric(
+            exact / max(comparable, 1), "fraction"
+        ),
+    }
 
 
 def _turnover_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:

@@ -562,6 +562,26 @@
       "unit": "silver",
       "value": 45.145699
     },
+    "scale.floored_direct_labor": {
+      "unit": "commodities",
+      "value": 36.0
+    },
+    "scale.population_commodities": {
+      "unit": "commodities",
+      "value": 647.0
+    },
+    "scale.value_solve_comparable": {
+      "unit": "commodities",
+      "value": 447.0
+    },
+    "scale.value_solve_exact": {
+      "unit": "commodities",
+      "value": 447.0
+    },
+    "scale.value_solve_exact_share": {
+      "unit": "fraction",
+      "value": 1.0
+    },
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",
       "value": 28.706403
