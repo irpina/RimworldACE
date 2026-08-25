@@ -310,11 +310,43 @@ fail.
 the assembly as `Â·`. The separator is written `·` for that reason, and
 the build is verified by looking for the UTF-16 bytes in the DLL.
 
-The required in-game visual pass is still incomplete. What is left to decide
-by looking at real items in game: whether the three-unit line is too long for
-the info card at common resolutions, whether the two stats sit in the right
-place in `BasicsNonPawn`, and whether the expansion-split patches load
-cleanly under every combination of official expansions.
+Two of the visual-pass questions are now **answered** (2026-08-25, at low
+resolution): the line length is fine, and a `0` row for things with no
+fabrication labor is wanted rather than noise.
+
+The third is addressed rather than answered: the stats were in
+`BasicsNonPawn` and are now their own **`SNLT_LaborContent` category**,
+labelled "Labor content", at `displayOrder` 20 — between `BasicsNonPawn`
+(12) and `Apparel` (30), so the block sits directly under Basics on every
+kind of thing. With the header carrying the context the labels shortened to
+"extraction labor" and "fabrication labor".
+
+Still open: whether the *multi-unit* rendering is right, which has never
+actually been seen (see "Deployment" below), and whether the expansion-split
+patches load cleanly under every combination of official expansions.
+
+### Deployment: junction, not a copy
+
+`RimWorld/Mods/SNLT` is a **directory junction** to this repository's `mod/`,
+matching how `SocialProductionEconomy` points at `economy_mod/`. Rebuild or
+regenerate and the game sees it; there is no copy step to forget.
+
+This was not always so, and it cost a false pass. The first in-game check of
+the multi-unit stat worker *looked* correct — the rows rendered plausible
+`work-s` figures — but `RimWorld/Mods/SNLT` was a real directory copied on
+11 August, three weeks before the assembly existed. What was on screen was
+the `formatString` fallback doing exactly its job. The values were only
+wrong in the sense of being the wrong feature, which is the hardest kind of
+wrong to notice.
+
+Two lessons worth keeping. A graceful fallback hides the failure it degrades
+from, so **verify a new feature by a reading only the new code can produce**,
+not by the absence of errors. And the deployed copy is part of the test
+setup: check what the game is loading before trusting what it shows.
+
+The stale copy was moved out of `Mods/` rather than deleted in place —
+leaving it there would have created a duplicate `packageId` conflict with
+the junction.
 
 ### Planned successor mod: gated economic information
 

@@ -2,6 +2,20 @@
 <Defs>
 
   <!--
+    Its own section rather than more rows in Basics. displayOrder 20 sits
+    between BasicsNonPawn (12) and Apparel (30), so the block lands directly
+    under Basics on every kind of thing.
+
+    With the header carrying the context, the stat labels no longer need to
+    repeat "embodied labor" twice in a row.
+  -->
+  <StatCategoryDef>
+    <defName>SNLT_LaborContent</defName>
+    <label>Labor content</label>
+    <displayOrder>20</displayOrder>
+  </StatCategoryDef>
+
+  <!--
     Values are stored in work-seconds (ticks / 60), RimWorld's own work unit -
     GenText.ToStringWorkAmount is CeilToInt(ticks / 60). We do not use
     toStringStyle WorkAmount because it ceils, which would flatten every
@@ -20,10 +34,10 @@
 
   <StatDef>
     <defName>SNLT_ExtractionLabor</defName>
-    <label>embodied labor: extraction</label>
+    <label>extraction labor</label>
     <description>Labor spent at the point of extraction — mining, harvesting, and butchery — to obtain the raw materials embodied in this thing, per unit.\n\nMeasured following the cheapest chain of production that could yield this thing. Nature contributes nothing: an ore vein's labor content is the work of mining it, not what the ore is worth.\n\nShown in every unit that says something, from the coarsest down to raw ticks: in-game hours of work (2,500 ticks each), work-seconds (60 ticks each, the unit a recipe's work amount is quoted in), and ticks. Small things read in ticks alone, because at that magnitude the coarser units are all zeroes.</description>
     <workerClass>SocialProduction.LaborContent.StatWorker_LaborContent</workerClass>
-    <category>BasicsNonPawn</category>
+    <category>SNLT_LaborContent</category>
     <defaultBaseValue>0</defaultBaseValue>
     <minValue>0</minValue>
     <toStringStyle>FloatMaxTwo</toStringStyle>
@@ -35,10 +49,10 @@
 
   <StatDef>
     <defName>SNLT_FabricationLabor</defName>
-    <label>embodied labor: fabrication</label>
+    <label>fabrication labor</label>
     <description>Labor spent transforming materials into this thing — crafting, smithing, cooking, construction — summed over every production step, per unit.\n\nExcludes the extraction labor embodied in the inputs, which is reported separately.\n\nRimWorld's own pricing pays several times more for extraction labor than for fabrication labor, so a thing dominated by this stat is one whose labor the economy barely rewards.\n\nShown in every unit that says something, from the coarsest down to raw ticks: in-game hours of work (2,500 ticks each), work-seconds (60 ticks each, the unit a recipe's work amount is quoted in), and ticks. Small things read in ticks alone, because at that magnitude the coarser units are all zeroes.</description>
     <workerClass>SocialProduction.LaborContent.StatWorker_LaborContent</workerClass>
-    <category>BasicsNonPawn</category>
+    <category>SNLT_LaborContent</category>
     <defaultBaseValue>0</defaultBaseValue>
     <minValue>0</minValue>
     <toStringStyle>FloatMaxTwo</toStringStyle>
