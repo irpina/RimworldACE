@@ -255,6 +255,14 @@ class ScenarioParameters:
     #: 5000-tick recipe.
     chemfuel_per_component: float = 0.2 * 5000.0 / 350.0
 
+    # --- capacity depreciation and exit (docs/38) ----------------------------
+    #: Whether a producer that cannot carry its plant's maintenance sheds
+    #: capacity.  Off by default, and not because it is unfinished: turning
+    #: it on deletes the component sector, because RimWorld prices a
+    #: component below what it costs to make one (docs/37 section 6).  That
+    #: is the scenario's finding rather than an obstacle to it.
+    capacity_exit: bool = False
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -970,6 +978,7 @@ def seeded_two_region_economy(
         competitive_price_intensity=parameters.competitive_price_intensity,
         competitive_share_elasticity=parameters.competitive_share_elasticity,
         capital_service_life_days=parameters.capital_service_life_days,
+        capacity_exit=parameters.capacity_exit,
         production_price_tolerance=parameters.production_price_tolerance,
         production_price_max_iterations=(
             parameters.production_price_max_iterations
@@ -1113,6 +1122,30 @@ def capital_goods(
     """
     parameters = replace(
         parameters or ScenarioParameters(), capital_goods=True
+    )
+    return equilibrium(days, parameters=parameters)
+
+
+def capacity_exit(
+    days: int = 4000, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """Plant that cannot pay for its own upkeep is not replaced (docs/38).
+
+    The capital-goods circuit with the money rule on: a producer maintains
+    plant in proportion to how much of the day's maintenance its margin
+    covers, so competition is for survival and not only for orders.
+
+    Four thousand days, which is sixty-six years and much longer than the
+    design expected to need.  A sector shedding `1/L` a day takes about
+    2,200 days to fall from headroom to the point where its price starts to
+    respond, and the whole result of docs/39 is what happens *after* that.
+    Ten years shows a decay in progress and no rest point, which is a
+    misleading picture rather than a shorter one.
+    """
+    parameters = replace(
+        parameters or ScenarioParameters(),
+        capital_goods=True,
+        capacity_exit=True,
     )
     return equilibrium(days, parameters=parameters)
 

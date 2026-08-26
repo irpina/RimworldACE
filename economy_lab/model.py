@@ -1163,6 +1163,22 @@ class Economy:
         technology rather than two.  Empty for every process without a bill
         of materials, which is what keeps the pre-docs/36 price system
         reachable and bit-exact.
+
+        **This is the technique's plant, not the installed stock.**  The
+        coefficient is machines per unit of daily output *at full
+        utilization*, so an idle producer's plant enters here at what it
+        would need if it ran rather than at what it owns.  Prices of
+        production are long-period prices for a technique operated normally,
+        and Sraffa's system has no notion of utilization at all; charging
+        idle plant into them would make a long-period price depend on a
+        short-period fact, which is the objection docs/23 raised against
+        use-based depreciation in the price anchor.
+
+        The consequence is that this does not equal
+        ``capital_advanced()["fixed_capital"]``, which reads the stock the
+        model actually holds.  The gap is the idle capacity: 6.8% in the
+        capital-goods equilibrium, and small only because the two sectors
+        holding 89.6% of the plant both run at capacity (docs/39).
         """
 
         def weight(producer: Producer) -> float:
@@ -2485,10 +2501,16 @@ class Economy:
             drawn[name] = drawn.get(name, 0.0) + take
             Ledger.add(self.ledger.capital_replacement, name, take)
             rebuilt += take * self.labor_values.get(name, 0.0)
+        # Scaled by what actually arrived.  You cannot put up the part of
+        # a machine whose steel never came, and booking the full
+        # construction labor against a partial delivery would claim plant
+        # value that no capacity corresponds to — the flow identity would
+        # still close and the stock story would not.
         construction = (
             per_capacity
             * producer.process.machines_per_capacity
             * producer.process.capital_construction_labor
+            * supplied
         )
         rebuilt += construction
         Ledger.add(self.ledger.value_produced, region.name, rebuilt)

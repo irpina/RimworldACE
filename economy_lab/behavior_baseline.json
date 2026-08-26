@@ -6,6 +6,26 @@
       "unit": "units",
       "value": 10.322317
     },
+    "capacity_exit.components.coverage": {
+      "unit": "fraction",
+      "value": 1.0
+    },
+    "capacity_exit.components.final_capacity": {
+      "unit": "units/day",
+      "value": 0.002051
+    },
+    "capacity_exit.components.final_price": {
+      "unit": "silver",
+      "value": 38.344794
+    },
+    "capacity_exit.production.profit_rate": {
+      "unit": "ratio",
+      "value": 0.51825
+    },
+    "capacity_exit.sectors_that_lost_capacity": {
+      "unit": "commodities",
+      "value": 1.0
+    },
     "capital_goods.advance.fixed_share": {
       "unit": "fraction",
       "value": 0.037569

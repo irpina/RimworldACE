@@ -23,6 +23,7 @@ from economy_lab.scenarios import (
     YAYO,
     ScenarioParameters,
     arbitrage,
+    capacity_exit,
     capital_goods,
     circuit_processes,
     cost_competition,
@@ -2938,3 +2939,103 @@ class CapitalGoodsTests(unittest.TestCase):
         # And the sectors that do carry plant must have lost some, or this
         # proves nothing about the sectors that do not.
         self.assertGreater(economy.ledger.capacity_lost.get(MEALS, 0.0), 0.0)
+
+
+class CapacityExitTests(unittest.TestCase):
+    """Competition for survival, not only for orders (docs/38).
+
+    Capacity falls by exactly the part of a day's wear that was not made
+    good, and nothing else moves it.  The money rule is off by default
+    because turning it on shrinks the component sector by a factor of
+    thirty, which is a consequence of RimWorld pricing a component below
+    what one costs to make (docs/37 section 6).
+    """
+
+    def test_the_rule_is_off_by_default(self):
+        """Off must mean bit-identical, not merely inactive."""
+        economy = capital_goods(days=240)
+        self.assertFalse(economy.capacity_exit)
+        self.assertEqual(economy.ledger.capacity_lost, {})
+        for region in economy.regions.values():
+            for producer in region.producers:
+                self.assertEqual(
+                    economy.maintenance_coverage(region, producer), 1.0
+                )
+
+    def test_a_loss_making_sector_decays_at_exactly_one_over_the_life(self):
+        """No margin covers no maintenance, so none of the wear is replaced.
+
+        Components lose 6.12 silver on a 32-silver product (docs/37 section
+        6), so their coverage is zero and their capacity follows the closed
+        form exactly while that stays true.
+        """
+        economy = capacity_exit(days=250)
+        region = economy.regions["Dust Basin"]
+        self.assertAlmostEqual(
+            region.capacity(COMPONENTS),
+            0.0625 * (1.0 - 1.0 / 600.0) ** 250,
+            places=9,
+        )
+        # And nothing else moved: every other sector covers its maintenance
+        # many times over, so its plant is replaced and its capacity holds.
+        self.assertEqual(sorted(economy.ledger.capacity_lost), [COMPONENTS])
+
+    def test_exit_stops_when_the_price_makes_the_survivor_viable(self):
+        """The sector is disciplined, not deleted.
+
+        Capacity contracts, utilization rises, the price rises with it, and
+        the decay stops at the point where the margin covers the day's
+        maintenance.  This is the whole result of docs/39 and the design
+        predicted the opposite — a cascade — so it is pinned here.
+        """
+        economy = capacity_exit(days=4000)
+        region = economy.regions["Dust Basin"]
+        machinists = [
+            producer
+            for producer in region.producers
+            if producer.commodity == COMPONENTS
+        ]
+        self.assertEqual(len(machinists), 1)
+        producer = machinists[0]
+        self.assertTrue(producer.active)
+        # Shrunk by roughly thirty times, not to zero.
+        self.assertLess(producer.capacity_per_day, 0.0625 / 20.0)
+        self.assertGreater(producer.capacity_per_day, 0.0)
+        # Still producing what the circuit asks of it.
+        self.assertGreater(producer.last_runs, 0.0)
+        # The price rose above the cost that had been sinking it.
+        self.assertGreater(
+            region.prices[COMPONENTS],
+            producer.effective_unit_cost(region.prices),
+        )
+        # And that is exactly why it stopped.
+        self.assertEqual(economy.maintenance_coverage(region, producer), 1.0)
+
+    def test_the_end_state_is_a_stationary_equilibrium(self):
+        """The economy finds a rest point it was not seeded at."""
+        economy = capacity_exit(days=4000)
+        region = economy.regions["Dust Basin"]
+        prices = dict(region.prices)
+        capacity = {name: region.capacity(name) for name in economy.commodities}
+        economy.step(400)
+        for name in sorted(economy.commodities):
+            with self.subTest(commodity=name):
+                self.assertAlmostEqual(
+                    region.prices[name], prices[name], places=12
+                )
+                self.assertAlmostEqual(
+                    region.capacity(name), capacity[name], places=12
+                )
+
+    def test_the_ledgers_still_close_after_four_thousand_days(self):
+        economy = capacity_exit(days=4000)
+        for name, residual in economy.commodity_balances().items():
+            self.assertAlmostEqual(residual, 0.0, places=6, msg=name)
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=6)
+        produced = sum(
+            economy.ledger.value_produced.get(name, 0.0)
+            for name in economy.regions
+        )
+        # Relative, because four thousand days of double-precision addition
+        # accumulates: 2e-13 of the value produced is rounding, not a leak.
+        self.assertLess(abs(economy.value_balance()) / produced, 1e-11)

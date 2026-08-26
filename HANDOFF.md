@@ -4,9 +4,10 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `772d713` (Department I: the machines are produced)
-**Behavioral baseline:** `5aaff0a` (164 metrics: 10 for the capital-goods circuit)
+**Latest Stage 0 model commit:** `HEAD` (capacity depreciation and exit)
+**Behavioral baseline:** `HEAD` (169 metrics: 10 capital-goods, 5 capacity-exit)
 **Capital-goods design / results:** `docs/36`, `docs/37`
+**Capacity-exit design / results:** `docs/38`, `docs/39`
 **Latest Labor Content commit:** `db769fd` (stuff-aware stats, generated defs, dendrovore graze fix)
 **Closed-analysis correction:** `db769fd` — `animals.py` `can_graze` now accepts `Dendrovore`;
 one def of 653 moved, `Meat_Alphabeaver` 717.7 → 5.2 ticks. `out/embodied_labor.csv` regenerated.
@@ -77,7 +78,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
-| **Stage 0 lab** (`economy_lab/`) | 163 tests, 164 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 170 tests, 169 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -110,9 +111,10 @@ the enlarged subsistence basket and turnover are all **done** (docs/27,
 docs/29, docs/31), and so is the capital-goods sector (docs/37). The
 two numbers the project reports as rates of profit are now rates, and
 the price system's is 0.518 per day rather than 1.17 because fixed
-capital is finally inside it. What is left is exit and capacity
-depreciation; recreation in the basket; monopoly rent. Optionally
-credit and bankruptcy. Then re-run the stale sensitivity sweep.
+capital is finally inside it. Capacity depreciation and exit are done
+too (docs/39). What is left is recreation in the basket; monopoly
+rent. Optionally credit and bankruptcy. Then re-run the stale
+sensitivity sweep.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -761,6 +763,10 @@ Locations:
   and the claim about what reads it that turned out to be false;
 - `docs/36-capital-goods-sector-design.md` — Department I, and the finding
   that the model's six authored machines were already bills of materials;
+- `docs/38-capacity-depreciation-design.md` — capacity falls only where a
+  replacement failed, and why shedding all idle capacity has no rest point;
+- `docs/39-capacity-depreciation-results.md` — a loss-making sector is
+  disciplined rather than deleted, and the third accounting mismatch;
 - `docs/37-capital-goods-sector-results.md` — six predictions right, one
   wrong by sixteen, and 89.6% of the fixed capital that moves nothing;
 - `docs/35-history-detail-results.md` — memory flat at ~60 MiB instead
@@ -1065,7 +1071,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 163 tests pass;
+- all 170 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -1512,22 +1518,30 @@ above. The scale question that section carried as its largest open risk is
     makes yayo an input to anything, check `r` first** — nine tenths of
     the fixed capital stops being inert and the rate moves a long way.
 
-    *Capacity depreciation and mothballing*, so that competition is for
-    survival and not only for orders. Today a producer that loses the
-    order book keeps its capacity forever, keeps inflating throughput
-    demand and inventory targets through the full-capacity convention,
-    and would take its share straight back. Exit is also what would let
-    the social labor value migrate to a superseded technique rather than
-    resting at the mix average. Time-based depreciation belongs here too,
-    since idle capacity is its subject.
+    *~~Capacity depreciation and mothballing~~* — depreciation and exit
+    are done (`docs/39`); mothballing is not, and is named there. Three
+    things to carry forward:
 
-    `docs/36` §3.3 explains why this could not ship with Department I and
-    what it now owes: a continuous sink against episodic investment cannot
-    reproduce itself exactly, and the equilibrium must report exactly
-    zero. The consequence is live in the model today — a replacement
-    shortfall is not throttled, so a region that cannot replace its
-    machines runs them into the ground and nothing notices. Noticing is
-    precisely this item.
+    **A loss-making sector is disciplined, not deleted.** Components shed
+    `1/L` a day for 2,200 days, and then stopped — the contraction raised
+    the price 19.8% while the maintenance bill fell thirtyfold, and they
+    met at exactly the point where the margin covers the upkeep. Nothing
+    in `_shed_capacity` knows about prices. The design predicted a cascade
+    and got an adjustment.
+
+    **The price system cannot see idle plant**, by a convention `docs/36`
+    introduced and `docs/39` §5 finally states: `social_fixed_capital`
+    reports the technique's coefficient at full utilization. So the plant
+    the price system implies (17,007 ticks) is 6.8% below the stock the
+    ledger holds (18,255). **If anything ever makes that read the
+    installed stock, `r` becomes utilization-dependent and every profit
+    rate reported since `docs/37` needs re-deriving.**
+
+    **Exit is necessary but not sufficient** for the social labor value to
+    migrate off a superseded technique. A superseded producer with a
+    positive margin covers its maintenance and never sheds. The missing
+    piece is a cheaper rival driving that margin down, which belongs with
+    `cost_competition`.
 
     *Recreation in the basket*, deliberately deferred in `docs/28` §2.2.
     The obvious candidate is yayo, which would make the model's own final
@@ -1577,8 +1591,16 @@ it is not intended for per-commit testing.
 - ~~competitive transmission from cost to price~~ — done (`docs/22`);
   transmission strength is now a measured quantity, and it is small for
   labor-saving change because wages are 2-4% of money cost;
-- competitive *exit*: a producer that loses the order book keeps its
-  capacity indefinitely, so competition is for orders and not survival;
+- ~~competitive *exit*~~ — done (`docs/39`). Capacity falls by exactly the
+  part of a day's wear a replacement did not make good; there is no decay
+  rule and no exit rule. Off by default, because turning the money rule on
+  shrinks Department I thirtyfold over sixty-six years. The result is that
+  a loss-making sector is *disciplined*, not deleted: it sheds idle plant
+  until the price rises to where the survivor pays for itself. Exit turns
+  out to be necessary but **not sufficient** for social labor value to
+  migrate to a superseded technique — a superseded producer with a positive
+  margin covers its maintenance and never sheds. That needs a cheaper rival
+  driving the margin down, which is `cost_competition`'s territory;
 - ~~an economic interpretation for the `unit_cost` operating overhead~~ —
   done, and the answer is that it is the authored-price wedge (`docs/24`);
   it is now named and measured, but not removed, and removing it means
@@ -1622,8 +1644,11 @@ it is not intended for per-commit testing.
 - wage deviations from value: bargaining, the reserve army, worker mobility;
 - credit, bankruptcy, and liquidity-constrained consumption (workers are
   cash-constrained on the basket, but nothing else is);
-- capacity depreciation or mothballing (idle surplus from buffer investment
-  persists indefinitely);
+- ~~capacity depreciation~~ — done (`docs/39`). Mothballing is still absent
+  and deliberately so: arresting an idle plant's decay needs a rule about
+  expected future demand, and expectations here are one exponentially
+  smoothed price. Moral depreciation — plant devalued by a better technique
+  appearing rather than by wear — is also still absent;
 - individual producer cash accounts and transfer pricing (wages are paid
   from the regional pool; producer-level exploitation accounts need
   producer-level cash);

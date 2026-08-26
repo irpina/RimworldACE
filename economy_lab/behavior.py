@@ -201,6 +201,7 @@ def collect_behavioral_metrics(
     metrics.update(_subsistence_basket_metrics(stable=stable))
     metrics.update(_turnover_metrics(stable=stable))
     metrics.update(_capital_goods_metrics())
+    metrics.update(_capacity_exit_metrics())
     metrics.update(_scale_metrics())
     return metrics
 
@@ -272,6 +273,53 @@ def _capital_goods_metrics() -> Dict[str, Dict[str, object]]:
             economy.capital_advanced()["fixed_capital"]
             / economy.capital_advanced()["total"],
             "fraction",
+        ),
+    }
+
+
+def _capacity_exit_metrics() -> Dict[str, Dict[str, object]]:
+    """What competition for survival does to a loss-making sector (docs/38).
+
+    The headline is that it does *not* delete it.  Components lose 6.12
+    silver on a 32-silver product, cover none of their maintenance, and shed
+    capacity at 1/L a day for about 2,200 days — and then stop, because the
+    contraction raised the price until the surviving plant paid for itself.
+    The design predicted a cascade that took the rest of Department I with
+    it, and the opposite happened.
+
+    `final_capacity` and `final_price` are the rest point.  `coverage` is 1.0
+    there by construction and is frozen because it is *why* the decay
+    stopped; if it ever drops below 1.0 the sector is decaying again and the
+    rest point was not one.
+    """
+    from .scenarios import COMPONENTS, capacity_exit
+
+    economy = capacity_exit()
+    region = economy.regions["Dust Basin"]
+    machinist = next(
+        producer
+        for producer in region.producers
+        if producer.commodity == COMPONENTS
+    )
+    return {
+        "capacity_exit.components.final_capacity": _metric(
+            machinist.capacity_per_day, "units/day"
+        ),
+        "capacity_exit.components.final_price": _metric(
+            region.prices[COMPONENTS], "silver"
+        ),
+        "capacity_exit.components.coverage": _metric(
+            economy.maintenance_coverage(region, machinist), "fraction"
+        ),
+        # Everything else must be untouched: a sector covering its
+        # maintenance replaces its plant and keeps its capacity.
+        "capacity_exit.sectors_that_lost_capacity": _metric(
+            float(len(economy.ledger.capacity_lost)), "commodities"
+        ),
+        # The rate of profit is read from the *technique*, which idle
+        # capacity does not enter, so shedding it should move nothing.
+        "capacity_exit.production.profit_rate": _metric(
+            economy.prices_of_production()["profit_rate"], "ratio"
         ),
     }
 
