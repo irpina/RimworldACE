@@ -24,12 +24,20 @@ Four sessions, twenty-three numbered predictions.
 | `docs/43` absolute rent | 3 | 2 |
 | **total** | **16** | **7** |
 
-**Every one of the seven wrong predictions produced that session's actual
-result.** That is not a coincidence and it is the strongest argument for the
-method: a prediction written down before the code is a hypothesis, and a
-hypothesis that fails tells you where your model of your own model was
-wrong. The right ones confirmed arithmetic; the wrong ones changed what the
-project believes.
+**Six of the seven wrong predictions produced that session's actual result.**
+That is not a coincidence and it is the strongest argument for the method: a
+prediction written down before the code is a hypothesis, and a hypothesis
+that fails tells you where your model of your own model was wrong. The right
+ones confirmed arithmetic; the wrong ones changed what the project believes.
+
+The seventh is worth naming as the exception, because it flatters nobody.
+`docs/43` §5.1 predicted chemfuel would have the lowest organic composition
+in the model. It is fifth, because steel and wood have *exactly* zero
+constant capital and I had forgotten the model contained them — Department I
+had added them two sessions earlier. That is not a productive failure of
+reasoning; it is a failure to look. A wrong prediction is only informative
+when the reasoning behind it was written down and can be inspected, and this
+one's reasoning was fine and its inventory was not.
 
 ---
 

@@ -363,6 +363,7 @@ results document scoring the predictions afterward.
 | doc | |
 |---|---|
 | **[25-stage0-arc-summary.md](docs/25-stage0-arc-summary.md)** | **Start here: what the laboratory has learned, and what it got wrong** |
+| **[44-phase-a-arc-summary.md](docs/44-phase-a-arc-summary.md)** | **Then here: closing the last holes, and the proxy that keeps failing** |
 | [06-stage0-economy-lab.md](docs/06-stage0-economy-lab.md) | The laboratory's purpose and shape |
 | [07](docs/07-accounted-input-predictions.md) · [08](docs/08-accounted-input-design.md) · [09](docs/09-accounted-input-results.md) | Accounted input-output production: joint products by mass, proportional rationing, simultaneous production |
 | [10](docs/10-upstream-observation-results.md) · [11](docs/11-upstream-production-control.md) · [12](docs/12-upstream-production-control-results.md) | The upstream hysteresis bug and the damped demand-led control that fixed it |

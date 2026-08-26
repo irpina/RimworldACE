@@ -813,10 +813,15 @@ Locations:
 - `docs/27-prices-of-production-results.md` — meals as the only basic
   commodity, the corn-model profit rate, the aggregate invariance
   failure, and why the subsistence basket is now a prerequisite;
-- `docs/25-stage0-arc-summary.md` — the narrative summary of the whole
-  Stage 0 arc: what each layer measured, the three thesis-relevant
-  results, the wrong predictions, and the standing caveat on every
-  ratio built on v;
+- `docs/25-stage0-arc-summary.md` — the narrative summary of the Stage 0
+  arc to the scale test: what each layer measured, the three
+  thesis-relevant results, the wrong predictions, and the standing caveat
+  on every ratio built on v;
+- `docs/44-phase-a-arc-summary.md` — the continuation, covering docs/36 to
+  docs/43. Sixteen predictions right and seven wrong; the four times a
+  ratio measured in one accounting was quietly reused in another; and why
+  the exactly-zero equilibrium requirement is the most productive
+  constraint in the project;
 - `docs/23-constant-capital-and-the-overhead-design.md` — fixed capital,
   the reclassification of the operating overhead, and the c/v/s ledger
   decided in advance;
