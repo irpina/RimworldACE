@@ -23,11 +23,37 @@ INTEGER_PARAMETERS = {
 }
 
 
+def excluded_parameters(
+    baseline: ScenarioParameters,
+) -> Dict[str, str]:
+    """Parameters a proportional sweep cannot say anything about, and why.
+
+    Reported rather than silently skipped.  A parameter absent from the
+    ranking with no explanation reads as "no effect measured", which is a
+    different and much stronger claim than "not measurable this way".
+    """
+    excluded: Dict[str, str] = {}
+    for parameter in fields(baseline):
+        value = getattr(baseline, parameter.name)
+        if isinstance(value, bool):
+            excluded[parameter.name] = (
+                "regime switch, not a magnitude: a boolean has no +/-10%"
+            )
+        elif float(value) == 0.0:
+            excluded[parameter.name] = (
+                "zero at baseline, so a proportional perturbation is zero"
+            )
+    return excluded
+
+
 def parameter_variants(
     baseline: ScenarioParameters,
 ) -> Iterable[Tuple[str, str, float, float, ScenarioParameters]]:
+    skip = excluded_parameters(baseline)
     for parameter in fields(baseline):
         name = parameter.name
+        if name in skip:
+            continue
         original = float(getattr(baseline, name))
         for direction, factor in (("minus", 1.0 - PERTURBATION), ("plus", 1.0 + PERTURBATION)):
             perturbed = original * factor
@@ -50,8 +76,35 @@ def run_sweep() -> List[Dict[str, object]]:
     for name, direction, original, perturbed, parameters in parameter_variants(
         baseline_parameters
     ):
-        outputs = collect_behavioral_metrics(parameters)
         input_change = (perturbed - original) / original
+        try:
+            outputs = collect_behavioral_metrics(parameters)
+        except Exception as failure:  # noqa: BLE001
+            # A perturbation the circuit refuses is a *result*, not a crash.
+            # docs/17 section 7 engineered several of these deliberately:
+            # `meals_per_worker_day` and `meal_capacity_per_day` are part of
+            # the exact-stationarity calibration, and moving them by a tenth
+            # is meant to break the seeding rather than to be absorbed.  The
+            # sweep reports which parameters refuse and what they said.
+            rows.append(
+                {
+                    "parameter": name,
+                    "direction": direction,
+                    "baseline_parameter": original,
+                    "perturbed_parameter": perturbed,
+                    "actual_parameter_change_pct": input_change * 100.0,
+                    "metric": "REFUSED",
+                    "unit": type(failure).__name__,
+                    "baseline_output": "",
+                    "perturbed_output": "",
+                    "absolute_delta": "",
+                    "relative_delta_pct": "",
+                    "normalized_output_change": "",
+                    "elasticity": "",
+                    "note": str(failure)[:300],
+                }
+            )
+            continue
         for metric_name in sorted(baseline_outputs):
             baseline_metric = baseline_outputs[metric_name]
             current_metric = outputs[metric_name]
@@ -84,6 +137,7 @@ def run_sweep() -> List[Dict[str, object]]:
                     ),
                     "normalized_output_change": normalized_change,
                     "elasticity": elasticity,
+                    "note": "",
                 }
             )
     return rows
@@ -102,12 +156,22 @@ def parameter_ranking(
 ) -> List[Dict[str, object]]:
     strongest: Dict[str, Dict[str, object]] = {}
     for row in rows:
+        if row["metric"] == "REFUSED":
+            continue
         current = strongest.get(str(row["parameter"]))
         if current is None or float(row["elasticity"]) > float(current["elasticity"]):
             strongest[str(row["parameter"])] = row
     return sorted(
         strongest.values(),
         key=lambda row: (-float(row["elasticity"]), str(row["parameter"])),
+    )
+
+
+def refusals(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    """Perturbations the circuit refused to seed, in parameter order."""
+    return sorted(
+        (row for row in rows if row["metric"] == "REFUSED"),
+        key=lambda row: (str(row["parameter"]), str(row["direction"])),
     )
 
 
@@ -142,6 +206,33 @@ def ranking_text(rows: List[Dict[str, object]]) -> str:
             "",
             "No measured effect on the captured outputs:",
             "  " + (", ".join(inert) if inert else "none"),
+        ]
+    )
+
+    refused = refusals(rows)
+    lines.extend(["", "Refused to seed (a result, not a crash):"])
+    if refused:
+        for row in refused:
+            lines.append(
+                f"  {str(row['parameter'])} {str(row['direction'])}: "
+                f"{row['unit']}"
+            )
+            lines.append(f"      {row['note']}")
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Not swept, and why:"])
+    for name, reason in sorted(
+        excluded_parameters(ScenarioParameters()).items()
+    ):
+        lines.append(f"  {name:32} {reason}")
+    lines.extend(
+        [
+            "",
+            "Scale metrics read out/embodied_labor.csv rather than a scenario,",
+            "so they are parameter-independent by construction.  Their zeros",
+            "in this sweep are structural and are not evidence about any",
+            "parameter.",
             "",
         ]
     )

@@ -200,15 +200,17 @@ def collect_behavioral_metrics(
     )
     metrics.update(_subsistence_basket_metrics(stable=stable))
     metrics.update(_turnover_metrics(stable=stable))
-    metrics.update(_capital_goods_metrics())
-    metrics.update(_capacity_exit_metrics())
-    metrics.update(_recreation_basket_metrics())
-    metrics.update(_absolute_rent_metrics())
+    metrics.update(_capital_goods_metrics(parameters))
+    metrics.update(_capacity_exit_metrics(parameters))
+    metrics.update(_recreation_basket_metrics(parameters))
+    metrics.update(_absolute_rent_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
 
-def _capital_goods_metrics() -> Dict[str, Dict[str, object]]:
+def _capital_goods_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
     """What Department I changes when the machines become produced (docs/36).
 
     The headline is `profit_rate`.  Fixed capital had been left out of the
@@ -225,7 +227,7 @@ def _capital_goods_metrics() -> Dict[str, Dict[str, object]]:
     """
     from .scenarios import COMPONENTS, STEEL, WOOD, capital_goods
 
-    economy = capital_goods()
+    economy = capital_goods(parameters=parameters)
     system = economy.prices_of_production()
     region = economy.regions["Dust Basin"]
     direct = sum(
@@ -279,7 +281,9 @@ def _capital_goods_metrics() -> Dict[str, Dict[str, object]]:
     }
 
 
-def _capacity_exit_metrics() -> Dict[str, Dict[str, object]]:
+def _capacity_exit_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
     """What competition for survival does to a loss-making sector (docs/38).
 
     The headline is that it does *not* delete it.  Components lose 6.12
@@ -296,7 +300,7 @@ def _capacity_exit_metrics() -> Dict[str, Dict[str, object]]:
     """
     from .scenarios import COMPONENTS, capacity_exit
 
-    economy = capacity_exit()
+    economy = capacity_exit(parameters=parameters)
     region = economy.regions["Dust Basin"]
     machinist = next(
         producer
@@ -326,7 +330,9 @@ def _capacity_exit_metrics() -> Dict[str, Dict[str, object]]:
     }
 
 
-def _recreation_basket_metrics() -> Dict[str, Dict[str, object]]:
+def _recreation_basket_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
     """What happens when the workers' basket holds the workers' own product.
 
     docs/37 section 8 left a standing prediction: if anything ever consumes
@@ -344,9 +350,11 @@ def _recreation_basket_metrics() -> Dict[str, Dict[str, object]]:
     """
     from .scenarios import capital_goods, recreation_basket, recreation_sweep
 
-    economy = recreation_basket()
+    economy = recreation_basket(parameters=parameters)
     system = economy.prices_of_production()
-    epsilon = recreation_sweep(quantities=[2.0 ** -12])[0]
+    epsilon = recreation_sweep(
+        quantities=[2.0 ** -12], parameters=parameters
+    )[0]
     return {
         "recreation.production.profit_rate": _metric(
             system["profit_rate"], "ratio"
@@ -371,12 +379,16 @@ def _recreation_basket_metrics() -> Dict[str, Dict[str, object]]:
         ),
         # For the comparison the two above are only meaningful against.
         "recreation.baseline_profit_rate": _metric(
-            capital_goods().prices_of_production()["profit_rate"], "ratio"
+            capital_goods(parameters=parameters)
+            .prices_of_production()["profit_rate"],
+            "ratio",
         ),
     }
 
 
-def _absolute_rent_metrics() -> Dict[str, Dict[str, object]]:
+def _absolute_rent_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
     """Marx's condition for absolute rent, measured (docs/42, docs/43).
 
     The account rests on a below-average organic composition implying a
@@ -401,8 +413,8 @@ def _absolute_rent_metrics() -> Dict[str, Dict[str, object]]:
         )
         return all(a[1] <= b[1] for a, b in zip(rows, rows[1:]))
 
-    plain = equilibrium()
-    plant = capital_goods()
+    plain = equilibrium(parameters=parameters)
+    plant = capital_goods(parameters=parameters)
     deviation = plant.price_value_deviation()
     _, _, output = plant.social_technique()
     total = sum(output[name] * deviation[name] for name in deviation)
