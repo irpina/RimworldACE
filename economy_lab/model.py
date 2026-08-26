@@ -126,6 +126,16 @@ class Process:
     #: bit-identical.
     capital_money_per_capacity: float = 0.0
     capital_labor_per_capacity: float = 0.0
+    #: Department I (docs/36).  Where this bill is non-empty the two scalars
+    #: above stop being authored and become *derived*: ``capital_bill`` is
+    #: what one machine is made of, ``capital_construction_labor`` the ticks
+    #: it takes to build one, and ``machines_per_capacity`` how many machines
+    #: support one unit of daily output.  An empty bill leaves every existing
+    #: model bit-identical, which is the same compatibility rule fixed
+    #: capital itself shipped under (docs/23).
+    capital_bill: Dict[str, float] = field(default_factory=dict)
+    capital_construction_labor: float = 0.0
+    machines_per_capacity: float = 0.0
 
     @property
     def primary(self) -> str:
@@ -179,11 +189,25 @@ class Process:
         share = self.share_of_cost(commodity, commodities)
         return self.unit_operating_cost * share / units
 
+    def capital_bill_per_capacity(self) -> Dict[str, float]:
+        """Commodities needed to build the plant behind one unit of daily output.
+
+        The bill for one machine times the machines a unit of capacity needs.
+        Empty where the process carries no bill, which is how every model
+        before docs/36 behaves.
+        """
+        return {
+            name: quantity * self.machines_per_capacity
+            for name, quantity in sorted(self.capital_bill.items())
+        }
+
     def capital_consumed_per_unit(
         self,
         commodity: str,
         service_life_days: float,
         commodities: Optional[Dict[str, "Commodity"]] = None,
+        money_per_capacity: Optional[float] = None,
+        labor_per_capacity: Optional[float] = None,
     ) -> Tuple[float, float]:
         """Fixed capital transferred to one unit of output: (silver, ticks).
 
@@ -192,6 +216,12 @@ class Process:
         life of the capital that supports it.  Unit cost is therefore
         independent of utilization, which keeps idle plant from feeding a
         rising unit cost back into the price anchor (docs/23).
+
+        ``money_per_capacity`` and ``labor_per_capacity`` override the
+        authored scalars.  Department I passes the figures it derives from
+        the bill of materials, which are prices and values rather than
+        constants and so cannot live on a frozen process (docs/36 section
+        3.2).  Omitted, the authored scalars are used and nothing moves.
         """
         if service_life_days <= EPSILON:
             return 0.0, 0.0
@@ -199,9 +229,19 @@ class Process:
         units = self.outputs.get(commodity, 0.0)
         if units <= EPSILON:
             return 0.0, 0.0
+        money = (
+            self.capital_money_per_capacity
+            if money_per_capacity is None
+            else money_per_capacity
+        )
+        labor = (
+            self.capital_labor_per_capacity
+            if labor_per_capacity is None
+            else labor_per_capacity
+        )
         return (
-            self.capital_money_per_capacity * share / service_life_days,
-            self.capital_labor_per_capacity * share / service_life_days,
+            money * share / service_life_days,
+            labor * share / service_life_days,
         )
 
     def input_cost_per_run(self, prices: Dict[str, float]) -> float:
@@ -314,6 +354,27 @@ class Producer:
     def desired_runs(self, price: float, prices: Optional[Dict[str, float]] = None) -> float:
         return self.process.runs_for(self.capacity_per_day) * self.utilization(price, prices)
 
+    def capital_draw_per_day(
+        self, commodity: str, service_life_days: float
+    ) -> float:
+        """Matter drawn per day to replace plant, at full capacity.
+
+        The full-capacity convention the derived-input term already uses,
+        for the same reason: an idled producer still owns its machines and
+        will still need to replace them.  Zero for a process without a bill
+        of materials, which is every process before docs/36.
+        """
+        quantity = self.process.capital_bill_per_capacity().get(commodity, 0.0)
+        if quantity <= 0.0:
+            return 0.0
+        # Associated exactly as `Region.throughput_demands` associates it:
+        # capacity times the per-capacity bill, then divided by the service
+        # life.  Multiplying the machine count in separately gives a
+        # different last bit and the equivalence test would say so.
+        return (
+            self.capacity_per_day * quantity / max(service_life_days, EPSILON)
+        )
+
     def input_per_day(self, commodity: str) -> float:
         """Input required per day at full capacity, ignoring price curtailment."""
         per_run = self.process.inputs.get(commodity, 0.0)
@@ -360,6 +421,11 @@ class Region:
     seed_unit_cost: Dict[str, float] = field(default_factory=dict)
     cost_ratio: Dict[str, float] = field(default_factory=dict)
     ticks_per_worker_day: float = 24000.0
+    #: Service life of fixed capital, mirrored from the economy so the
+    #: full-capacity replacement draw can be sized without reaching back
+    #: out of the region (docs/36).  Set by ``Economy.__init__``; the
+    #: default matches the economy's own so a bare Region is consistent.
+    capital_service_life_days: float = 600.0
     #: Fixed daily labor supply in worker-days; infinite means never binding.
     labor_pool: float = float("inf")
     #: Workers' silver.  Wages flow in, basket purchases flow out.
@@ -386,7 +452,29 @@ class Region:
         generalization: a commodity nothing is made from has zero derived
         demand and behaves exactly as before.
         """
-        derived = sum(p.input_per_day(commodity) for p in self.producers if p.active)
+        # Input draw and plant replacement, interleaved producer by
+        # producer.  Department I's plant wears out in proportion to output,
+        # so replacing it is throughput demand exactly as an input draw is;
+        # without it steel would carry a target inventory of zero and sit on
+        # the price floor, the same collapse the derived-input term was
+        # written to prevent (docs/36).
+        #
+        # The interleaving is not cosmetic.  `throughput_demands` walks each
+        # producer once and appends both terms together, and the two must
+        # agree to the bit: summing all the input draws and then all the
+        # replacement draws gives a different last bit wherever a commodity
+        # is both an input and a means of building plant, which steel is.
+        terms: List[float] = []
+        for producer in self.producers:
+            if not producer.active:
+                continue
+            terms.append(producer.input_per_day(commodity))
+            terms.append(
+                producer.capital_draw_per_day(
+                    commodity, self.capital_service_life_days
+                )
+            )
+        derived = sum(terms)
         total = self.base_daily_demand.get(commodity, 0.0) + derived
         basket_quantity = self.subsistence_basket.get(commodity, 0.0)
         if basket_quantity > 0.0:
@@ -423,6 +511,15 @@ class Region:
             for name, per_run in producer.process.inputs.items():
                 if per_run > 0:
                     terms.setdefault(name, []).append(runs * per_run)
+            for name, quantity in (
+                producer.process.capital_bill_per_capacity().items()
+            ):
+                if quantity > 0:
+                    terms.setdefault(name, []).append(
+                        producer.capacity_per_day
+                        * quantity
+                        / max(self.capital_service_life_days, EPSILON)
+                    )
         workers = self.full_capacity_labor_ticks() / max(
             self.ticks_per_worker_day, EPSILON
         )
@@ -539,6 +636,16 @@ class Ledger:
     #: Basket units workers could not obtain — labor-power paid below its
     #: reproduction cost, made visible even though nothing yet acts on it.
     basket_shortfall: Dict[str, float] = field(default_factory=dict)
+    #: Matter drawn to rebuild worn plant, by commodity (docs/36).  Also
+    #: booked as intermediate consumption, which is what closes the material
+    #: identity; this bucket exists so Department I's draw can be read
+    #: apart from ordinary input use.
+    capital_replacement: Dict[str, float] = field(default_factory=dict)
+    #: Living labor spent rebuilding plant, by region.  Part of
+    #: ``living_labor``, not additional to it: it is broken out because it
+    #: is the one kind of living labor that reaches a product only through
+    #: depreciation.
+    construction_labor: Dict[str, float] = field(default_factory=dict)
     transport_cash: float = 0.0
     initial_cash: float = 0.0
 
@@ -627,6 +734,11 @@ class Economy:
         self.competitive_price_intensity = competitive_price_intensity
         self.competitive_share_elasticity = competitive_share_elasticity
         self.capital_service_life_days = capital_service_life_days
+        # Mirrored onto every region so the full-capacity replacement
+        # draw can be sized inside `throughput_demand` without the
+        # region reaching back out to the economy (docs/36).
+        for region in self.regions.values():
+            region.capital_service_life_days = capital_service_life_days
         self.production_price_tolerance = production_price_tolerance
         self.production_price_max_iterations = production_price_max_iterations
         if production_period_days <= 0.0:
@@ -702,7 +814,7 @@ class Economy:
         # (docs/21).  Recorded once, from the same capacity weights.
         for region in self.regions.values():
             for producer in region.producers:
-                self._set_capital_consumption(producer)
+                self._set_capital_consumption(producer, region)
         for region in self.regions.values():
             self._update_wage_costs(region)
             for name in self.commodities:
@@ -1376,7 +1488,7 @@ class Economy:
         # Installed plant, not depreciation times service life: the machines
         # exist whether or not they ran today.
         fixed = sum(
-            producer.process.capital_labor_per_capacity
+            self.capital_labor_per_capacity(producer.process)
             * producer.capacity_per_day
             for name in names
             for producer in self.regions[name].producers
@@ -1547,7 +1659,7 @@ class Economy:
                     process=project.process
                     or self.known_processes[project.commodity],
                 )
-                self._set_capital_consumption(entrant)
+                self._set_capital_consumption(entrant, region)
                 region.producers.append(entrant)
             region.projects = pending
 
@@ -1582,7 +1694,7 @@ class Economy:
             # in directly — always carries the capital its technique implies.
             for producer in region.producers:
                 if producer.active:
-                    self._set_capital_consumption(producer)
+                    self._set_capital_consumption(producer, region)
 
             self._update_wage_costs(region)
 
@@ -1611,6 +1723,20 @@ class Economy:
                 runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     required[name] = required.get(name, 0.0) + runs * per_run
+                # Department I (docs/36).  The plant wears out in proportion
+                # to what it makes, and the matter to rebuild it has to come
+                # from somewhere.  Requested here so it contends pro-rata
+                # with everything else drawing on the same stock; a bill-free
+                # process requests nothing and this loop does not run.
+                per_output = (
+                    runs
+                    * producer.process.outputs.get(producer.commodity, 0.0)
+                    / self.capital_service_life_days
+                )
+                for name, quantity in (
+                    producer.process.capital_bill_per_capacity().items()
+                ):
+                    required[name] = required.get(name, 0.0) + per_output * quantity
 
             ration: Dict[str, float] = {}
             for name, need in required.items():
@@ -1694,6 +1820,15 @@ class Economy:
                         region.name,
                         own_output * producer.unattributed_margin,
                     )
+                # Rebuild the plant this output wore out (docs/36 3.3).
+                # Replacement in place, not decay of capacity: the charge
+                # the ledger has made since docs/23 stops being a fiction
+                # and becomes a draw on real stock.  A shortfall is *not*
+                # throttled here — running a machine you cannot replace is
+                # capacity decay, which is deliberately the next item.
+                labor_performed += self._replace_plant(
+                    region, producer, own_output, ration, drawn
+                )
                 for name, per_run in inputs.items():
                     drawn[name] = drawn.get(name, 0.0) + runs * per_run
                 for name, per_run in producer.process.outputs.items():
@@ -1958,7 +2093,12 @@ class Economy:
                     # (FINDINGS.md; docs/23).  Already apportioned per unit
                     # of output, so it scales with output, not with runs.
                     _, capital_labor = process.capital_consumed_per_unit(
-                        name, self.capital_service_life_days, self.commodities
+                        name,
+                        self.capital_service_life_days,
+                        self.commodities,
+                        labor_per_capacity=self.capital_labor_per_capacity(
+                            process, values
+                        ),
                     )
                     contributed += (
                         runs * process.outputs[name] * capital_labor
@@ -2002,7 +2142,12 @@ class Economy:
                     if name not in self.commodities:
                         continue
                     _, capital_labor = process.capital_consumed_per_unit(
-                        name, self.capital_service_life_days, self.commodities
+                        name,
+                        self.capital_service_life_days,
+                        self.commodities,
+                        labor_per_capacity=self.capital_labor_per_capacity(
+                            process
+                        ),
                     )
                     region_labor[name] = (
                         region_labor.get(name, 0.0)
@@ -2020,12 +2165,114 @@ class Economy:
                 if total > EPSILON
             }
 
-    def _set_capital_consumption(self, producer: Producer) -> None:
+    def capital_labor_per_capacity(
+        self,
+        process: Process,
+        values: Optional[Dict[str, float]] = None,
+    ) -> float:
+        """Embodied labor of the plant behind one unit of daily capacity.
+
+        Authored where the process carries no bill of materials, which is
+        every model before docs/36.  Where it carries one, this is the bill
+        at prevailing social labor values plus the construction labor —
+        endogenous, and circular where a capital good needs capital goods
+        to make.  ``values`` lets the value solve pass its current iterate
+        instead of the last committed one, which is what makes that circle
+        converge rather than lag a day behind.
+        """
+        if not process.capital_bill:
+            return process.capital_labor_per_capacity
+        prevailing = self.labor_values if values is None else values
+        return process.machines_per_capacity * (
+            sum(
+                quantity * prevailing.get(name, 0.0)
+                for name, quantity in sorted(process.capital_bill.items())
+            )
+            + process.capital_construction_labor
+        )
+
+    def capital_money_per_capacity(
+        self, process: Process, region: Optional[Region] = None
+    ) -> float:
+        """Silver cost of the plant behind one unit of daily capacity.
+
+        The bill at the region's own prices plus the construction labor at
+        the region's own wage, so a machine costs what machines cost
+        *there*.  Before docs/36 there was no such thing as a regional
+        capital cost; the authored MarketValue was the same everywhere, and
+        it carried the authored-price wedge docs/24 named.
+        """
+        if not process.capital_bill or region is None:
+            return process.capital_money_per_capacity
+        materials = sum(
+            quantity * region.prices.get(name, 0.0)
+            for name, quantity in sorted(process.capital_bill.items())
+        )
+        wage_per_tick = (
+            region.wage_rate() / max(region.ticks_per_worker_day, EPSILON)
+            if region.subsistence_basket
+            else 0.0
+        )
+        return process.machines_per_capacity * (
+            materials + process.capital_construction_labor * wage_per_tick
+        )
+
+    def _replace_plant(
+        self,
+        region: Region,
+        producer: Producer,
+        own_output: float,
+        ration: Dict[str, float],
+        drawn: Dict[str, float],
+    ) -> float:
+        """Rebuild the plant this output wore out; return the labor it took.
+
+        The value accounting is a small production in its own right and it
+        closes on its own terms.  The plant consumed transfers ``K/L`` to
+        the product as constant capital, which the ledger has booked since
+        docs/23.  The plant *rebuilt* is new value: its materials come out
+        of stock as circulating capital, its construction labor is living
+        labor performed today, and the two sum to the same ``K/L``.  So the
+        two cancel in ``value_balance`` and neither is counted twice.
+
+        Construction labor is not the sector's direct labor and is not
+        added to it.  It enters the value of the plant, which is where it
+        belongs, and reaches the product only through depreciation.
+
+        Returns zero, and touches nothing, for a process without a bill.
+        """
+        bill = producer.process.capital_bill_per_capacity()
+        if not bill or own_output <= EPSILON:
+            return 0.0
+        per_output = own_output / self.capital_service_life_days
+        rebuilt = 0.0
+        for name, quantity in bill.items():
+            take = per_output * quantity * ration.get(name, 1.0)
+            drawn[name] = drawn.get(name, 0.0) + take
+            Ledger.add(self.ledger.capital_replacement, name, take)
+            rebuilt += take * self.labor_values.get(name, 0.0)
+        construction = (
+            per_output
+            * producer.process.machines_per_capacity
+            * producer.process.capital_construction_labor
+        )
+        rebuilt += construction
+        Ledger.add(self.ledger.value_produced, region.name, rebuilt)
+        Ledger.add(self.ledger.construction_labor, region.name, construction)
+        return construction
+
+    def _set_capital_consumption(
+        self, producer: Producer, region: Optional[Region] = None
+    ) -> None:
         """Record what fixed capital this producer's technique consumes."""
         money, labor = producer.process.capital_consumed_per_unit(
             producer.commodity,
             self.capital_service_life_days,
             self.commodities,
+            money_per_capacity=self.capital_money_per_capacity(
+                producer.process, region
+            ),
+            labor_per_capacity=self.capital_labor_per_capacity(producer.process),
         )
         producer.capital_cost_per_unit = money
         producer.capital_labor_per_unit = labor
