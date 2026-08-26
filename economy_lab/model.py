@@ -1837,6 +1837,119 @@ class Economy:
                     draw[other] = draw.get(other, 0.0) + per_capacity * quantity
         return draw
 
+    def sector_organic_composition(
+        self, *, use_capacity: bool = False
+    ) -> Dict[str, float]:
+        """c / v per sector, in work-ticks (docs/42).
+
+        Constant capital per unit of output is the material inputs at their
+        own social labor values plus the plant worn out making it; variable
+        capital is the living labor times the **value of labor-power** per
+        tick, not the money wage.  That distinction is the whole point: an
+        organic composition built from the wage in silver would be a price
+        ratio wearing a value's name, which is the substitution this project
+        has caught itself making three times already.
+
+        The average of these, weighted by output, is what
+        ``organic_composition`` reports for a region.  Sectors with no living
+        labor are omitted rather than returned as infinity.
+        """
+        inputs, labor, output = self.social_technique(use_capacity=use_capacity)
+        plant_bill, plant_labor = self.social_fixed_capital(
+            use_capacity=use_capacity
+        )
+        life = max(self.capital_service_life_days, EPSILON)
+        necessary = 0.0
+        weight = 0.0
+        for region in self.regions.values():
+            if not region.subsistence_basket:
+                continue
+            ticks = max(region.ticks_per_worker_day, EPSILON)
+            necessary += self.basket_labor_value(region) / ticks
+            weight += 1.0
+        if weight <= 0.0:
+            return {}
+        necessary /= weight
+
+        composition: Dict[str, float] = {}
+        for name in sorted(output):
+            constant = sum(
+                quantity * self.labor_values.get(other, 0.0)
+                for other, quantity in sorted(inputs.get(name, {}).items())
+            )
+            constant += (
+                sum(
+                    quantity * self.labor_values.get(other, 0.0)
+                    for other, quantity in sorted(
+                        plant_bill.get(name, {}).items()
+                    )
+                )
+                + plant_labor.get(name, 0.0)
+            ) / life
+            variable = labor[name] * necessary
+            if variable <= EPSILON:
+                continue
+            composition[name] = constant / variable
+        return composition
+
+    def price_value_deviation(
+        self, *, use_capacity: bool = False
+    ) -> Optional[Dict[str, float]]:
+        """Production price minus labor value, per unit, in one numeraire.
+
+        Positive where a sector sells above its value under an equalized
+        rate of profit, negative where it sells below.  Under the
+        ``labor_value`` numeraire the output-weighted sum of these is
+        exactly zero by construction, which is the quantitative form of the
+        proposition that redistribution through the price system creates no
+        value (docs/42 section 5.4).
+
+        ``None`` where the price system is undefined.
+        """
+        system = self.prices_of_production(use_capacity=use_capacity)
+        if system is None:
+            return None
+        prices = system["prices"]
+        return {
+            name: prices[name] - self.labor_values.get(name, 0.0)
+            for name in sorted(prices)
+        }
+
+    def absolute_rent_bound(
+        self, *, use_capacity: bool = False
+    ) -> Optional[Dict[str, float]]:
+        """The most absolute rent could take, per day, by commodity (docs/42).
+
+        Marx's absolute rent is the part of a low-composition sector's
+        surplus value that landed property stops the price system from
+        redistributing away.  Its ceiling is therefore the amount the price
+        system *is* redistributing away — value minus price of production —
+        and only where that is positive.  A sector already selling above its
+        value has nothing being taken from it and so nothing to withhold.
+
+        Restricted to commodities some region holds a reserve in, because
+        absolute rent needs a landlord and only a reserve gives one.
+
+        This is a bound and not a flow.  Nothing collects it: the model has
+        no producer-level cash for rent to be paid out of, and no landowner
+        class to pay it to (docs/42 section 2).
+        """
+        deviation = self.price_value_deviation(use_capacity=use_capacity)
+        if deviation is None:
+            return None
+        owned = {
+            name
+            for region in self.regions.values()
+            for name in region.reserves
+        }
+        _, _, output = self.social_technique(use_capacity=use_capacity)
+        return {
+            name: max(0.0, -deviation[name]) * output.get(name, 0.0)
+            for name in sorted(deviation)
+            if name in owned
+        }
+
+
     def system_inventory(self, commodity: str) -> float:
         held = sum(r.inventory.get(commodity, 0.0) for r in self.regions.values())
         in_transit = sum(

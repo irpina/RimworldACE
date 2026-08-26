@@ -4,11 +4,12 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `HEAD` (recreation in the basket)
-**Behavioral baseline:** `HEAD` (176 metrics: 10 capital-goods, 5 capacity-exit, 7 recreation)
+**Latest Stage 0 model commit:** `HEAD` (absolute rent)
+**Behavioral baseline:** `HEAD` (182 metrics; 6 of them the absolute-rent measurements)
 **Capital-goods design / results:** `docs/36`, `docs/37`
 **Capacity-exit design / results:** `docs/38`, `docs/39`
 **Recreation-basket design / results:** `docs/40`, `docs/41`
+**Absolute-rent design / results:** `docs/42`, `docs/43`
 **Latest Labor Content commit:** `db769fd` (stuff-aware stats, generated defs, dendrovore graze fix)
 **Closed-analysis correction:** `db769fd` — `animals.py` `can_graze` now accepts `Dendrovore`;
 one def of 653 moved, `Meat_Alphabeaver` 717.7 → 5.2 ticks. `out/embodied_labor.csv` regenerated.
@@ -79,7 +80,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
-| **Stage 0 lab** (`economy_lab/`) | 177 tests, 176 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 183 tests, 182 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -114,9 +115,11 @@ two numbers the project reports as rates of profit are now rates, and
 the price system's is 0.518 per day rather than 1.17 because fixed
 capital is finally inside it. Capacity depreciation and exit are done
 too (docs/39), and so is recreation in the basket (docs/41). What is
-left is monopoly rent. Optionally credit and bankruptcy. Then re-run
-the stale sensitivity sweep, which now has a parameter worth sweeping:
-`yayo_per_worker_day` moves the rate of profit a lot and continuously.
+left is the stale sensitivity sweep, which is now the last thing
+standing between Stage 0 and a stable model, and which has a new
+parameter worth sweeping: `yayo_per_worker_day` moves the rate of
+profit a lot and continuously. Absolute rent is measured (docs/43);
+monopoly rent proper, credit and bankruptcy remain optional.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -774,6 +777,10 @@ Locations:
 - `docs/41-recreation-in-the-basket-results.md` — basicness is binary, its
   economic weight is not, and a correction to how docs/37 read its own
   biggest result;
+- `docs/42-absolute-rent-design.md` — Marx's condition for absolute rent as
+  something the model can test rather than assume;
+- `docs/43-absolute-rent-results.md` — it holds exactly without fixed
+  capital and breaks with it; the bound is 75.7% of chemfuel's value;
 - `docs/37-capital-goods-sector-results.md` — six predictions right, one
   wrong by sixteen, and 89.6% of the fixed capital that moves nothing;
 - `docs/35-history-detail-results.md` — memory flat at ~60 MiB instead
@@ -1078,7 +1085,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 177 tests pass;
+- all 183 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -1653,7 +1660,17 @@ it is not intended for per-commit testing.
 - joint products in an actual scenario — the mass apportionment rule is
   implemented and unit-tested, but every current process has one output;
 - ~~resource reserves, grades, and differential rent~~ — done for chemfuel;
-  absolute (monopoly) rent is still absent;
+- ~~absolute rent~~ — *measured* (`docs/43`), not collected. Marx's
+  condition for it — a below-average organic composition implying a value
+  above the price of production — holds **exactly** in a circulating-capital
+  economy and is broken by fixed capital, because the markup gains a
+  sector-specific `K/cost` term ranging 11.88 to 38.60 across sectors. The
+  bound on chemfuel is 75.7% of its value, 229 ticks a day, and the
+  deviations sum to floating-point zero, so rent can only ever be a
+  deduction from surplus value. It cannot become a *flow* until producers
+  hold cash and a landowner has somewhere to spend it — the producer-cash
+  omission below is the blocker, not a missing rent rule. Monopoly rent
+  proper, price *above* value rather than up to it, is still absent;
 - ~~labor supply and wages~~ — done: fixed regional pool, wage at the value
   of labor-power, surplus ledger;
 - ~~the subsistence basket~~ — done, and enlarged to food, clothing and

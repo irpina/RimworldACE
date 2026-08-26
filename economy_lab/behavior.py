@@ -203,6 +203,7 @@ def collect_behavioral_metrics(
     metrics.update(_capital_goods_metrics())
     metrics.update(_capacity_exit_metrics())
     metrics.update(_recreation_basket_metrics())
+    metrics.update(_absolute_rent_metrics())
     metrics.update(_scale_metrics())
     return metrics
 
@@ -371,6 +372,60 @@ def _recreation_basket_metrics() -> Dict[str, Dict[str, object]]:
         # For the comparison the two above are only meaningful against.
         "recreation.baseline_profit_rate": _metric(
             capital_goods().prices_of_production()["profit_rate"], "ratio"
+        ),
+    }
+
+
+def _absolute_rent_metrics() -> Dict[str, Dict[str, object]]:
+    """Marx's condition for absolute rent, measured (docs/42, docs/43).
+
+    The account rests on a below-average organic composition implying a
+    value above the price of production.  In a circulating-capital economy
+    that holds exactly; fixed capital breaks it, and
+    `deviation_monotone_without_plant` against
+    `deviation_monotone_with_plant` is that result in two bits.
+
+    `deviations_sum` is the invariant behind all of it: redistribution
+    through the price system creates no value, so the output-weighted
+    deviations cancel.  If that ever leaves float noise, the two systems are
+    not being read in one numeraire and every comparison here is void.
+    """
+    from .scenarios import CHEMFUEL, capital_goods, equilibrium
+
+    def monotone(economy):
+        composition = economy.sector_organic_composition()
+        prices = economy.prices_of_production()["prices"]
+        rows = sorted(
+            (composition[name], prices[name] / economy.labor_values[name])
+            for name in composition
+        )
+        return all(a[1] <= b[1] for a, b in zip(rows, rows[1:]))
+
+    plain = equilibrium()
+    plant = capital_goods()
+    deviation = plant.price_value_deviation()
+    _, _, output = plant.social_technique()
+    total = sum(output[name] * deviation[name] for name in deviation)
+    value = sum(output[name] * plant.labor_values[name] for name in deviation)
+    prices = plant.prices_of_production()["prices"]
+    return {
+        "rent.deviation_monotone_without_plant": _metric(
+            1.0 if monotone(plain) else 0.0, "boolean"
+        ),
+        "rent.deviation_monotone_with_plant": _metric(
+            1.0 if monotone(plant) else 0.0, "boolean"
+        ),
+        "rent.deviations_sum_over_value": _metric(total / value, "fraction"),
+        # The ceiling on absolute rent: what the price system takes away
+        # from the one sector that has a landlord.
+        "rent.chemfuel_bound_share_of_value": _metric(
+            1.0 - prices[CHEMFUEL] / plant.labor_values[CHEMFUEL], "fraction"
+        ),
+        "rent.chemfuel_bound_ticks_per_day": _metric(
+            plant.absolute_rent_bound()[CHEMFUEL], "ticks/day"
+        ),
+        "rent.chemfuel_organic_composition": _metric(
+            plant.sector_organic_composition()[CHEMFUEL], "ratio"
         ),
     }
 

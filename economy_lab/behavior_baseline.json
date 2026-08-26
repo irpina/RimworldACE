@@ -650,6 +650,30 @@
       "unit": "silver",
       "value": 43.2825
     },
+    "rent.chemfuel_bound_share_of_value": {
+      "unit": "fraction",
+      "value": 0.756888
+    },
+    "rent.chemfuel_bound_ticks_per_day": {
+      "unit": "ticks/day",
+      "value": 229.079385
+    },
+    "rent.chemfuel_organic_composition": {
+      "unit": "ratio",
+      "value": 0.050201
+    },
+    "rent.deviation_monotone_with_plant": {
+      "unit": "boolean",
+      "value": 0.0
+    },
+    "rent.deviation_monotone_without_plant": {
+      "unit": "boolean",
+      "value": 1.0
+    },
+    "rent.deviations_sum_over_value": {
+      "unit": "fraction",
+      "value": 0.0
+    },
     "scale.floored_direct_labor": {
       "unit": "commodities",
       "value": 30.0

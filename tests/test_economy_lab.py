@@ -3155,3 +3155,112 @@ class RecreationBasketTests(unittest.TestCase):
         self.assertGreater(without, full)
         # But by a few percent, not "a long way".
         self.assertLess((without - full) / full, 0.10)
+
+
+class AbsoluteRentTests(unittest.TestCase):
+    """Marx's condition for absolute rent, tested rather than assumed (docs/42).
+
+    Absolute rent is the part of a low-composition sector's surplus value
+    that landed property stops the price system redistributing away.  Its
+    ceiling is what the price system is taking, so the whole account rests
+    on a below-average organic composition implying a value above the price
+    of production.  These check that implication rather than granting it.
+    """
+
+    def test_the_deviations_sum_to_zero(self):
+        """Redistribution through prices creates no value (docs/42 s5.4).
+
+        Under the labor-value numeraire total price equals total value by
+        construction, so the positives and negatives must cancel exactly.
+        This is the quantitative form of rent being a deduction from surplus
+        value rather than an addition to it.
+        """
+        for economy in (equilibrium(days=240), capital_goods(days=240)):
+            with self.subTest(commodities=len(economy.commodities)):
+                deviation = economy.price_value_deviation()
+                _, _, output = economy.social_technique()
+                total = sum(output[n] * deviation[n] for n in deviation)
+                value = sum(
+                    output[n] * economy.labor_values[n] for n in deviation
+                )
+                self.assertLess(abs(total) / value, 1e-12)
+
+    def test_composition_ranks_the_deviation_without_fixed_capital(self):
+        """Marx's step 2, and it holds exactly in a circulating economy."""
+        economy = equilibrium(days=240)
+        composition = economy.sector_organic_composition()
+        prices = economy.prices_of_production()["prices"]
+        rows = sorted(
+            (composition[n], prices[n] / economy.labor_values[n])
+            for n in composition
+        )
+        for lower, higher in zip(rows, rows[1:]):
+            self.assertLessEqual(lower[1], higher[1])
+
+    def test_fixed_capital_breaks_that_ranking(self):
+        """And it is the result of docs/43, so it is pinned.
+
+        A sector's markup over cost depends on its plant-to-cost ratio,
+        which is a different ratio from its organic composition.  Sectors
+        heavy in plant relative to their circulating cost move up the
+        ranking - chemfuel at 56 days of it against a 21-day turnover - and
+        sectors light in it move down, which is garments at 0.6 days.
+        """
+        economy = capital_goods(days=240)
+        composition = economy.sector_organic_composition()
+        prices = economy.prices_of_production()["prices"]
+        deviation = {
+            n: prices[n] / economy.labor_values[n] for n in composition
+        }
+        rows = sorted((composition[n], deviation[n]) for n in composition)
+        self.assertFalse(
+            all(a[1] <= b[1] for a, b in zip(rows, rows[1:])),
+            "fixed capital no longer breaks the ranking; docs/43 is stale",
+        )
+        # Chemfuel is the clearest case: a fifteenth of garments' organic
+        # composition and a twentieth of psychoid leaves', and it sells
+        # further above its cost than either.
+        self.assertLess(composition[CHEMFUEL], composition[GARMENTS])
+        self.assertLess(composition[CHEMFUEL], composition[LEAVES])
+        self.assertGreater(deviation[CHEMFUEL], deviation[GARMENTS])
+        self.assertGreater(deviation[CHEMFUEL], deviation[LEAVES])
+        # And garments is the mirror image: the highest composition of the
+        # three and the lowest deviation, because its plant is a wooden
+        # bench worth 0.6 days of its own cost.
+        self.assertLess(deviation[GARMENTS], deviation[MEALS])
+
+    def test_the_bound_needs_a_landlord_and_a_deduction(self):
+        """Only reserve-holding commodities, and only where value exceeds price."""
+        economy = capital_goods(days=240)
+        bound = economy.absolute_rent_bound()
+        deviation = economy.price_value_deviation()
+        # A landlord is a reserve; chemfuel is the only one in this circuit.
+        self.assertEqual(sorted(bound), [CHEMFUEL])
+        self.assertGreater(bound[CHEMFUEL], 0.0)
+        # And a sector selling above its value has nothing withheld from it.
+        self.assertGreater(deviation[YAYO], 0.0)
+        self.assertNotIn(YAYO, bound)
+
+    def test_the_chemfuel_bound_is_three_quarters_of_its_value(self):
+        """docs/42 s5.2 predicted roughly 75%; this pins what it turned out to be."""
+        economy = capital_goods(days=240)
+        prices = economy.prices_of_production()["prices"]
+        share = 1.0 - prices[CHEMFUEL] / economy.labor_values[CHEMFUEL]
+        self.assertAlmostEqual(share, 0.757, places=2)
+
+    def test_variable_capital_is_the_value_of_labor_power(self):
+        """Not the money wage, which would be a price wearing a value's name.
+
+        docs/42 s7 named this as the fourth place the project could make a
+        substitution it has already made three times.  A composition built
+        on the silver wage would move when prices moved; this one must not.
+        """
+        economy = capital_goods(days=240)
+        before = economy.sector_organic_composition()
+        for region in economy.regions.values():
+            for name in region.prices:
+                region.prices[name] *= 2.0
+        after = economy.sector_organic_composition()
+        for name in before:
+            with self.subTest(commodity=name):
+                self.assertEqual(before[name], after[name])
