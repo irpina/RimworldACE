@@ -200,8 +200,80 @@ def collect_behavioral_metrics(
     )
     metrics.update(_subsistence_basket_metrics(stable=stable))
     metrics.update(_turnover_metrics(stable=stable))
+    metrics.update(_capital_goods_metrics())
     metrics.update(_scale_metrics())
     return metrics
+
+
+def _capital_goods_metrics() -> Dict[str, Dict[str, object]]:
+    """What Department I changes when the machines become produced (docs/36).
+
+    The headline is `profit_rate`.  Fixed capital had been left out of the
+    price system because the machines were exogenous, and docs/30 could only
+    report the size of the omission from the *value ledger*, where it was
+    3.54% of the advance.  In the price system it is 13.05%, and the rate of
+    profit it was hiding is not 3% but 56%.
+
+    Frozen beside it are the two facts that make the number believable: the
+    three new sectors move `r` by nothing at all on their own (they are
+    non-basic until the plant makes them basic), and Department I is under
+    two parts in a thousand of the labor performed.  A change in either
+    would mean the fall came from somewhere other than the plant.
+    """
+    from .scenarios import COMPONENTS, STEEL, WOOD, capital_goods
+
+    economy = capital_goods()
+    system = economy.prices_of_production()
+    region = economy.regions["Dust Basin"]
+    direct = sum(
+        producer.last_runs * producer.process.direct_labor
+        for producer in region.producers
+    )
+    department_one = sum(
+        producer.last_runs * producer.process.direct_labor
+        for producer in region.producers
+        if producer.commodity in (STEEL, WOOD, COMPONENTS)
+    )
+    construction = (
+        economy.ledger.construction_labor[region.name] / economy.day
+    )
+    return {
+        "capital_goods.production.profit_rate": _metric(
+            system["profit_rate"], "ratio"
+        ),
+        "capital_goods.production.gross_markup": _metric(
+            system["gross_markup"], "ratio"
+        ),
+        "capital_goods.production.fixed_capital_share": _metric(
+            system["fixed_capital_share"], "fraction"
+        ),
+        "capital_goods.production.basics": _metric(
+            float(len(system["basics"])), "commodities"
+        ),
+        # The closed analysis puts components at 5570 embodied ticks and
+        # omits the machining table that makes them.  This is that omission,
+        # measured one level deeper than docs/23 measured it.
+        "capital_goods.value.components": _metric(
+            economy.labor_values[COMPONENTS], "ticks"
+        ),
+        # Pure labor with nothing behind it: these must stay exact, and if
+        # they move, fixed capital has leaked into a sector that has none.
+        "capital_goods.value.steel": _metric(
+            economy.labor_values[STEEL], "ticks"
+        ),
+        "capital_goods.value.wood": _metric(economy.labor_values[WOOD], "ticks"),
+        "capital_goods.department_one.labor_share": _metric(
+            (department_one + construction) / direct, "fraction"
+        ),
+        "capital_goods.department_one.steel_per_day": _metric(
+            economy.department_one_output()[STEEL], "units"
+        ),
+        "capital_goods.advance.fixed_share": _metric(
+            economy.capital_advanced()["fixed_capital"]
+            / economy.capital_advanced()["total"],
+            "fraction",
+        ),
+    }
 
 
 def _scale_metrics() -> Dict[str, Dict[str, object]]:

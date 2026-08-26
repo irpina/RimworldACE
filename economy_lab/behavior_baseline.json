@@ -6,6 +6,46 @@
       "unit": "units",
       "value": 10.322317
     },
+    "capital_goods.advance.fixed_share": {
+      "unit": "fraction",
+      "value": 0.037569
+    },
+    "capital_goods.department_one.labor_share": {
+      "unit": "fraction",
+      "value": 0.001837
+    },
+    "capital_goods.department_one.steel_per_day": {
+      "unit": "units",
+      "value": 0.135916
+    },
+    "capital_goods.production.basics": {
+      "unit": "commodities",
+      "value": 7.0
+    },
+    "capital_goods.production.fixed_capital_share": {
+      "unit": "fraction",
+      "value": 0.130463
+    },
+    "capital_goods.production.gross_markup": {
+      "unit": "ratio",
+      "value": 12.516134
+    },
+    "capital_goods.production.profit_rate": {
+      "unit": "ratio",
+      "value": 0.51825
+    },
+    "capital_goods.value.components": {
+      "unit": "ticks",
+      "value": 5654.891129
+    },
+    "capital_goods.value.steel": {
+      "unit": "ticks",
+      "value": 47.5
+    },
+    "capital_goods.value.wood": {
+      "unit": "ticks",
+      "value": 22.5
+    },
     "cost_competition.local.meals.cheap_producer_share": {
       "unit": "fraction",
       "value": 0.72343

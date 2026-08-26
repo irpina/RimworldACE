@@ -1102,6 +1102,26 @@ def perishable_meals(
     return equilibrium(days, parameters=perishable)
 
 
+def capital_goods(
+    days: int = 240, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The circuit with its own means of production (docs/36).
+
+    Nine commodities instead of six.  Steel and wood are extracted, components
+    are made from steel at a machining table which is itself made of steel and
+    components, and every sector's plant is rebuilt out of that stock at the
+    rate the ledger has always said it wears out.
+
+    Stationary to the bit, like the six-commodity equilibrium it extends, and
+    for the same reason: a constant capacity implies a constant replacement
+    draw, which is an ordinary constant input flow.
+    """
+    parameters = replace(
+        parameters or ScenarioParameters(), capital_goods=True
+    )
+    return equilibrium(days, parameters=parameters)
+
+
 def regional_glut(
     days_after_injection: int = 120,
     *,

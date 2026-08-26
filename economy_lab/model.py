@@ -1750,6 +1750,61 @@ class Economy:
             "necessary_labor": necessary,
         }
 
+    def department_one_output(
+        self, region: Optional[str] = None
+    ) -> Dict[str, float]:
+        """Gross daily output of the commodities that build plant (docs/36).
+
+        The commodities that appear in some process's bill of materials,
+        and what was produced of them on the last day.  Empty where no
+        process carries a bill, which is the honest answer for a model in
+        which the machines are exogenous: there is no Department I.
+        """
+        makes_plant = {
+            name
+            for r in self.regions.values()
+            for producer in r.producers
+            if producer.active
+            for name in producer.process.capital_bill
+        }
+        names = [region] if region is not None else sorted(self.regions)
+        output: Dict[str, float] = {}
+        for name in names:
+            for producer in self.regions[name].producers:
+                if not producer.active or producer.commodity not in makes_plant:
+                    continue
+                output[producer.commodity] = output.get(
+                    producer.commodity, 0.0
+                ) + producer.last_runs * producer.process.outputs.get(
+                    producer.commodity, 0.0
+                )
+        return output
+
+    def capital_bill_draw(self, region: Optional[str] = None) -> Dict[str, float]:
+        """Matter drawn per day to replace worn plant, at the last day's runs.
+
+        The flow side of Department I, against which
+        ``department_one_output`` is the supply side.  In a stationary
+        state the two agree up to whatever else consumes the same goods.
+        """
+        names = [region] if region is not None else sorted(self.regions)
+        draw: Dict[str, float] = {}
+        for name in names:
+            for producer in self.regions[name].producers:
+                if not producer.active:
+                    continue
+                own_output = producer.last_runs * producer.process.outputs.get(
+                    producer.commodity, 0.0
+                )
+                if own_output <= EPSILON:
+                    continue
+                per_output = own_output / self.capital_service_life_days
+                for other, quantity in (
+                    producer.process.capital_bill_per_capacity().items()
+                ):
+                    draw[other] = draw.get(other, 0.0) + per_output * quantity
+        return draw
+
     def system_inventory(self, commodity: str) -> float:
         held = sum(r.inventory.get(commodity, 0.0) for r in self.regions.values())
         in_transit = sum(

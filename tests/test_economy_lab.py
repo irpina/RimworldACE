@@ -12,14 +12,18 @@ from economy_lab.model import (
 from economy_lab.scale import population, synthetic_economy
 from economy_lab.scenarios import (
     CHEMFUEL,
+    COMPONENTS,
     DAYS_PER_YEAR,
     GARMENTS,
     LEAVES,
     MEALS,
     MEDICINE,
+    STEEL,
+    WOOD,
     YAYO,
     ScenarioParameters,
     arbitrage,
+    capital_goods,
     circuit_processes,
     cost_competition,
     equilibrium,
@@ -2668,3 +2672,190 @@ class HistoryDetailTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CapitalGoodsTests(unittest.TestCase):
+    """Department I: machines that are produced rather than assumed (docs/36).
+
+    The circuit's fixed capital had been six authored constants.  They are
+    bills of materials in three commodities plus construction work, and the
+    tests below are the arithmetic of docs/36 section 2 made executable, so
+    the table in that document cannot rot without something going red.
+    """
+
+    #: The closed analysis's embodied labor for the three capital goods.
+    AUTHORED = {STEEL: 47.5, WOOD: 22.5, COMPONENTS: 5570.0}
+
+    def test_every_bill_reproduces_its_authored_machine_to_the_tick(self):
+        """docs/36 section 2: six machines and a machining table, exactly."""
+        parameters = ScenarioParameters(capital_goods=True)
+        expected = {
+            YAYO: parameters.drug_lab_capital_labor,
+            LEAVES: parameters.psychoid_field_capital_labor,
+            CHEMFUEL: parameters.refinery_capital_labor,
+            MEALS: parameters.provisioner_capital_labor,
+            GARMENTS: parameters.tailoring_bench_capital_labor,
+            MEDICINE: parameters.plant_pot_capital_labor,
+            # TableMachining: 150 steel, 5 components, 3000 work.
+            COMPONENTS: 37_975.0,
+        }
+        for sector, (bill, work) in parameters.machine_bills.items():
+            if sector not in expected:
+                continue
+            with self.subTest(sector=sector):
+                self.assertEqual(
+                    sum(
+                        quantity * self.AUTHORED[name]
+                        for name, quantity in bill.items()
+                    )
+                    + work,
+                    expected[sector],
+                )
+
+    def test_a_bill_free_process_is_untouched(self):
+        """An empty bill must change nothing, which is how docs/23 shipped."""
+        for process in circuit_processes(ScenarioParameters()).values():
+            self.assertEqual(process.capital_bill, {})
+            self.assertEqual(process.capital_bill_per_capacity(), {})
+            self.assertEqual(process.machines_per_capacity, 0.0)
+
+    def test_the_capital_goods_equilibrium_is_exactly_stationary(self):
+        """Nine commodities, both regions, four years, price range exactly 0."""
+        economy = capital_goods(days=4 * DAYS_PER_YEAR)
+        self.assertEqual(len(economy.commodities), 9)
+        for rname in economy.regions:
+            for cname in economy.commodities:
+                series = economy.series(rname, cname)
+                self.assertEqual(
+                    max(series) - min(series),
+                    0.0,
+                    f"{rname}/{cname} price moved at equilibrium",
+                )
+
+    def test_matter_is_conserved_through_the_plant(self):
+        """Steel drawn to rebuild machines is a declared sink, not a leak."""
+        economy = capital_goods(days=120)
+        for name, residual in economy.commodity_balances().items():
+            self.assertAlmostEqual(residual, 0.0, places=7, msg=name)
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+        # The value side closes too: plant consumed transfers K/L to the
+        # product, plant rebuilt takes materials as circulating capital and
+        # construction labor as living labor, and the two cancel.
+        self.assertAlmostEqual(economy.value_balance(), 0.0, places=6)
+        for name in (STEEL, WOOD, COMPONENTS):
+            self.assertGreater(
+                economy.ledger.capital_replacement.get(name, 0.0), 0.0
+            )
+
+    def test_department_one_has_a_positive_stationary_output(self):
+        """Without this, nothing in the price system's plant term is defined."""
+        economy = capital_goods(days=120)
+        output = economy.department_one_output()
+        draw = economy.capital_bill_draw()
+        self.assertEqual(sorted(output), sorted([COMPONENTS, STEEL, WOOD]))
+        for name in (STEEL, WOOD, COMPONENTS):
+            self.assertGreater(output[name], 0.0)
+            self.assertGreater(draw[name], 0.0)
+        # Wood and components are used for nothing but plant, so in a
+        # stationary state their output *is* the replacement draw.
+        for name in (WOOD, COMPONENTS):
+            self.assertAlmostEqual(output[name], draw[name], places=12)
+        # Steel is also a component input, so its output exceeds the draw.
+        self.assertGreater(output[STEEL], draw[STEEL])
+
+    def test_the_value_solve_closes_the_machining_table_cycle(self):
+        """Components need components, and the solve has to survive it."""
+        economy = capital_goods(days=120)
+        # Pure labor with nothing behind it: exactly the closed analysis.
+        self.assertEqual(economy.labor_values[STEEL], 47.5)
+        self.assertEqual(economy.labor_values[WOOD], 22.5)
+        # Components carry the fixed capital RimWorld's formula omits, so
+        # they must come out *above* the authored 5570 and not far above.
+        solved = economy.labor_values[COMPONENTS]
+        self.assertGreater(solved, 5570.0)
+        self.assertLess(solved, 5570.0 * 1.05)
+
+    def test_the_price_of_production_identity_holds_sector_by_sector(self):
+        """p = cost + r * advance, with the plant counted once in each.
+
+        The failure this guards against is the one docs/36 section 7 named:
+        charging the rate of profit on the standing plant *and* again on a
+        turnover-inflated depreciation flow.  Checking the aggregate would
+        not catch it, because an aggregate can be made to balance by a
+        compensating error; every sector separately cannot.
+        """
+        economy = capital_goods(days=120)
+        result = economy.prices_of_production()
+        prices = result["prices"]
+        rate = result["profit_rate"]
+        life = economy.capital_service_life_days
+        inputs, labor, output = economy.social_technique()
+        bundle = economy.social_wage_bundle()
+        plant_bill, plant_labor = economy.social_fixed_capital()
+        wage = sum(per * prices[name] for name, per in bundle.items())
+        self.assertTrue(plant_bill, "no plant means this proves nothing")
+        for name in sorted(output):
+            with self.subTest(commodity=name):
+                circulating = (
+                    sum(
+                        quantity * prices[other]
+                        for other, quantity in inputs.get(name, {}).items()
+                    )
+                    + labor[name] * wage
+                )
+                plant = (
+                    sum(
+                        quantity * prices[other]
+                        for other, quantity in plant_bill.get(name, {}).items()
+                    )
+                    + plant_labor.get(name, 0.0) * wage
+                )
+                cost = circulating + plant / life
+                advance = result["turnover_days"][name] * cost + plant
+                self.assertAlmostEqual(
+                    (cost + rate * advance) / prices[name], 1.0, places=10
+                )
+
+    def test_fixed_capital_makes_the_capital_goods_basic(self):
+        """Sraffa's distinction, and the reason the profit rate moves.
+
+        Steel does not enter herbal medicine directly - the plant pot is
+        wood - so it is basic only through the wage bundle: steel enters
+        the provisioner's stove, the stove enters meals, and meals enter
+        every sector that employs labor.
+        """
+        basics = capital_goods(days=120).prices_of_production()["basics"]
+        for name in (STEEL, WOOD, COMPONENTS):
+            self.assertIn(name, basics)
+        # Nothing consumes leaves or yayo but yayo and final demand.
+        self.assertNotIn(LEAVES, basics)
+        self.assertNotIn(YAYO, basics)
+
+    def test_capacity_is_not_built_out_of_nothing(self):
+        """A region short of the bill does not get the plant (docs/36 3.4).
+
+        Stated as a difference rather than an absence.  Checking only that
+        a stripped region builds nothing would pass even if investment were
+        blocked for some unrelated reason, so the same shock is run twice
+        and the stocked region has to rebuild.
+        """
+
+        def rebuild(strip_bill):
+            economy = capital_goods(days=60)
+            region = economy.regions["Dust Basin"]
+            economy.destroy_capacity("Dust Basin", MEALS, 0.6)
+            for _ in range(60):
+                if strip_bill:
+                    for name in (STEEL, WOOD, COMPONENTS):
+                        region.inventory[name] = 0.0
+                economy.step(1)
+            return region.capacity(MEALS), len(region.projects)
+
+        stocked_capacity, stocked_projects = rebuild(False)
+        stripped_capacity, stripped_projects = rebuild(True)
+        # The provisioner is 80 steel and 2 components a machine, so with
+        # the materials the region rebuilds and without them it cannot.
+        self.assertGreater(stocked_capacity, 0.4)
+        self.assertGreater(stocked_projects, 0)
+        self.assertEqual(stripped_capacity, 0.4)
+        self.assertEqual(stripped_projects, 0)
