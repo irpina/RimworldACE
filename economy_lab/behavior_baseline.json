@@ -564,7 +564,7 @@
     },
     "scale.floored_direct_labor": {
       "unit": "commodities",
-      "value": 36.0
+      "value": 30.0
     },
     "scale.population_commodities": {
       "unit": "commodities",
@@ -572,11 +572,11 @@
     },
     "scale.value_solve_comparable": {
       "unit": "commodities",
-      "value": 447.0
+      "value": 456.0
     },
     "scale.value_solve_exact": {
       "unit": "commodities",
-      "value": 447.0
+      "value": 456.0
     },
     "scale.value_solve_exact_share": {
       "unit": "fraction",
