@@ -80,8 +80,8 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
-| **Stage 0 lab** (`economy_lab/`) | 183 tests, 182 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
-| **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
+| **Stage 0 lab** (`economy_lab/`) | 183 tests, 182 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | **Phase A is finished** (`docs/44`); what is left is optional, not structural |
+| **Stage 1 runtime** (`economy_mod/`) | about 550 lines of real C#: a daily tick, deterministic settlement profiles, faction regions, a persisted reload determinism check, and a read-only tab that lists them | the economic model itself; this is still only the world it will run on |
 
 **The economics is the part that is nearly solved. The engineering that would
 make it a playable suite is barely started.** Labor Content is one visual pass
@@ -1280,13 +1280,30 @@ new model merely to make the forecast come true.
 ## Stage 1 runtime shell
 
 Stage 1 has begun as an isolated read-only RimWorld 1.6 mod in `economy_mod`.
-Commit `6794dfc` adds:
+Commit `6794dfc` added the shell and `585bf09` the first real content:
 
 - a persistent `EconomyWorldComponent` with a 60,000-tick daily cadence;
-- observation of generated world settlements;
-- a read-only Economy main tab, ordered between Animals and Wildlife;
+- a **deterministic profile per settlement** — faction, tile, biome,
+  hilliness — read off the generated world, with **regions** assigned by a
+  faction's first appearance in tile order;
+- those profiles persisted, **re-derived on load and compared**, with the
+  result shown in the tab. A mismatch means the derivation depends on state
+  that is not in the save, which is invisible otherwise and fatal once the
+  Stage 0 model is integrated;
+- a read-only Economy main tab, ordered between Animals and Wildlife, now
+  listing the profiles in a scrolling table;
 - explicit UI copy that vanilla prices remain unchanged;
-- no Harmony and no gameplay mutation.
+- no Harmony, no gameplay mutation, and **no `Rand`** — variation comes from
+  hashing stable identity through the same SplitMix64 mixer
+  `economy_lab/scale.py` uses, because `Rand` is global mutable state shared
+  with the game's own generation.
+
+`economy_mod/Source/verify.py` checks all of that against the *built
+assembly*, the way `mod/Source/verify.py` does for Labor Content: the four
+types the defs name exist, `Rand` and Harmony are absent, no
+gameplay-writing API is on the binding surface, and the surface is exactly
+the 30 expected symbols. Schema version is 2; a schema-1 save has no
+profiles node and loads clean.
 
 Runtime verification on RimWorld 1.6.4871 rev591 passed:
 
@@ -1303,10 +1320,27 @@ Runtime verification on RimWorld 1.6.4871 rev591 passed:
 Save serialization is confirmed. A deliberate save/reload read-back test has
 not yet been completed, so do not report reload persistence as verified.
 
-**That verification is now partly stale.** It was run when Labor Content was
-XML-only; the "loaded beside Labor Content with no assembly errors" line no
-longer covers the current Labor Content, which carries its own assembly since
-`b3727f1`. The co-load needs redoing.
+**That verification is now stale in two ways**, and both need a human at the
+game. The "loaded beside Labor Content with no assembly errors" line was run
+when Labor Content was XML-only; it carries its own assembly since `b3727f1`,
+so the co-load needs redoing. And `585bf09` added the profiles, the regions
+and the reload check, none of which has been seen running.
+
+**What to test in game, in one sitting:**
+
+1. **Co-load.** Both mods enabled together, new colony, no red errors. The
+   startup log should carry one line naming the settlement and region counts
+   and the determinism check.
+2. **The tab.** Settlements listed with a region, faction, tile, biome and
+   hilliness, grouped by region. Region numbers should be small integers
+   with no gaps.
+3. **Save and reload.** The tab's "Reload determinism" row should read
+   `reproduced N/N on reload`. Anything else is the finding, and the log
+   will name the first profile that disagreed.
+4. **A day passing.** "Economy days simulated" increments, and the
+   determinism row does *not* change (it is set at load, not per day).
+5. **An old save.** A save written before `585bf09` should load clean and
+   report `nothing saved to compare` rather than erroring.
 
 The local build toolchain is:
 
