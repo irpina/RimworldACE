@@ -1970,7 +1970,14 @@ class Economy:
                         region.name,
                         own_output * producer.unattributed_margin,
                     )
+                for name, per_run in inputs.items():
+                    drawn[name] = drawn.get(name, 0.0) + runs * per_run
                 # Rebuild the plant this output wore out (docs/36 3.3).
+                # *After* the input draw, not before: `_planned_runs`
+                # accumulates intended outflow inputs-first for each
+                # producer, and a draw accumulated in the other order
+                # differs in the last bits, which showed up as steel
+                # stock climbing by 9e-13 a day at equilibrium.
                 # Replacement in place, not decay of capacity: the charge
                 # the ledger has made since docs/23 stops being a fiction
                 # and becomes a draw on real stock.  A shortfall is *not*
@@ -1979,8 +1986,6 @@ class Economy:
                 labor_performed += self._replace_plant(
                     region, producer, own_output, ration, drawn
                 )
-                for name, per_run in inputs.items():
-                    drawn[name] = drawn.get(name, 0.0) + runs * per_run
                 for name, per_run in producer.process.outputs.items():
                     if name not in self.commodities:
                         continue
@@ -2527,6 +2532,16 @@ class Economy:
         downstream run plans become today's upstream input orders; it does not
         make today's output available as today's input. Production therefore
         remains simultaneous and independent of producer list order.
+
+        Convergence is exact equality, not a tolerance.  It used to stop
+        once no run moved by more than ``EPSILON``, which left the returned
+        plan differing from the plan its own input orders were computed
+        from — by up to 1e-9, though in practice 1e-12.  That was invisible
+        while the input graph was shallow enough to land on the fixed point
+        in one step.  Fixed capital makes it cyclic, the loop started
+        stopping one iterate early, and the gap showed up as steel stock
+        climbing 9e-13 a day in a supposedly exact equilibrium.  The plan
+        is a fixed point or it is an error; there is no third state.
         """
         planned = dict(desired)
         # The same answer on every iteration, so it is computed once.
@@ -2540,6 +2555,22 @@ class Economy:
                 runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     intended_outflow[name] += runs * per_run
+                # Department I (docs/36).  The plant this output wears out
+                # has to be rebuilt from stock, so it is intended outflow
+                # exactly as an input draw is.  Left out, steel would settle
+                # at whatever stock made the replenishment correction cover
+                # the replacement flow, which is stable but is not the
+                # stationary state the circuit was seeded at.
+                per_output = (
+                    runs
+                    * producer.process.outputs.get(producer.commodity, 0.0)
+                    / self.capital_service_life_days
+                )
+                for name, quantity in (
+                    producer.process.capital_bill_per_capacity().items()
+                ):
+                    if name in intended_outflow:
+                        intended_outflow[name] += per_output * quantity
             # Worker basket demand due today is a known constant within the
             # plan (wages today, bread tomorrow — docs/17), so it adds no
             # new coupling to the fixed point.
@@ -2572,10 +2603,7 @@ class Economy:
             revised = self._allocate_orders(
                 region, active, desired, desired_output, requested_output, grouped
             )
-            if all(
-                abs(revised[key] - planned[key]) <= EPSILON
-                for key in revised
-            ):
+            if revised == planned:
                 return revised
             planned = revised
         raise RuntimeError("production-order plan did not converge")

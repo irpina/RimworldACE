@@ -18,10 +18,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from math import floor
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from .model import (
     Commodity,
+    EPSILON,
     Economy,
     Process,
     Producer,
@@ -41,6 +42,9 @@ CHEMFUEL = "chemfuel"
 MEALS = "meals"
 GARMENTS = "garments"
 MEDICINE = "herbal_medicine"
+STEEL = "steel"
+WOOD = "wood"
+COMPONENTS = "components"
 
 
 @dataclass(frozen=True)
@@ -217,6 +221,40 @@ class ScenarioParameters:
     record_history: bool = True
     history_every: int = 1
 
+    # --- Department I (docs/36) ----------------------------------------------
+    # The six machines the model already used are bills of materials in three
+    # commodities plus construction work, and each decomposes to the tick:
+    # DrugLab, HydroponicsBasin, BiofuelRefinery, ElectricStove,
+    # HandTailoringBench and PlantPot.  Nothing here is invented; it is the
+    # closed analysis read one level deeper.  Off by default, because turning
+    # it on changes the commodity set.
+    capital_goods: bool = False
+    steel_reference_price: float = 1.9
+    steel_direct_labor: float = 47.5
+    steel_labor_value: float = 47.5 * 11.4 / 720.0
+    steel_mass: float = 0.5
+    steel_capacity_per_day: float = 1.0
+    wood_reference_price: float = 1.2
+    wood_direct_labor: float = 22.5
+    wood_labor_value: float = 22.5 * 11.4 / 720.0
+    wood_mass: float = 0.4
+    wood_capacity_per_day: float = 1.0
+    #: `Make_ComponentIndustrial`: 12 steel and 5000 ticks for one component
+    #: worth 32 silver.  The authored labor value is the closed analysis's
+    #: 5570 embodied ticks, which omits fixed capital; the solved one will
+    #: not, and the gap is the point.
+    component_reference_price: float = 32.0
+    component_direct_labor: float = 5000.0
+    component_labor_value: float = 5570.0 * 11.4 / 720.0
+    component_mass: float = 0.6
+    component_capacity_per_day: float = 0.0625
+    steel_per_component: float = 12.0
+    #: The fourth use of the docs/08 power stylization, on the same terms as
+    #: the tailoring bench: 0.2 chemfuel per 350 ticks of bench time.  It is
+    #: applied rather than exempted, and docs/37 reports what it costs a
+    #: 5000-tick recipe.
+    chemfuel_per_component: float = 0.2 * 5000.0 / 350.0
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -226,6 +264,32 @@ class ScenarioParameters:
     def machines_per_capacity(self, direct_labor: float) -> float:
         """Machines needed to support one unit of daily output."""
         return direct_labor / self.ticks_per_worker_day
+
+    #: What each machine is made of, and the ticks to put it up.  Read off
+    #: the game (docs/36 section 2); each reproduces the authored
+    #: `*_capital_labor` exactly at Steel = 47.5, WoodLog = 22.5 and
+    #: ComponentIndustrial = 5570 embodied ticks.
+    @property
+    def machine_bills(self) -> Dict[str, Tuple[Dict[str, float], float]]:
+        return {
+            YAYO: ({STEEL: 75.0, WOOD: 50.0, COMPONENTS: 6.0}, 3500.0),
+            LEAVES: ({STEEL: 100.0, COMPONENTS: 1.0}, 2800.0),
+            CHEMFUEL: ({STEEL: 150.0, COMPONENTS: 3.0}, 2000.0),
+            MEALS: ({STEEL: 80.0, COMPONENTS: 2.0}, 2000.0),
+            GARMENTS: ({WOOD: 75.0}, 2000.0),
+            MEDICINE: ({WOOD: 20.0}, 250.0),
+            # Department I owns its own means of production: a machining
+            # table, itself 150 steel and 5 components.  This is the cycle
+            # that makes the value solve circular, and it is the property
+            # that makes this Department I rather than a third consumer
+            # sector.
+            COMPONENTS: ({STEEL: 150.0, COMPONENTS: 5.0}, 3000.0),
+            # Mining and chopping need no building, which is true of the
+            # game and keeps these two at the bottom of the value graph
+            # where a productive matrix needs them.
+            STEEL: ({}, 0.0),
+            WOOD: ({}, 0.0),
+        }
 
     # --- resource reserves ---------------------------------------------------
     # Default: one large grade at the current operating overhead.  The reserve
@@ -307,6 +371,9 @@ class ScenarioParameters:
             MEALS: self.meal_reference_price,
             GARMENTS: self.garment_reference_price,
             MEDICINE: self.medicine_reference_price,
+            STEEL: self.steel_reference_price,
+            WOOD: self.wood_reference_price,
+            COMPONENTS: self.component_reference_price,
         }
         processes = circuit_processes(self)
         process = processes[commodity]
@@ -396,7 +463,33 @@ def circuit_commodities(
             parameters.medicine_labor_value,
             parameters.medicine_mass,
         ),
-    ]
+    ] + (
+        [
+            _commodity(
+                parameters,
+                STEEL,
+                parameters.steel_reference_price,
+                parameters.steel_labor_value,
+                parameters.steel_mass,
+            ),
+            _commodity(
+                parameters,
+                WOOD,
+                parameters.wood_reference_price,
+                parameters.wood_labor_value,
+                parameters.wood_mass,
+            ),
+            _commodity(
+                parameters,
+                COMPONENTS,
+                parameters.component_reference_price,
+                parameters.component_labor_value,
+                parameters.component_mass,
+            ),
+        ]
+        if parameters.capital_goods
+        else []
+    )
 
 
 def circuit_processes(
@@ -404,7 +497,7 @@ def circuit_processes(
 ) -> Dict[str, Process]:
     """The three technologies, keyed by their primary output."""
     parameters = parameters or ScenarioParameters()
-    return {
+    processes = {
         CHEMFUEL: Process(
             "chemfuel synthesis",
             outputs={CHEMFUEL: 1.0},
@@ -531,6 +624,64 @@ def circuit_processes(
             ),
         ),
     }
+    if parameters.capital_goods:
+        return _capital_goods_processes(parameters, processes)
+    return processes
+
+
+def _capital_goods_processes(
+    parameters: ScenarioParameters, processes: Dict[str, Process]
+) -> Dict[str, Process]:
+    """Attach the bills of materials, and add Department I itself (docs/36).
+
+    The six existing processes keep their authored `*_capital_*` scalars as
+    a fallback and gain the bill that supersedes them, so the two can be
+    compared rather than conflated — the same choice `Commodity.labor_value`
+    made in docs/19.
+
+    Steel and wood are extraction with no plant behind them.  Components are
+    manufactured at a machining table which is itself 150 steel and 5
+    components, which is the cycle the value solve has to close.
+    """
+    bills = parameters.machine_bills
+    revised = {
+        name: replace(
+            process,
+            capital_bill=bills[name][0],
+            capital_construction_labor=bills[name][1],
+            machines_per_capacity=parameters.machines_per_capacity(
+                process.direct_labor
+            ),
+        )
+        for name, process in processes.items()
+    }
+    revised[STEEL] = Process(
+        "steel mining",
+        outputs={STEEL: 1.0},
+        inputs={},
+        direct_labor=parameters.steel_direct_labor,
+    )
+    revised[WOOD] = Process(
+        "wood cutting",
+        outputs={WOOD: 1.0},
+        inputs={},
+        direct_labor=parameters.wood_direct_labor,
+    )
+    revised[COMPONENTS] = Process(
+        "component fabrication",
+        outputs={COMPONENTS: 1.0},
+        inputs={
+            STEEL: parameters.steel_per_component,
+            CHEMFUEL: parameters.chemfuel_per_component,
+        },
+        direct_labor=parameters.component_direct_labor,
+        capital_bill=bills[COMPONENTS][0],
+        capital_construction_labor=bills[COMPONENTS][1],
+        machines_per_capacity=parameters.machines_per_capacity(
+            parameters.component_direct_labor
+        ),
+    )
+    return revised
 
 
 def _region(
@@ -548,7 +699,13 @@ def _region(
         MEALS: parameters.meal_capacity_per_day,
         GARMENTS: parameters.garment_capacity_per_day,
         MEDICINE: parameters.medicine_capacity_per_day,
+        STEEL: parameters.steel_capacity_per_day,
+        WOOD: parameters.wood_capacity_per_day,
+        COMPONENTS: parameters.component_capacity_per_day,
     }
+    sectors = (YAYO, LEAVES, CHEMFUEL, MEALS, GARMENTS, MEDICINE)
+    if parameters.capital_goods:
+        sectors += (STEEL, WOOD, COMPONENTS)
     producers = [
         Producer(
             producer_names[key],
@@ -559,7 +716,7 @@ def _region(
             parameters.full_utilization_price_ratio,
             process=processes[key],
         )
-        for key in (YAYO, LEAVES, CHEMFUEL, MEALS, GARMENTS, MEDICINE)
+        for key in sectors
     ]
     # Build chemfuel reserve: first grade at the operating overhead, optional
     # second grade at a higher cost for depletion scenarios.
@@ -621,7 +778,14 @@ def _stationary_runs(
     acquired a material input (docs/28).
     """
     runs = {id(producer): 0.0 for producer in ordered}
-    for _ in range(len(ordered) + 2):
+    # One pass per stage, plus one to observe that nothing moved.  That bound
+    # was right while the input graph was a chain; fixed capital makes it
+    # cyclic — components need a machining table, which needs components —
+    # and a pass no longer buys a whole stage.  Measured rather than
+    # guessed: the docs/36 circuit settles on the eleventh pass against an
+    # old bound of eleven, so the bound is widened with room and still
+    # refuses loudly rather than returning an inexact plan.
+    for _ in range(4 * len(ordered) + 2):
         outflow = {
             name: region.base_daily_demand.get(name, 0.0)
             for name in region.prices
@@ -632,6 +796,21 @@ def _stationary_runs(
         for producer in ordered:
             for name, per_run in producer.process.inputs.items():
                 outflow[name] += runs[id(producer)] * per_run
+            # Department I (docs/36): the plant this output wears out is
+            # rebuilt from stock, so it is outflow like any input draw.
+            # Interleaved with the inputs above and expressed exactly as
+            # `Economy._planned_runs` expresses it, because the seed has to
+            # reproduce the runtime to the bit.
+            per_output = (
+                runs[id(producer)]
+                * producer.process.outputs.get(producer.commodity, 0.0)
+                / region.capital_service_life_days
+            )
+            for name, quantity in (
+                producer.process.capital_bill_per_capacity().items()
+            ):
+                if name in outflow:
+                    outflow[name] += per_output * quantity
         revised = {}
         for producer in ordered:
             units = producer.process.outputs[producer.commodity]
@@ -668,6 +847,23 @@ def _equilibrium_worker_days(
         labor = 0.0
         for producer in ordered:
             labor += runs[id(producer)] * producer.process.direct_labor
+            # Construction labor rebuilding worn plant is living labor and
+            # is employed like any other (docs/36 3.3).  Added inside the
+            # same producer step and in the same order as
+            # `Economy._replace_plant` adds it, so the quantized employment
+            # fixed point sees the identical float.
+            if producer.process.capital_bill:
+                own_output = (
+                    runs[id(producer)]
+                    * producer.process.outputs.get(producer.commodity, 0.0)
+                )
+                if own_output > EPSILON:
+                    labor += (
+                        own_output
+                        / region.capital_service_life_days
+                        * producer.process.machines_per_capacity
+                        * producer.process.capital_construction_labor
+                    )
         raw = labor / parameters.ticks_per_worker_day
         if quantum > 0.0:
             revised = floor(raw / quantum) * quantum
@@ -721,6 +917,9 @@ def seeded_two_region_economy(
                 MEALS: "Dust provisioners",
                 GARMENTS: "Dust tailors",
                 MEDICINE: "Dust herbalists",
+                STEEL: "Dust steelworks",
+                WOOD: "Dust woodcutters",
+                COMPONENTS: "Dust machinists",
             },
         ),
         _region(
@@ -734,6 +933,9 @@ def seeded_two_region_economy(
                 MEALS: "River provisioners",
                 GARMENTS: "River tailors",
                 MEDICINE: "River herbalists",
+                STEEL: "River steelworks",
+                WOOD: "River woodcutters",
+                COMPONENTS: "River machinists",
             },
         ),
     ]
@@ -786,33 +988,55 @@ def seeded_two_region_economy(
 
 
 def _assert_reference_full_utilization(economy: Economy) -> None:
-    """Refuse loudly if the wage pushes any producer below full utilization.
+    """Refuse loudly if a producer cannot supply what the circuit asks of it.
 
     The hazard of an additive wage (docs/17 section 4) is a producer quietly
-    dropped below its full-utilization ratio at reference prices, which
-    would silently break the stationary equilibrium.  Checked at seeding,
-    raised at seeding.
+    curtailed at reference prices, which would silently break the stationary
+    equilibrium.  That was checked by a proxy — full utilization — and the
+    proxy is wrong in both directions.
 
-    The cost read here is exactly the one `Producer.utilization` compares
-    against, so the guard's threshold is the model's own.  It used to add
-    the wage a second time on top of `effective_unit_cost`, which already
-    carries it; the generous-basket scenario of docs/28 pushed a sector
-    into the gap between the two and exposed it.  Over-strict rather than
-    unsafe, but wrong either way.
+    It over-refuses.  A sector priced below the full-utilization ratio is
+    curtailed but not stopped, and if what it is curtailed *to* still clears
+    the circuit's stationary call on it by a wide margin, the equilibrium is
+    exactly as stationary as before.  Department I found this: components
+    clear their cost by 1.45% before power and lose 19% after it, so the
+    proxy refuses a sector whose desired output is fourteen times the draw
+    (docs/37).
+
+    So this checks the property the proxy stood for: the runs a producer's
+    utilization permits must cover the runs the stationary circuit asks of
+    it.  Full utilization is still reported in the message, because it is
+    still the diagnosis in the usual case, but it is no longer the test.
+
+    What this does *not* catch is a producer whose capacity is below its
+    own stationary draw, because `_stationary_runs` caps at capacity and so
+    never asks for more than a producer can give.  The old check did not
+    catch it either.  Naming it here rather than claiming an improvement
+    that was not made.
     """
     for region in economy.regions.values():
-        for producer in region.producers:
+        ordered = sorted(
+            region.producers, key=lambda p: (p.name, p.commodity)
+        )
+        stationary = _stationary_runs(
+            region, ordered, region.worker_days_due
+        )
+        for producer in ordered:
             effective = producer.effective_unit_cost(region.prices)
             price = region.prices[producer.commodity]
             ratio = price / max(effective, 1e-9)
-            if ratio < producer.full_utilization_price_ratio:
-                raise ValueError(
-                    f"producer {producer.name!r} falls below full "
-                    f"utilization at reference prices once wages are paid "
-                    f"(price {price:.4f} / effective cost {effective:.4f} "
-                    f"= {ratio:.4f}); the seeded equilibrium would not be "
-                    "stationary"
-                )
+            permitted = producer.desired_runs(price, region.prices)
+            asked = stationary[id(producer)]
+            if permitted >= asked:
+                continue
+            raise ValueError(
+                f"producer {producer.name!r} cannot supply the stationary "
+                f"circuit at reference prices once wages are paid: it is "
+                f"asked for {asked:.6f} runs a day and its price/effective "
+                f"cost of {price:.4f}/{effective:.4f} = {ratio:.4f} permits "
+                f"only {permitted:.6f}; the seeded equilibrium would not be "
+                "stationary"
+            )
 
 
 def equilibrium(
