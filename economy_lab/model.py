@@ -641,6 +641,10 @@ class Ledger:
     #: identity; this bucket exists so Department I's draw can be read
     #: apart from ordinary input use.
     capital_replacement: Dict[str, float] = field(default_factory=dict)
+    #: Matter consumed building *new* plant, by commodity (docs/36 3.4).
+    #: Also booked as intermediate consumption, for the same reason as
+    #: ``capital_replacement``.
+    capital_construction: Dict[str, float] = field(default_factory=dict)
     #: Living labor spent rebuilding plant, by region.  Part of
     #: ``living_labor``, not additional to it: it is broken out because it
     #: is the one kind of living labor that reaches a product only through
@@ -1128,6 +1132,78 @@ class Economy:
             {name: output[name] for name in sorted(priced)},
         )
 
+    def social_fixed_capital(
+        self, *, use_capacity: bool = False
+    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, float]]:
+        """The plant behind one unit of output: its bill, and its build labor.
+
+        A *stock*, not a flow: what stands behind a unit of daily output,
+        which is ``machines_per_capacity`` machines because a unit of daily
+        capacity makes one unit a day.  Divide by the service life for the
+        depreciation flow; do not multiply by it, which is the error
+        docs/30 section 7.3 made in the other direction.
+
+        Weighted and apportioned exactly as ``social_technique`` weights and
+        apportions, so the price system and the value system see one
+        technology rather than two.  Empty for every process without a bill
+        of materials, which is what keeps the pre-docs/36 price system
+        reachable and bit-exact.
+        """
+
+        def weight(producer: Producer) -> float:
+            if use_capacity:
+                return producer.process.runs_for(producer.capacity_per_day)
+            return producer.last_runs
+
+        bill: Dict[str, Dict[str, float]] = {}
+        construction: Dict[str, float] = {}
+        output: Dict[str, float] = {}
+        for region in sorted(self.regions):
+            for producer in self.regions[region].producers:
+                if not producer.active:
+                    continue
+                runs = weight(producer)
+                if runs <= EPSILON:
+                    continue
+                process = producer.process
+                if not process.capital_bill:
+                    for name, per_run in sorted(process.outputs.items()):
+                        if name in self.commodities:
+                            output[name] = output.get(name, 0.0) + runs * per_run
+                    continue
+                per_capacity = process.capital_bill_per_capacity()
+                for name, per_run in sorted(process.outputs.items()):
+                    if name not in self.commodities:
+                        continue
+                    share = process.share_of_cost(name, self.commodities)
+                    units = runs * per_run
+                    output[name] = output.get(name, 0.0) + units
+                    row = bill.setdefault(name, {})
+                    for other, quantity in per_capacity.items():
+                        row[other] = row.get(other, 0.0) + units * quantity * share
+                    construction[name] = construction.get(name, 0.0) + (
+                        units
+                        * process.machines_per_capacity
+                        * process.capital_construction_labor
+                        * share
+                    )
+        return (
+            {
+                name: {
+                    other: total / output[name]
+                    for other, total in sorted(row.items())
+                    if total > EPSILON
+                }
+                for name, row in sorted(bill.items())
+                if output.get(name, 0.0) > EPSILON
+            },
+            {
+                name: total / output[name]
+                for name, total in sorted(construction.items())
+                if output.get(name, 0.0) > EPSILON and total > EPSILON
+            },
+        )
+
     def social_wage_bundle(self, *, use_capacity: bool = False) -> Dict[str, float]:
         """The subsistence basket per work-tick, averaged over regions.
 
@@ -1264,13 +1340,43 @@ class Economy:
                 row[commodity] = row.get(commodity, 0.0) + labor[name] * per_tick
             matrix[name] = row
 
+        # Fixed capital, where the machines are produced (docs/36 3.5).  The
+        # stock standing behind a unit of output: its bill of materials, plus
+        # the construction labor folded into the wage bundle exactly as
+        # direct labor is, so no money wage leaks into a system whose whole
+        # point is to be free of one.  Empty before docs/36, and the branch
+        # below keeps that case on the original code path bit for bit.
+        plant_bill, plant_labor = self.social_fixed_capital(
+            use_capacity=use_capacity
+        )
+        fixed: Dict[str, Dict[str, float]] = {}
+        for name in priced:
+            row = dict(plant_bill.get(name, {}))
+            build = plant_labor.get(name, 0.0)
+            if build > 0.0:
+                for commodity, per_tick in bundle.items():
+                    row[commodity] = row.get(commodity, 0.0) + build * per_tick
+            if row:
+                fixed[name] = row
+        life = max(self.capital_service_life_days, EPSILON)
+        # Cost carries depreciation; the advance carries the whole
+        # undepreciated stock.  Combined here so `combined` is exactly
+        # `matrix` when there is no plant, which is what makes the
+        # no-plant path reduce to the pre-docs/36 one.
+        combined: Dict[str, Dict[str, float]] = {}
+        for name in priced:
+            row = dict(matrix[name])
+            for other, quantity in fixed.get(name, {}).items():
+                row[other] = row.get(other, 0.0) + quantity / life
+            combined[name] = row
+
         # A priced good may not depend on a good nobody produced: its price
         # would be an invention.  Loud, like the value solve's convergence
         # failure, rather than a silent zero.
         for name in priced:
             missing = sorted(
                 other
-                for other, quantity in matrix[name].items()
+                for other, quantity in combined[name].items()
                 if quantity > EPSILON and other not in output
             )
             if missing:
@@ -1297,12 +1403,31 @@ class Economy:
 
         def root(rate: float) -> Tuple[float, Dict[str, float], int]:
             factor = {name: 1.0 + rate * turnover[name] for name in priced}
-            return self._perron_root(matrix, output, priced, seed, factor)
+            if not fixed:
+                return self._perron_root(matrix, output, priced, seed, factor)
+            # With plant in the advance the system is no longer a scalar
+            # times one matrix, because K_i / c_i differs by sector.  The
+            # effective row is (1 + r*tau_i)(A_i + F_i/L) + r*F_i:
+            # depreciation inside the turnover-inflated cost, the standing
+            # stock charged once.  Still non-decreasing in r entry by
+            # entry, so the bisection's root is still unique.
+            effective: Dict[str, Dict[str, float]] = {}
+            for name in priced:
+                row = {
+                    other: factor[name] * quantity
+                    for other, quantity in combined[name].items()
+                }
+                for other, quantity in fixed.get(name, {}).items():
+                    row[other] = row.get(other, 0.0) + rate * quantity
+                effective[name] = row
+            return self._perron_root(
+                effective, output, priced, seed, {name: 1.0 for name in priced}
+            )
 
         # Bisect on the rate at which the system exactly reproduces itself:
         # the Perron root of diag(1 + r*tau) M is non-decreasing in r, since
         # every entry is, so the root is unique where it exists.
-        if longest == min(turnover.values()):
+        if not fixed and longest == min(turnover.values()):
             # Uniform turnover is a scalar, not a diagonal: diag(1 + r*tau)
             # factors out and the system is exactly the pre-turnover
             # eigenproblem with r = (k - 1)/tau (docs/30 section 3.2).
@@ -1383,11 +1508,33 @@ class Economy:
             output[name]
             * sum(
                 quantity * prices[other]
-                for other, quantity in matrix[name].items()
+                for other, quantity in combined[name].items()
             )
             for name in priced
         )
         revenue = sum(output[name] * prices[name] for name in priced)
+        # What share of the advance is standing plant.  The number docs/30
+        # section 3.3 had to report as an omission and could not put in the
+        # system; it is in the system now, so it is reported as a share of
+        # it.  Zero where nothing carries a bill.
+        plant_advance = sum(
+            output[name]
+            * sum(
+                quantity * prices[other]
+                for other, quantity in fixed.get(name, {}).items()
+            )
+            for name in priced
+        )
+        circulating_advance = sum(
+            output[name]
+            * turnover[name]
+            * sum(
+                quantity * prices[other]
+                for other, quantity in combined[name].items()
+            )
+            for name in priced
+        )
+        advance = circulating_advance + plant_advance
 
         return {
             # Profit per period on capital *advanced* (docs/30).
@@ -1404,7 +1551,10 @@ class Economy:
                 for name, per_tick in bundle.items()
                 if name in prices
             ),
-            "basics": self._basic_commodities(matrix, priced),
+            "basics": self._basic_commodities(combined, priced),
+            "fixed_capital_share": (
+                plant_advance / advance if advance > EPSILON else 0.0
+            ),
             "iterations": iterations,
         }
 
@@ -2762,20 +2912,8 @@ class Economy:
                 ):
                     continue
                 amount = shortfall * self.investment_fraction_of_shortfall
-                # Construction costs silver: days of effective cost per unit
-                # of daily capacity. Deducted when the project is commissioned.
-                construction_unit = (
-                    assumed_effective * self.construction_cost_multiplier
-                )
-                total_cost = amount * construction_unit
-                if total_cost > region.cash:
-                    # Scale down to what the region can afford.
-                    amount = region.cash / max(construction_unit, EPSILON)
-                if amount < self.min_investment_capacity:
-                    continue
-                total_cost = amount * construction_unit
-                region.cash -= total_cost
-                self.ledger.investment_spending += total_cost
+                # Which technique the new capacity would use decides what it
+                # is made of, so it has to be settled before the size is.
                 existing_process = next(
                     (
                         p.process
@@ -2784,6 +2922,57 @@ class Economy:
                     ),
                     self.known_processes[name],
                 )
+                bill = existing_process.capital_bill_per_capacity()
+                if bill:
+                    # Department I (docs/36 3.4): what a unit of capacity
+                    # costs is what its plant is made of, at this region's
+                    # prices, plus the labor to put it up at this region's
+                    # wage.  `construction_cost_multiplier` stops governing
+                    # anything here; it still governs every bill-free
+                    # process, which is every scenario that does not opt in.
+                    construction_unit = self.capital_money_per_capacity(
+                        existing_process, region
+                    )
+                else:
+                    # Construction costs silver: days of effective cost per
+                    # unit of daily capacity.
+                    construction_unit = (
+                        assumed_effective * self.construction_cost_multiplier
+                    )
+                total_cost = amount * construction_unit
+                if total_cost > region.cash:
+                    # Scale down to what the region can afford.
+                    amount = region.cash / max(construction_unit, EPSILON)
+                # And to what it can build out of.  A region short of
+                # components does not get a refinery, which is the entire
+                # point of making the machines produced.
+                for material, quantity in bill.items():
+                    if quantity > 0.0:
+                        amount = min(
+                            amount,
+                            region.inventory.get(material, 0.0) / quantity,
+                        )
+                if amount < self.min_investment_capacity:
+                    continue
+                total_cost = amount * construction_unit
+                region.cash -= total_cost
+                self.ledger.investment_spending += total_cost
+                # The matter, out of stock.  Booked as a declared sink so
+                # the material identity closes, and deliberately *not* as
+                # circulating capital: the value it becomes is plant, and
+                # the model keeps no plant stock account for the value side
+                # to close against.  Named in docs/37 rather than hidden.
+                for material, quantity in bill.items():
+                    take = amount * quantity
+                    if take <= 0.0:
+                        continue
+                    region.inventory[material] = (
+                        region.inventory.get(material, 0.0) - take
+                    )
+                    Ledger.add(
+                        self.ledger.intermediate_consumption, material, take
+                    )
+                    Ledger.add(self.ledger.capital_construction, material, take)
                 region.projects.append(
                     CapacityProject(
                         name,
