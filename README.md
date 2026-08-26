@@ -379,11 +379,12 @@ results document scoring the predictions afterward.
 | [34](docs/34-history-detail-design.md) · [35](docs/35-history-detail-results.md) | Making history optional, and a ledger that was reading its own report |
 | [36](docs/36-capital-goods-sector-design.md) · [37](docs/37-capital-goods-sector-results.md) | Department I: machines that are produced, and the nine tenths of the fixed capital that move nothing |
 | [38](docs/38-capacity-depreciation-design.md) · [39](docs/39-capacity-depreciation-results.md) | Capacity depreciation and exit: a loss-making sector is disciplined rather than deleted |
+| [40](docs/40-recreation-in-the-basket-design.md) · [41](docs/41-recreation-in-the-basket-results.md) | Recreation in the basket: basicness is binary, and its economic weight is not |
 
 ### Running it
 
 ```bash
-python -m unittest discover -s tests      # 170 acceptance and invariant tests
+python -m unittest discover -s tests      # 177 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
@@ -391,11 +392,12 @@ python -m economy_lab generous-basket     # the basket, pushed past defensible
 python -m economy_lab perishable-meals    # differential turnover: meals rot
 python -m economy_lab capital-goods       # Department I: the machines are produced
 python -m economy_lab capacity-exit       # competition for survival, not only for orders
-python -m economy_lab.baseline            # 169 frozen metrics vs current
+python -m economy_lab recreation-basket   # the workers' basket holds the workers' product
+python -m economy_lab.baseline            # 176 frozen metrics vs current
 python -m economy_lab.scale --sweep       # the size ladder, 6 to 6,470 producers
 ```
 
-`behavior_baseline.json` freezes 169 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 176 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

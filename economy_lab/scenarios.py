@@ -263,6 +263,26 @@ class ScenarioParameters:
     #: is the scenario's finding rather than an obstacle to it.
     capacity_exit: bool = False
 
+    # --- recreation in the basket (docs/40) ----------------------------------
+    #: Whether the workers' basket includes the model's own final good.
+    #: Off by default: it makes yayo *basic*, and basicness is binary, so
+    #: 0.2% more demand is a change of regime rather than a sensitivity.
+    recreation_basket: bool = False
+    #: Deliberately not calibrated from `Need_Joy` — RimWorld's recreation
+    #: is met mostly for free and no colony lives on drugs, so a single
+    #: "true" quantity would be an invention.  Reported over a sweep.  An
+    #: exact binary fraction, for the docs/17 section 7 reason.
+    yayo_per_worker_day: float = 0.0625
+    #: Yayo runs at exactly full capacity in the seeded circuit, so the
+    #: basket entry has nowhere to come from.  The scenario raises
+    #: `producer_capacity_per_day` to this, rather than taking the room out
+    #: of final demand, so the comparison is the same economy plus a basket
+    #: entry and not a smaller economy.  It has to be the *base* parameter:
+    #: leaves and chemfuel capacity are derived from it, and raising yayo's
+    #: alone leaves the psychoid fields 4 units a day short — which is
+    #: exactly what the first attempt did.
+    recreation_capacity_per_day: float = 10.5
+
     # --- prices of production (docs/26) --------------------------------------
     # Same convergence discipline as the labor value solve, so the two
     # iterative systems fail on the same terms.
@@ -333,11 +353,14 @@ class ScenarioParameters:
     @property
     def subsistence_basket(self) -> Dict[str, float]:
         """Units of each commodity reproducing one worker-day of labor-power."""
-        return {
+        basket = {
             MEALS: self.meals_per_worker_day,
             GARMENTS: self.garments_per_worker_day,
             MEDICINE: self.medicine_per_worker_day,
         }
+        if self.recreation_basket:
+            basket[YAYO] = self.yayo_per_worker_day
+        return basket
 
     def basket_cost(self) -> float:
         """The basket at reference prices: the money wage per worker-day."""
@@ -345,6 +368,7 @@ class ScenarioParameters:
             MEALS: self.meal_reference_price,
             GARMENTS: self.garment_reference_price,
             MEDICINE: self.medicine_reference_price,
+            YAYO: self.reference_price,
         }
         return sum(
             quantity * reference[name]
@@ -1148,6 +1172,71 @@ def capacity_exit(
         capacity_exit=True,
     )
     return equilibrium(days, parameters=parameters)
+
+
+def recreation_basket(
+    days: int = 240, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The workers' basket includes the good the workers make (docs/40).
+
+    Yayo becomes basic, psychoid leaves become basic through it, and the
+    89.6% of the economy's fixed capital that docs/39 measured as inert
+    stops being inert.  docs/37 section 8 left this as a standing
+    prediction; this is what fires it.
+    """
+    parameters = parameters or ScenarioParameters()
+    parameters = replace(
+        parameters,
+        capital_goods=True,
+        recreation_basket=True,
+        producer_capacity_per_day=parameters.recreation_capacity_per_day,
+    )
+    return equilibrium(days, parameters=parameters)
+
+
+def recreation_sweep(
+    quantities: List[float] | None = None,
+    days: int = 120,
+    *,
+    parameters: ScenarioParameters | None = None,
+) -> List[Dict[str, object]]:
+    """The recreation basket as a curve rather than a point (docs/40 s1).
+
+    The quantity is not calibrated and cannot honestly be: RimWorld's
+    recreation need is met mostly for free.  So the answer is reported over
+    a range, the same discipline docs/28 s3.5 used for the generous basket.
+
+    The curve is what separates the two candidate mechanisms.  Basicness
+    flips at the first positive quantity; the wage rises continuously with
+    it.  If the rate of profit steps, basicness is doing the work; if it
+    slides, the wage is.  It slides (docs/41).
+    """
+    base = parameters or ScenarioParameters()
+    if quantities is None:
+        quantities = [2.0 ** -12, 2.0 ** -8, 2.0 ** -6, 2.0 ** -4, 2.0 ** -2]
+    rows: List[Dict[str, object]] = []
+    for quantity in quantities:
+        economy = equilibrium(
+            days,
+            parameters=replace(
+                base,
+                capital_goods=True,
+                recreation_basket=True,
+                yayo_per_worker_day=quantity,
+                producer_capacity_per_day=base.recreation_capacity_per_day,
+            ),
+        )
+        system = economy.prices_of_production()
+        rows.append(
+            {
+                "yayo_per_worker_day": quantity,
+                "profit_rate": system["profit_rate"],
+                "basics": len(system["basics"]),
+                "wage": economy.regions["Dust Basin"].wage_rate(),
+                "rate_of_surplus_value": economy.rate_of_surplus_value(),
+            }
+        )
+    return rows
 
 
 def regional_glut(

@@ -4,10 +4,11 @@
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `HEAD` (capacity depreciation and exit)
-**Behavioral baseline:** `HEAD` (169 metrics: 10 capital-goods, 5 capacity-exit)
+**Latest Stage 0 model commit:** `HEAD` (recreation in the basket)
+**Behavioral baseline:** `HEAD` (176 metrics: 10 capital-goods, 5 capacity-exit, 7 recreation)
 **Capital-goods design / results:** `docs/36`, `docs/37`
 **Capacity-exit design / results:** `docs/38`, `docs/39`
+**Recreation-basket design / results:** `docs/40`, `docs/41`
 **Latest Labor Content commit:** `db769fd` (stuff-aware stats, generated defs, dendrovore graze fix)
 **Closed-analysis correction:** `db769fd` — `animals.py` `can_graze` now accepts `Dendrovore`;
 one def of 653 moved, `Meat_Alphabeaver` 717.7 → 5.2 ticks. `out/embodied_labor.csv` regenerated.
@@ -78,7 +79,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
-| **Stage 0 lab** (`economy_lab/`) | 170 tests, 169 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 177 tests, 176 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -112,9 +113,10 @@ docs/29, docs/31), and so is the capital-goods sector (docs/37). The
 two numbers the project reports as rates of profit are now rates, and
 the price system's is 0.518 per day rather than 1.17 because fixed
 capital is finally inside it. Capacity depreciation and exit are done
-too (docs/39). What is left is recreation in the basket; monopoly
-rent. Optionally credit and bankruptcy. Then re-run the stale
-sensitivity sweep.
+too (docs/39), and so is recreation in the basket (docs/41). What is
+left is monopoly rent. Optionally credit and bankruptcy. Then re-run
+the stale sensitivity sweep, which now has a parameter worth sweeping:
+`yayo_per_worker_day` moves the rate of profit a lot and continuously.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -767,6 +769,11 @@ Locations:
   replacement failed, and why shedding all idle capacity has no rest point;
 - `docs/39-capacity-depreciation-results.md` — a loss-making sector is
   disciplined rather than deleted, and the third accounting mismatch;
+- `docs/40-recreation-in-the-basket-design.md` — the workers' basket holds
+  the workers' own product, and why the quantity is swept not calibrated;
+- `docs/41-recreation-in-the-basket-results.md` — basicness is binary, its
+  economic weight is not, and a correction to how docs/37 read its own
+  biggest result;
 - `docs/37-capital-goods-sector-results.md` — six predictions right, one
   wrong by sixteen, and 89.6% of the fixed capital that moves nothing;
 - `docs/35-history-detail-results.md` — memory flat at ~60 MiB instead
@@ -1071,7 +1078,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 170 tests pass;
+- all 177 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -1543,11 +1550,25 @@ above. The scale question that section carried as its largest open risk is
     piece is a cheaper rival driving that margin down, which belongs with
     `cost_competition`.
 
-    *Recreation in the basket*, deliberately deferred in `docs/28` §2.2.
-    The obvious candidate is yayo, which would make the model's own final
-    good basic and create a wage-price loop through the commodity every
-    scenario is measured on. Worth doing on its own, not alongside
-    something else.
+    *~~Recreation in the basket~~* — done (`docs/41`), and it produced a
+    **correction to how the project had been reading `docs/37` §4.**
+
+    That finding — 89.6% of the fixed capital sits in non-basic sectors and
+    moves the general rate of profit by 6e-13 — stands. What does not is
+    the inference `docs/37` §8 drew from it in writing, that making those
+    sectors basic would move `r` "a long way". It moves it 4.3%.
+
+    **Non-basic is a veto; basic is only permission.** How much a sector's
+    plant then weighs is set by its `K/cost` ratio, not by the size of its
+    stock. A sector can hold two thirds of the economy's fixed capital, be
+    basic, and still barely touch `r`. Watch for this shape of error
+    elsewhere: a category flipping is not a magnitude changing.
+
+    The sharpest number: at **one part in four thousand** of a yayo per
+    worker-day, every commodity in the model is already basic and `r` has
+    moved 0.07%. It is frozen as
+    `recreation.production.profit_rate_at_epsilon` beside
+    `basics_at_epsilon`, because the pair is the whole argument.
 
     Other candidates: labor content of resource grades; wage deviations
     from the value of labor-power; absolute rent; credit and bankruptcy.

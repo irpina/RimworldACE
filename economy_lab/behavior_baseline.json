@@ -622,6 +622,34 @@
       "unit": "silver",
       "value": 45.145699
     },
+    "recreation.baseline_profit_rate": {
+      "unit": "ratio",
+      "value": 0.51825
+    },
+    "recreation.production.basics": {
+      "unit": "commodities",
+      "value": 9.0
+    },
+    "recreation.production.basics_at_epsilon": {
+      "unit": "commodities",
+      "value": 9.0
+    },
+    "recreation.production.profit_rate": {
+      "unit": "ratio",
+      "value": 0.44897
+    },
+    "recreation.production.profit_rate_at_epsilon": {
+      "unit": "ratio",
+      "value": 0.517892
+    },
+    "recreation.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 25.310753
+    },
+    "recreation.wage_per_worker_day": {
+      "unit": "silver",
+      "value": 43.2825
+    },
     "scale.floored_direct_labor": {
       "unit": "commodities",
       "value": 30.0

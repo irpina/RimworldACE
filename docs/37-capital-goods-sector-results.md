@@ -288,3 +288,12 @@ coefficient.
   consumes yayo as an input, 89.6% of the fixed capital stops being inert and
   the rate of profit moves a long way. That is a prediction, and it is the
   first thing to check if a later scenario makes yayo an input to anything.
+
+  **Half wrong, and corrected in `docs/41` §4.** `recreation_basket` made
+  yayo an input and the prediction was checked. The inert capital does stop
+  being inert — stripping it now moves `r` by 4.3% where it moved it by
+  6e-13 before. But 4.3% is not "a long way", and it is not what produced
+  that scenario's fall in `r`. Non-basic is a *veto*; basic is only
+  *permission*, and how much a sector's plant then weighs is set by its
+  `K/cost` ratio, not by the size of its stock. Lifting a veto is not the
+  same as exercising it.

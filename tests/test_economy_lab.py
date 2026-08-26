@@ -33,6 +33,8 @@ from economy_lab.scenarios import (
     perishable_meals,
     producer_loss,
     regional_glut,
+    recreation_basket,
+    recreation_sweep,
     reserve_depletion,
     seeded_two_region_economy,
     subsistence_shock,
@@ -3039,3 +3041,117 @@ class CapacityExitTests(unittest.TestCase):
         # Relative, because four thousand days of double-precision addition
         # accumulates: 2e-13 of the value produced is rounding, not a leak.
         self.assertLess(abs(economy.value_balance()) / produced, 1e-11)
+
+
+class RecreationBasketTests(unittest.TestCase):
+    """The workers' basket includes the good the workers make (docs/40).
+
+    The scenario exists to fire the standing prediction docs/37 section 8
+    left in writing.  It fired, and the prediction was half right: the
+    fixed capital in yayo and psychoid leaves does stop being inert, and it
+    does not move the rate of profit anywhere near "a long way" (docs/41).
+    """
+
+    def test_off_by_default(self):
+        self.assertNotIn(YAYO, ScenarioParameters().subsistence_basket)
+        self.assertIn(YAYO, ScenarioParameters(recreation_basket=True).subsistence_basket)
+
+    def test_every_commodity_becomes_basic(self):
+        """Yayo through the wage bundle, leaves through yayo."""
+        economy = recreation_basket(days=120)
+        basics = economy.prices_of_production()["basics"]
+        self.assertEqual(sorted(basics), sorted(economy.commodities))
+        # And the comparison case still has two non-basics, or this proves
+        # nothing about what changed.
+        self.assertEqual(
+            len(capital_goods(days=120).prices_of_production()["basics"]), 7
+        )
+
+    def test_the_equilibrium_is_exactly_stationary(self):
+        """The first self-referential price in the model, and still exact."""
+        economy = recreation_basket(days=2 * DAYS_PER_YEAR)
+        for rname in economy.regions:
+            for cname in economy.commodities:
+                series = economy.series(rname, cname)
+                self.assertEqual(
+                    max(series) - min(series),
+                    0.0,
+                    f"{rname}/{cname} price moved at equilibrium",
+                )
+
+    def test_the_ledgers_close(self):
+        economy = recreation_basket(days=240)
+        for name, residual in economy.commodity_balances().items():
+            self.assertAlmostEqual(residual, 0.0, places=7, msg=name)
+        self.assertAlmostEqual(economy.cash_balance(), 0.0, places=7)
+        self.assertAlmostEqual(economy.value_balance(), 0.0, places=5)
+
+    def test_the_value_of_labor_power_rises_and_the_rate_of_surplus_falls(self):
+        """A more expensive basket against an unchanged working day.
+
+        Written the wrong way round in docs/40 section 6 - as `s/v` rising -
+        and corrected in the same document's predictions before the code
+        existed.  Necessary labor is the basket at *labor values*, so adding
+        yayo at 736 ticks makes labor-power dearer, not cheaper.
+        """
+        before = capital_goods(days=240).rate_of_surplus_value()
+        after = recreation_basket(days=240).rate_of_surplus_value()
+        self.assertLess(after, before)
+        self.assertAlmostEqual(after, 25.31, places=1)
+
+    def test_the_profit_rate_slides_rather_than_stepping(self):
+        """The result of docs/41, and the thing that decides the mechanism.
+
+        Basicness flips at the first positive quantity; the wage rises
+        continuously with it.  A step at the bottom of the sweep would mean
+        basicness was doing the work.  It is not: at one part in four
+        thousand of a yayo per worker-day, every commodity is already basic
+        and the rate of profit has moved by less than a tenth of a percent.
+        """
+        rows = recreation_sweep(quantities=[2.0 ** -12, 2.0 ** -6, 2.0 ** -2])
+        for row in rows:
+            self.assertEqual(row["basics"], 9)
+        without = capital_goods(days=120).prices_of_production()["profit_rate"]
+        # Basic everywhere, and yet barely moved.
+        self.assertLess(
+            abs(rows[0]["profit_rate"] - without) / without, 0.001
+        )
+        # And then it keeps sliding, which is the wage and not the category.
+        self.assertLess(rows[1]["profit_rate"], rows[0]["profit_rate"])
+        self.assertLess(rows[2]["profit_rate"], rows[1]["profit_rate"])
+        # A quarter of a yayo a worker-day takes a third off the rate of
+        # profit, where making every commodity basic took a tenth of a
+        # percent.  That contrast is the finding.
+        self.assertLess(rows[2]["profit_rate"], 0.75 * without)
+
+    def test_the_inert_fixed_capital_stops_being_inert(self):
+        """docs/37 section 8's standing prediction, fired.
+
+        In the capital-goods circuit, stripping the plant out of yayo and
+        psychoid leaves - 89.6% of the economy's fixed capital - moves the
+        rate of profit by 6e-13.  Once they are basic it moves it for real,
+        and the point of this test is that the effect is *small*: basicness
+        is what lets a sector's plant matter, and the plant-to-cost ratio is
+        what decides how much.
+        """
+        economy = recreation_basket(days=120)
+        full = economy.prices_of_production()["profit_rate"]
+        original = economy.social_fixed_capital
+
+        def stripped(*, use_capacity=False):
+            bill, labor = original(use_capacity=use_capacity)
+            drop = {YAYO, LEAVES}
+            return (
+                {k: v for k, v in bill.items() if k not in drop},
+                {k: v for k, v in labor.items() if k not in drop},
+            )
+
+        economy.social_fixed_capital = stripped
+        try:
+            without = economy.prices_of_production()["profit_rate"]
+        finally:
+            del economy.social_fixed_capital
+        # It matters now, where before it did not at all.
+        self.assertGreater(without, full)
+        # But by a few percent, not "a long way".
+        self.assertLess((without - full) / full, 0.10)

@@ -202,6 +202,7 @@ def collect_behavioral_metrics(
     metrics.update(_turnover_metrics(stable=stable))
     metrics.update(_capital_goods_metrics())
     metrics.update(_capacity_exit_metrics())
+    metrics.update(_recreation_basket_metrics())
     metrics.update(_scale_metrics())
     return metrics
 
@@ -320,6 +321,56 @@ def _capacity_exit_metrics() -> Dict[str, Dict[str, object]]:
         # capacity does not enter, so shedding it should move nothing.
         "capacity_exit.production.profit_rate": _metric(
             economy.prices_of_production()["profit_rate"], "ratio"
+        ),
+    }
+
+
+def _recreation_basket_metrics() -> Dict[str, Dict[str, object]]:
+    """What happens when the workers' basket holds the workers' own product.
+
+    docs/37 section 8 left a standing prediction: if anything ever consumes
+    yayo as an input, 89.6% of the fixed capital stops being inert and the
+    rate of profit moves a long way.  Half of it was right.  Every commodity
+    becomes basic, the inert plant does start to matter — and the rate of
+    profit barely notices, because a sector's plant weighs on `r` through
+    its plant-to-cost ratio and not through the size of its stock.
+
+    `profit_rate_at_epsilon` is the metric that carries the finding.  At one
+    part in four thousand of a yayo per worker-day, every commodity is
+    already basic and `r` has moved 0.07%.  Basicness is binary; its
+    economic weight is not.  If that number ever moves far from 0.5179 the
+    mechanism has changed and docs/41 needs re-deriving.
+    """
+    from .scenarios import capital_goods, recreation_basket, recreation_sweep
+
+    economy = recreation_basket()
+    system = economy.prices_of_production()
+    epsilon = recreation_sweep(quantities=[2.0 ** -12])[0]
+    return {
+        "recreation.production.profit_rate": _metric(
+            system["profit_rate"], "ratio"
+        ),
+        "recreation.production.basics": _metric(
+            float(len(system["basics"])), "commodities"
+        ),
+        # The whole argument in one number: every commodity basic, and the
+        # rate of profit essentially where it was.
+        "recreation.production.profit_rate_at_epsilon": _metric(
+            epsilon["profit_rate"], "ratio"
+        ),
+        "recreation.production.basics_at_epsilon": _metric(
+            float(epsilon["basics"]), "commodities"
+        ),
+        "recreation.wage_per_worker_day": _metric(
+            economy.regions["Dust Basin"].wage_rate(), "silver"
+        ),
+        # Labor-power got dearer against an unchanged working day.
+        "recreation.rate_of_surplus_value": _metric(
+            economy.rate_of_surplus_value(), "ratio"
+        ),
+        # For the comparison the two above are only meaningful against.
+        "recreation.baseline_profit_rate": _metric(
+            capital_goods().prices_of_production()["profit_rate"], "ratio"
         ),
     }
 

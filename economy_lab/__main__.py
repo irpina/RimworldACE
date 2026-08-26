@@ -15,6 +15,7 @@ from .scenarios import (
     perishable_meals,
     input_shortage,
     producer_loss,
+    recreation_basket,
     regional_glut,
     reserve_depletion,
     subsistence_shock,
@@ -37,6 +38,7 @@ SCENARIOS = {
     "perishable-meals": perishable_meals,
     "capital-goods": capital_goods,
     "capacity-exit": capacity_exit,
+    "recreation-basket": recreation_basket,
 }
 
 
