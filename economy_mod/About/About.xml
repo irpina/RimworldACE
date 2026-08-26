@@ -8,5 +8,5 @@
   </supportedVersions>
   <description>Experimental regional economy simulation for Social Production.
 
-This early build observes the generated world, advances a separate daily economy clock, and exposes its state in a read-only tab. It does not alter vanilla prices, traders, inventories, pawns, or saves outside its own component.</description>
+This early build observes the generated world, advances a separate daily economy clock, and exposes its state in a read-only tab. It derives a deterministic profile for every settlement - faction, tile, biome, hilliness - groups settlements into regions by faction, and checks on every load that it re-derives exactly what it saved. It does not alter vanilla prices, traders, inventories, pawns, or saves outside its own component, and it uses no Harmony patches and no random rolls.</description>
 </ModMetaData>
