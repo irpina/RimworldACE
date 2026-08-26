@@ -1,11 +1,12 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-08-25  
+**Last updated:** 2026-08-26  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `7643fc4` (_allocate_orders tightened to the bit-identical limit)
-**Behavioral baseline:** `29e4627` (154 metrics: 5 structural scale observations, no timings)
+**Latest Stage 0 model commit:** `772d713` (Department I: the machines are produced)
+**Behavioral baseline:** `5aaff0a` (164 metrics: 10 for the capital-goods circuit)
+**Capital-goods design / results:** `docs/36`, `docs/37`
 **Latest Labor Content commit:** `db769fd` (stuff-aware stats, generated defs, dendrovore graze fix)
 **Closed-analysis correction:** `db769fd` — `animals.py` `can_graze` now accepts `Dendrovore`;
 one def of 653 moved, `Meat_Alphabeaver` 717.7 → 5.2 ticks. `out/embodied_labor.csv` regenerated.
@@ -76,7 +77,7 @@ performant, playable mod.
 | component | state | remaining |
 |---|---|---|
 | **Labor Content** (`mod/`) | 543 defs patched across six files (548 `<Operation>` elements, five of them expansion wrappers), plus one 40-line stat worker rendering multiple units | the in-game visual pass — needs a human looking at real items; the 104 generated meat defs are now *cheap* to reach, since the assembly the constraint forbade exists |
-| **Stage 0 lab** (`economy_lab/`) | 154 tests, 154 frozen metrics, three closing ledgers, a classical price system with an interpretable profit rate, six commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
+| **Stage 0 lab** (`economy_lab/`) | 163 tests, 164 frozen metrics, three closing ledgers, a classical price system that now carries fixed capital, nine commodities and two regions, and a harness that runs 647 × 100 | two or three more economic sessions |
 | **Stage 1 runtime** (`economy_mod/`) | about 115 lines of real C#: a daily tick, settlement observation, a read-only tab | essentially everything |
 
 **The economics is the part that is nearly solved. The engineering that would
@@ -106,12 +107,12 @@ rather than accounting, and neither has been started.
 
 **Phase A — finish the economics** (~2–4 sessions). Prices of production,
 the enlarged subsistence basket and turnover are all **done** (docs/27,
-docs/29, docs/31). The two numbers the project reports as rates of
-profit are now rates: 1.17 per day for the basic sector's uniform rate
-and 0.0305 per day realized on capital advanced. What is left is a
-capital-goods sector; exit and capacity depreciation; recreation in the
-basket; monopoly rent. Optionally credit and bankruptcy. Then re-run
-the stale sensitivity sweep.
+docs/29, docs/31), and so is the capital-goods sector (docs/37). The
+two numbers the project reports as rates of profit are now rates, and
+the price system's is 0.518 per day rather than 1.17 because fixed
+capital is finally inside it. What is left is exit and capacity
+depreciation; recreation in the basket; monopoly rent. Optionally
+credit and bankruptcy. Then re-run the stale sensitivity sweep.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -758,6 +759,10 @@ Locations:
   the exact-stationarity floating-point engineering;
 - `docs/34-history-detail-design.md` — history as an optional output,
   and the claim about what reads it that turned out to be false;
+- `docs/36-capital-goods-sector-design.md` — Department I, and the finding
+  that the model's six authored machines were already bills of materials;
+- `docs/37-capital-goods-sector-results.md` — six predictions right, one
+  wrong by sixteen, and 89.6% of the fixed capital that moves nothing;
 - `docs/35-history-detail-results.md` — memory flat at ~60 MiB instead
   of 3.8 GB over a run, and the material ledger stopped reading its own
   report to find its opening stock;
@@ -1060,7 +1065,7 @@ The load-bearing additions:
   the wage, records a 9-meal basket shortfall and forced worker savings,
   and rebuilds through ordinary investment — without moving yayo or leaf
   prices at all (wage share of cost is too small to curtail);
-- all 154 tests pass;
+- all 163 tests pass;
 - commodity and silver residuals close to floating-point zero for all four
   commodities, including investment spending and the wage circuit;
 - identical inputs reproduce identical histories.
@@ -1488,13 +1493,24 @@ above. The scale question that section carried as its largest open risk is
 
     Then the economics, unchanged in order:
 
-    *A capital-goods sector (Department I).* Machinery as a produced
-    commodity that investment consumes materially. Building capacity still
-    spends silver without consuming anything, which is the last place
-    something appears from nothing. Since `docs/27` it has a second
-    reason to exist: it is what would let fixed capital into the price
-    system — now 3.5% of the capital advanced, where its depreciation was
-    0.05% of cost.
+    *~~A capital-goods sector (Department I)~~* — done (`docs/37`). Three
+    commodities read off the game, seven bills that reproduce their
+    machines to the tick, and fixed capital inside the price system at
+    last. Two things to carry forward from it:
+
+    The rate of profit is **0.518** per day, not 1.17. The prediction was
+    a 3.4% fall and the answer was 55.80%, because I estimated the price
+    system's share of fixed capital from the *value ledger's* 3.54%. They
+    measure different advances. Any future number quoted from one
+    accounting into the other deserves the same suspicion.
+
+    **89.6% of the economy's fixed capital moves the general rate of
+    profit by nothing.** Yayo holds 67.3% of it and psychoid leaves 22.3%,
+    and both are non-basic. The whole collapse comes from the other tenth,
+    a third of it from the stove behind the workers' meals. This rests
+    entirely on yayo and leaves staying non-basic: **if any later scenario
+    makes yayo an input to anything, check `r` first** — nine tenths of
+    the fixed capital stops being inert and the rate moves a long way.
 
     *Capacity depreciation and mothballing*, so that competition is for
     survival and not only for orders. Today a producer that loses the
@@ -1504,6 +1520,14 @@ above. The scale question that section carried as its largest open risk is
     the social labor value migrate to a superseded technique rather than
     resting at the mix average. Time-based depreciation belongs here too,
     since idle capacity is its subject.
+
+    `docs/36` §3.3 explains why this could not ship with Department I and
+    what it now owes: a continuous sink against episodic investment cannot
+    reproduce itself exactly, and the equilibrium must report exactly
+    zero. The consequence is live in the model today — a replacement
+    shortfall is not throttled, so a region that cannot replace its
+    machines runs them into the ground and nothing notices. Noticing is
+    precisely this item.
 
     *Recreation in the basket*, deliberately deferred in `docs/28` §2.2.
     The obvious candidate is yayo, which would make the model's own final
@@ -1559,8 +1583,18 @@ it is not intended for per-commit testing.
   done, and the answer is that it is the authored-price wedge (`docs/24`);
   it is now named and measured, but not removed, and removing it means
   abandoning `MarketValue` as the price anchor;
-- a capital-goods sector: building capacity spends silver but consumes no
-  material, so capital stock still appears from nothing;
+- ~~a capital-goods sector~~ — done (`docs/37`). Steel, wood and components
+  are produced; every sector's plant is a bill of materials in them plus
+  construction work, and all seven bills reproduce their authored embodied
+  labor to the tick. Plant is rebuilt from stock at the rate the ledger has
+  charged since `docs/23`, and new capacity consumes the bill outright.
+  What is *not* closed: a replacement shortfall is not throttled, and the
+  value of newly built plant is not credited anywhere because the model
+  keeps no plant stock account. Both are named in `docs/37` section 7;
+- fixed capital in the price system: ~~absent~~ — in, since `docs/37`. It
+  is 13.05% of the advance, not the 3.54% the value ledger reports, because
+  the two measure different advances. And 89.6% of it sits in non-basic
+  sectors where it moves the general rate of profit by nothing at all;
 - equalization of profit rates across sectors: *computed* as an
   observation since `docs/27`, but not adopted — the cost anchor still
   freezes each sector's calibrated rate of profit rather than
