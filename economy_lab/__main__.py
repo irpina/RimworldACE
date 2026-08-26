@@ -7,6 +7,7 @@ import json
 
 from .scenarios import (
     arbitrage,
+    capital_goods,
     cost_competition,
     equilibrium,
     generous_basket,
@@ -33,6 +34,7 @@ SCENARIOS = {
     "cost-competition": cost_competition,
     "generous-basket": generous_basket,
     "perishable-meals": perishable_meals,
+    "capital-goods": capital_goods,
 }
 
 
