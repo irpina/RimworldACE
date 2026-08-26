@@ -2766,9 +2766,16 @@ class CapitalGoodsTests(unittest.TestCase):
     def test_the_value_solve_closes_the_machining_table_cycle(self):
         """Components need components, and the solve has to survive it."""
         economy = capital_goods(days=120)
-        # Pure labor with nothing behind it: exactly the closed analysis.
-        self.assertEqual(economy.labor_values[STEEL], 47.5)
-        self.assertEqual(economy.labor_values[WOOD], 22.5)
+        # Pure labor with nothing behind it: the closed analysis, to within
+        # the last bit of an output-weighted average over two regions.  The
+        # tolerance is twelve orders below the smallest leak that could
+        # matter — the least fixed capital any sector carries is 0.65% —
+        # so it still fails loudly if plant reaches a sector that has none.
+        for name, authored in ((STEEL, 47.5), (WOOD, 22.5)):
+            with self.subTest(commodity=name):
+                self.assertLess(
+                    abs(economy.labor_values[name] - authored) / authored, 1e-12
+                )
         # Components carry the fixed capital RimWorld's formula omits, so
         # they must come out *above* the authored 5570 and not far above.
         solved = economy.labor_values[COMPONENTS]
@@ -2832,12 +2839,16 @@ class CapitalGoodsTests(unittest.TestCase):
         self.assertNotIn(YAYO, basics)
 
     def test_capacity_is_not_built_out_of_nothing(self):
-        """A region short of the bill does not get the plant (docs/36 3.4).
+        """A region short of the bill cannot rebuild, and loses what it has.
 
-        Stated as a difference rather than an absence.  Checking only that
-        a stripped region builds nothing would pass even if investment were
+        Stated as a difference rather than an absence.  Checking only that a
+        stripped region builds nothing would pass even if investment were
         blocked for some unrelated reason, so the same shock is run twice
         and the stocked region has to rebuild.
+
+        The stripped region does not merely fail to rebuild: it sheds the
+        wear it could not replace, at 1/L a day, which is the debt docs/37
+        section 7 named and docs/38 pays.
         """
 
         def rebuild(strip_bill):
@@ -2857,5 +2868,73 @@ class CapitalGoodsTests(unittest.TestCase):
         # the materials the region rebuilds and without them it cannot.
         self.assertGreater(stocked_capacity, 0.4)
         self.assertGreater(stocked_projects, 0)
-        self.assertEqual(stripped_capacity, 0.4)
         self.assertEqual(stripped_projects, 0)
+        # Sixty days of unreplaced wear on 0.4 of capacity: the closed form
+        # is 0.4 * (1 - 1/600) ** 60, and the model must land on it.
+        self.assertAlmostEqual(
+            stripped_capacity, 0.4 * (1.0 - 1.0 / 600.0) ** 60, places=9
+        )
+
+    def test_capacity_lost_is_proportional_to_the_shortfall(self):
+        """Half the supply must lose part of the wear, not all of it or none.
+
+        The rule docs/38 works under is proportional and damped; a threshold
+        would show up here as a step, and a step is what this excludes.
+
+        The stock is set to a share of the day's *requirement*, not a share
+        of the inventory: inventory is twenty days of throughput, so halving
+        it still covers a day's draw and rations nothing.  Getting that wrong
+        is what the first version of this test did.
+        """
+        goods = (STEEL, WOOD, COMPONENTS)
+
+        def daily_requirement():
+            economy = capital_goods(days=60)
+            before = {
+                name: economy.ledger.intermediate_consumption.get(name, 0.0)
+                for name in goods
+            }
+            economy.step(1)
+            return {
+                name: (
+                    economy.ledger.intermediate_consumption.get(name, 0.0)
+                    - before[name]
+                )
+                # Two regions draw on the ledger; one region's share is half.
+                / 2.0
+                for name in goods
+            }
+
+        need = daily_requirement()
+        losses = {}
+        for share in (0.0, 0.5, 1.0):
+            economy = capital_goods(days=60)
+            region = economy.regions["Dust Basin"]
+            before = region.capacity(MEALS)
+            for _ in range(30):
+                for name in goods:
+                    region.inventory[name] = need[name] * share
+                economy.step(1)
+            losses[share] = before - region.capacity(MEALS)
+        self.assertGreater(losses[0.0], 0.0)
+        self.assertGreater(losses[0.5], 0.0)
+        self.assertLess(losses[0.5], losses[0.0])
+
+    def test_steel_and_wood_can_never_lose_capacity(self):
+        """They have no plant, so there is no wear for matter to refuse.
+
+        Asserted on the ledger rather than on the capacity, because a steel
+        shortage raises the steel price and `_invest` may well *build* steel
+        capacity in response.  What must never happen is a loss.
+        """
+        economy = capital_goods(days=60)
+        region = economy.regions["Dust Basin"]
+        for _ in range(60):
+            for name in (STEEL, WOOD, COMPONENTS):
+                region.inventory[name] = 0.0
+            economy.step(1)
+        for name in (STEEL, WOOD):
+            self.assertNotIn(name, economy.ledger.capacity_lost)
+        # And the sectors that do carry plant must have lost some, or this
+        # proves nothing about the sectors that do not.
+        self.assertGreater(economy.ledger.capacity_lost.get(MEALS, 0.0), 0.0)

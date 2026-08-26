@@ -796,21 +796,18 @@ def _stationary_runs(
         for producer in ordered:
             for name, per_run in producer.process.inputs.items():
                 outflow[name] += runs[id(producer)] * per_run
-            # Department I (docs/36): the plant this output wears out is
-            # rebuilt from stock, so it is outflow like any input draw.
-            # Interleaved with the inputs above and expressed exactly as
-            # `Economy._planned_runs` expresses it, because the seed has to
-            # reproduce the runtime to the bit.
-            per_output = (
-                runs[id(producer)]
-                * producer.process.outputs.get(producer.commodity, 0.0)
-                / region.capital_service_life_days
+        # Plant replacement, on the calendar (docs/38): a second pass in the
+        # same producer order `Economy._planned_runs` uses, because the seed
+        # has to reproduce the runtime to the bit.
+        for producer in ordered:
+            per_capacity = (
+                producer.capacity_per_day / region.capital_service_life_days
             )
             for name, quantity in (
                 producer.process.capital_bill_per_capacity().items()
             ):
                 if name in outflow:
-                    outflow[name] += per_output * quantity
+                    outflow[name] += per_capacity * quantity
         revised = {}
         for producer in ordered:
             units = producer.process.outputs[producer.commodity]
@@ -847,23 +844,21 @@ def _equilibrium_worker_days(
         labor = 0.0
         for producer in ordered:
             labor += runs[id(producer)] * producer.process.direct_labor
-            # Construction labor rebuilding worn plant is living labor and
-            # is employed like any other (docs/36 3.3).  Added inside the
-            # same producer step and in the same order as
-            # `Economy._replace_plant` adds it, so the quantized employment
-            # fixed point sees the identical float.
-            if producer.process.capital_bill:
-                own_output = (
-                    runs[id(producer)]
-                    * producer.process.outputs.get(producer.commodity, 0.0)
+        # Construction labor rebuilding worn plant is living labor and is
+        # employed like any other (docs/36 3.3), taken on the calendar
+        # (docs/38).  Its own pass, in the same order `_produce` uses, so the
+        # quantized employment fixed point sees the identical float.
+        for producer in ordered:
+            if (
+                producer.process.capital_bill
+                and producer.capacity_per_day > EPSILON
+            ):
+                labor += (
+                    producer.capacity_per_day
+                    / region.capital_service_life_days
+                    * producer.process.machines_per_capacity
+                    * producer.process.capital_construction_labor
                 )
-                if own_output > EPSILON:
-                    labor += (
-                        own_output
-                        / region.capital_service_life_days
-                        * producer.process.machines_per_capacity
-                        * producer.process.capital_construction_labor
-                    )
         raw = labor / parameters.ticks_per_worker_day
         if quantum > 0.0:
             revised = floor(raw / quantum) * quantum

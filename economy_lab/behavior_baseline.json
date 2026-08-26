@@ -12,11 +12,11 @@
     },
     "capital_goods.department_one.labor_share": {
       "unit": "fraction",
-      "value": 0.001837
+      "value": 0.001971
     },
     "capital_goods.department_one.steel_per_day": {
       "unit": "units",
-      "value": 0.135916
+      "value": 0.146496
     },
     "capital_goods.production.basics": {
       "unit": "commodities",
@@ -24,11 +24,11 @@
     },
     "capital_goods.production.fixed_capital_share": {
       "unit": "fraction",
-      "value": 0.130463
+      "value": 0.130475
     },
     "capital_goods.production.gross_markup": {
       "unit": "ratio",
-      "value": 12.516134
+      "value": 12.516309
     },
     "capital_goods.production.profit_rate": {
       "unit": "ratio",

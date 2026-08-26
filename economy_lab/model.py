@@ -277,6 +277,11 @@ class Producer:
     #: life; carved out of ``unit_cost`` rather than added to it.
     capital_cost_per_unit: float = 0.0
     capital_labor_per_unit: float = 0.0
+    #: Fraction of the day's plant wear that was actually replaced
+    #: (docs/38).  One while the bill is in stock and the producer can
+    #: carry the maintenance; less when either fails, and the shortfall
+    #: is what capacity is lost by.
+    replacement_supplied: float = 1.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -645,6 +650,10 @@ class Ledger:
     #: Also booked as intermediate consumption, for the same reason as
     #: ``capital_replacement``.
     capital_construction: Dict[str, float] = field(default_factory=dict)
+    #: Daily capacity lost to a replacement that did not happen, by
+    #: commodity (docs/38).  Not a decay rate: this is only ever the part
+    #: of a day's wear that matter or margin refused to make good.
+    capacity_lost: Dict[str, float] = field(default_factory=dict)
     #: Living labor spent rebuilding plant, by region.  Part of
     #: ``living_labor``, not additional to it: it is broken out because it
     #: is the one kind of living labor that reaches a product only through
@@ -698,6 +707,7 @@ class Economy:
         competitive_price_intensity: float = 0.5,
         competitive_share_elasticity: float = 2.0,
         capital_service_life_days: float = 600.0,
+        capacity_exit: bool = False,
         production_price_tolerance: float = 1e-12,
         production_price_max_iterations: int = 1000,
         production_period_days: float = 1.0,
@@ -738,6 +748,11 @@ class Economy:
         self.competitive_price_intensity = competitive_price_intensity
         self.competitive_share_elasticity = competitive_share_elasticity
         self.capital_service_life_days = capital_service_life_days
+        #: Whether a producer that cannot carry its maintenance sheds
+        #: capacity (docs/38 section 2.2).  Off by default: turning it
+        #: on deletes the component sector, which is a real consequence
+        #: of a real RimWorld price and is the scenario's whole point.
+        self.capacity_exit = capacity_exit
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -1786,23 +1801,24 @@ class Economy:
         The flow side of Department I, against which
         ``department_one_output`` is the supply side.  In a stationary
         state the two agree up to whatever else consumes the same goods.
+
+        Taken at capacity rather than at output, because plant wears on the
+        calendar (docs/38 section 2.1) — and because that is the basis
+        ``Region.throughput_demand`` has always sized this draw on.
         """
         names = [region] if region is not None else sorted(self.regions)
         draw: Dict[str, float] = {}
         for name in names:
             for producer in self.regions[name].producers:
-                if not producer.active:
+                if not producer.active or producer.capacity_per_day <= EPSILON:
                     continue
-                own_output = producer.last_runs * producer.process.outputs.get(
-                    producer.commodity, 0.0
+                per_capacity = (
+                    producer.capacity_per_day / self.capital_service_life_days
                 )
-                if own_output <= EPSILON:
-                    continue
-                per_output = own_output / self.capital_service_life_days
                 for other, quantity in (
                     producer.process.capital_bill_per_capacity().items()
                 ):
-                    draw[other] = draw.get(other, 0.0) + per_output * quantity
+                    draw[other] = draw.get(other, 0.0) + per_capacity * quantity
         return draw
 
     def system_inventory(self, commodity: str) -> float:
@@ -1928,20 +1944,21 @@ class Economy:
                 runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     required[name] = required.get(name, 0.0) + runs * per_run
-                # Department I (docs/36).  The plant wears out in proportion
-                # to what it makes, and the matter to rebuild it has to come
-                # from somewhere.  Requested here so it contends pro-rata
-                # with everything else drawing on the same stock; a bill-free
-                # process requests nothing and this loop does not run.
-                per_output = (
-                    runs
-                    * producer.process.outputs.get(producer.commodity, 0.0)
-                    / self.capital_service_life_days
+
+            # Department I (docs/36), on the calendar rather than on output
+            # (docs/38).  A second pass, not a term inside the first: the
+            # actual draw is applied in its own pass too, and the two have to
+            # accumulate in the same order or they differ in the last bits
+            # wherever a commodity is both an input and a means of building
+            # plant, which steel is.
+            for producer in active:
+                per_capacity = (
+                    producer.capacity_per_day / self.capital_service_life_days
                 )
                 for name, quantity in (
                     producer.process.capital_bill_per_capacity().items()
                 ):
-                    required[name] = required.get(name, 0.0) + per_output * quantity
+                    required[name] = required.get(name, 0.0) + per_capacity * quantity
 
             ration: Dict[str, float] = {}
             for name, need in required.items():
@@ -2027,20 +2044,6 @@ class Economy:
                     )
                 for name, per_run in inputs.items():
                     drawn[name] = drawn.get(name, 0.0) + runs * per_run
-                # Rebuild the plant this output wore out (docs/36 3.3).
-                # *After* the input draw, not before: `_planned_runs`
-                # accumulates intended outflow inputs-first for each
-                # producer, and a draw accumulated in the other order
-                # differs in the last bits, which showed up as steel
-                # stock climbing by 9e-13 a day at equilibrium.
-                # Replacement in place, not decay of capacity: the charge
-                # the ledger has made since docs/23 stops being a fiction
-                # and becomes a draw on real stock.  A shortfall is *not*
-                # throttled here — running a machine you cannot replace is
-                # capacity decay, which is deliberately the next item.
-                labor_performed += self._replace_plant(
-                    region, producer, own_output, ration, drawn
-                )
                 for name, per_run in producer.process.outputs.items():
                     if name not in self.commodities:
                         continue
@@ -2048,6 +2051,16 @@ class Economy:
                 producer.output_total += runs * producer.process.outputs.get(
                     producer.commodity, 0.0
                 )
+
+            # Plant, in its own pass over every active producer — including
+            # producers that made nothing today, because idle plant wears
+            # out too.  A shortfall is not throttled and never was; it is
+            # taken out of capacity instead (docs/38 section 2.2).
+            for producer in active:
+                labor_performed += self._replace_plant(
+                    region, producer, ration, drawn
+                )
+            self._shed_capacity(region, active)
 
             for name, amount in drawn.items():
                 region.inventory[name] -= amount
@@ -2431,45 +2444,138 @@ class Economy:
         self,
         region: Region,
         producer: Producer,
-        own_output: float,
         ration: Dict[str, float],
         drawn: Dict[str, float],
     ) -> float:
-        """Rebuild the plant this output wore out; return the labor it took.
+        """Rebuild the day's wear on this producer's plant; return its labor.
 
-        The value accounting is a small production in its own right and it
-        closes on its own terms.  The plant consumed transfers ``K/L`` to
-        the product as constant capital, which the ledger has booked since
-        docs/23.  The plant *rebuilt* is new value: its materials come out
-        of stock as circulating capital, its construction labor is living
-        labor performed today, and the two sum to the same ``K/L``.  So the
-        two cancel in ``value_balance`` and neither is counted twice.
+        **Time-based** (docs/38 section 2.1).  A refinery standing idle rusts
+        at the same rate as one running flat out, so the wear is
+        ``capacity / L`` and not ``output / L``.  It is also the basis
+        ``Region.throughput_demand`` has always used to *size* this draw, so
+        before docs/38 the target and the draw were computed on different
+        bases; this is the consistency fix as much as the physics.
 
-        Construction labor is not the sector's direct labor and is not
-        added to it.  It enters the value of the plant, which is where it
-        belongs, and reaches the product only through depreciation.
+        The value transferred to the *product* stays use-based, for the
+        reason docs/23 gave and which has not changed: idle plant must not
+        feed a rising unit cost into the price anchor.  The two bases coexist
+        without double counting, because they account for different things.
+        The plant consumed transfers ``K/L`` at output; the plant rebuilt is
+        new value whose materials come out of stock as circulating capital
+        and whose construction labor is living labor performed today.  Sum
+        the two identities and every term appears once on each side.
+
+        The gap between them is the fixed cost of idle capacity: plant that
+        costs matter to maintain and transfers nothing, because it made
+        nothing.  What happens to a producer that cannot carry that cost is
+        ``_shed_capacity``.
 
         Returns zero, and touches nothing, for a process without a bill.
         """
         bill = producer.process.capital_bill_per_capacity()
-        if not bill or own_output <= EPSILON:
+        if not bill or producer.capacity_per_day <= EPSILON:
             return 0.0
-        per_output = own_output / self.capital_service_life_days
+        per_capacity = producer.capacity_per_day / self.capital_service_life_days
         rebuilt = 0.0
+        supplied = 1.0
         for name, quantity in bill.items():
-            take = per_output * quantity * ration.get(name, 1.0)
+            share = ration.get(name, 1.0)
+            supplied = min(supplied, share)
+            take = per_capacity * quantity * share
             drawn[name] = drawn.get(name, 0.0) + take
             Ledger.add(self.ledger.capital_replacement, name, take)
             rebuilt += take * self.labor_values.get(name, 0.0)
         construction = (
-            per_output
+            per_capacity
             * producer.process.machines_per_capacity
             * producer.process.capital_construction_labor
         )
         rebuilt += construction
         Ledger.add(self.ledger.value_produced, region.name, rebuilt)
         Ledger.add(self.ledger.construction_labor, region.name, construction)
+        producer.replacement_supplied = supplied
         return construction
+
+    def maintenance_coverage(
+        self, region: Region, producer: Producer
+    ) -> float:
+        """How much of today's maintenance this producer's margin covers.
+
+        The mirror image of the entry rule (docs/38 section 2.2).  `_invest`
+        builds where expected revenue clears cost by a margin; this maintains
+        in proportion to whether it does.  Continuous and damped, with no
+        threshold anywhere: a producer keeping its orders covers maintenance
+        many times over and returns exactly 1.0, so nothing moves in a
+        stationary state.
+
+        Returns 1.0 unconditionally where the rule is off, which is the
+        default and is bit-identical to the model before docs/38.
+        """
+        if not self.capacity_exit:
+            return 1.0
+        maintenance = (
+            producer.capacity_per_day
+            / max(self.capital_service_life_days, EPSILON)
+            * self.capital_money_per_capacity(producer.process, region)
+        )
+        if maintenance <= EPSILON:
+            # No plant, nothing to maintain, nothing that can be lost.
+            return 1.0
+        price = region.prices.get(producer.commodity, 0.0)
+        output = producer.last_runs * producer.process.outputs.get(
+            producer.commodity, 0.0
+        )
+        margin = output * (price - producer.effective_unit_cost(region.prices))
+        if margin <= 0.0:
+            return 0.0
+        return min(1.0, margin / maintenance)
+
+    def _shed_capacity(self, region: Region, active: List[Producer]) -> None:
+        """Lose the fraction of today's wear that was not made good.
+
+        There is no decay rule here and no exit rule.  Capacity is constant
+        while the plant is replaced and falls by exactly the part of the
+        day's wear that was not, which is the only honest thing to do with a
+        replacement the model has already refused to supply.  Two things can
+        refuse it and both are proportional:
+
+        *Matter* — the region could not supply the bill.  This is the debt
+        docs/37 section 7 named: before this, a region short of components
+        drew what it could, booked the shortfall as unmet demand, and kept
+        its capacity anyway.
+
+        *Money* — the producer could not carry the maintenance.  Off by
+        default; see ``maintenance_coverage``.
+
+        A producer whose plant is fully replaced loses nothing, so the
+        stationary equilibrium is untouched and stays exact to the bit.
+        Retirement below 1e-9 is housekeeping and not economics: exponential
+        decay never reaches zero, and a list of ten-thousandth-of-a-machine
+        producers is a performance problem rather than a market outcome.
+        """
+        for producer in active:
+            if not producer.process.capital_bill:
+                # No bill, no wear that matter could fail to replace.  Steel
+                # and wood can never lose capacity, and a test says so.
+                continue
+            supplied = min(
+                producer.replacement_supplied,
+                self.maintenance_coverage(region, producer),
+            )
+            if supplied >= 1.0:
+                continue
+            lost = (
+                producer.capacity_per_day
+                * (1.0 - supplied)
+                / max(self.capital_service_life_days, EPSILON)
+            )
+            if lost <= 0.0:
+                continue
+            producer.capacity_per_day -= lost
+            Ledger.add(self.ledger.capacity_lost, producer.commodity, lost)
+            if producer.capacity_per_day < 1e-9:
+                producer.capacity_per_day = 0.0
+                producer.active = False
 
     def _set_capital_consumption(
         self, producer: Producer, region: Optional[Region] = None
@@ -2610,22 +2716,20 @@ class Economy:
                 runs = planned[id(producer)]
                 for name, per_run in producer.process.inputs.items():
                     intended_outflow[name] += runs * per_run
-                # Department I (docs/36).  The plant this output wears out
-                # has to be rebuilt from stock, so it is intended outflow
-                # exactly as an input draw is.  Left out, steel would settle
-                # at whatever stock made the replenishment correction cover
-                # the replacement flow, which is stable but is not the
-                # stationary state the circuit was seeded at.
-                per_output = (
-                    runs
-                    * producer.process.outputs.get(producer.commodity, 0.0)
-                    / self.capital_service_life_days
+            # Plant replacement is intended outflow exactly as an input draw
+            # is (docs/36), taken on the calendar rather than on output
+            # (docs/38) — so it is a constant within this fixed point, and a
+            # second pass in the same producer order the actual draw uses.
+            for producer in active:
+                per_capacity = (
+                    producer.capacity_per_day / self.capital_service_life_days
                 )
                 for name, quantity in (
                     producer.process.capital_bill_per_capacity().items()
                 ):
                     if name in intended_outflow:
-                        intended_outflow[name] += per_output * quantity
+                        intended_outflow[name] += per_capacity * quantity
+
             # Worker basket demand due today is a known constant within the
             # plan (wages today, bread tomorrow — docs/17), so it adds no
             # new coupling to the fixed point.
