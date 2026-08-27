@@ -486,6 +486,18 @@
       "unit": "silver",
       "value": 14.372385
     },
+    "input_shortage.local.psychoid_leaves.price_peak": {
+      "unit": "silver",
+      "value": 6.720485
+    },
+    "input_shortage.local.yayo.price_peak": {
+      "unit": "silver",
+      "value": 47.668307
+    },
+    "input_shortage.terminal_yayo_price": {
+      "unit": "silver",
+      "value": 21.095563
+    },
     "perishable_meals.local.meals.settled_inventory": {
       "unit": "units",
       "value": 2.720595
@@ -693,6 +705,22 @@
     "scale.value_solve_exact_share": {
       "unit": "fraction",
       "value": 1.0
+    },
+    "subsistence_shock.basket_shortfall": {
+      "unit": "units",
+      "value": 5.700773
+    },
+    "subsistence_shock.local.meals.price_peak": {
+      "unit": "silver",
+      "value": 74.427112
+    },
+    "subsistence_shock.local.wage_rate": {
+      "unit": "silver",
+      "value": 43.689466
+    },
+    "subsistence_shock.terminal_meal_price": {
+      "unit": "silver",
+      "value": 15.846063
     },
     "technique_change.distant.rate_of_surplus_value": {
       "unit": "ratio",

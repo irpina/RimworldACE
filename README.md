@@ -382,6 +382,7 @@ results document scoring the predictions afterward.
 | [38](docs/38-capacity-depreciation-design.md) · [39](docs/39-capacity-depreciation-results.md) | Capacity depreciation and exit: a loss-making sector is disciplined rather than deleted |
 | [40](docs/40-recreation-in-the-basket-design.md) · [41](docs/41-recreation-in-the-basket-results.md) | Recreation in the basket: basicness is binary, and its economic weight is not |
 | [42](docs/42-absolute-rent-design.md) · [43](docs/43-absolute-rent-results.md) | Absolute rent: Marx's condition holds exactly without fixed capital, and breaks with it |
+| [45](docs/45-sensitivity-sweep-results.md) | The sensitivity sweep, re-run: three defects that produced false answers, and what actually matters |
 
 ### Running it
 
@@ -395,11 +396,11 @@ python -m economy_lab perishable-meals    # differential turnover: meals rot
 python -m economy_lab capital-goods       # Department I: the machines are produced
 python -m economy_lab capacity-exit       # competition for survival, not only for orders
 python -m economy_lab recreation-basket   # the workers' basket holds the workers' product
-python -m economy_lab.baseline            # 182 frozen metrics vs current
+python -m economy_lab.baseline            # 189 frozen metrics vs current
 python -m economy_lab.scale --sweep       # the size ladder, 6 to 6,470 producers
 ```
 
-`behavior_baseline.json` freezes 182 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 189 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.

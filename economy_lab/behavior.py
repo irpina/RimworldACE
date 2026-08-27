@@ -17,11 +17,13 @@ from .scenarios import (
     cost_competition,
     GARMENTS,
     generous_basket,
+    input_shortage,
     MEDICINE,
     perishable_meals,
     producer_loss,
     regional_glut,
     reserve_depletion,
+    subsistence_shock,
     technique_change,
     YAYO,
 )
@@ -198,8 +200,11 @@ def collect_behavioral_metrics(
     metrics.update(
         _price_of_production_metrics(stable=stable, technique=technique)
     )
-    metrics.update(_subsistence_basket_metrics(stable=stable))
-    metrics.update(_turnover_metrics(stable=stable))
+    metrics.update(
+        _subsistence_basket_metrics(stable=stable, parameters=parameters)
+    )
+    metrics.update(_turnover_metrics(stable=stable, parameters=parameters))
+    metrics.update(_uncovered_scenario_metrics(parameters))
     metrics.update(_capital_goods_metrics(parameters))
     metrics.update(_capacity_exit_metrics(parameters))
     metrics.update(_recreation_basket_metrics(parameters))
@@ -442,6 +447,63 @@ def _absolute_rent_metrics(
     }
 
 
+def _uncovered_scenario_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Cover the two scenarios no metric had been reading.
+
+    The sensitivity sweep reports a parameter that moves nothing as inert,
+    and that is a claim about the model.  It is only true if some metric
+    could have seen the parameter move.  `subsistence_shock` and
+    `input_shortage` were never collected, so `subsistence_loss_fraction`
+    scored zero because nothing was looking — a false zero wearing the same
+    clothes as a finding.
+
+    Two readings each, chosen as the thing the scenario exists to show:
+    the wage-push channel for the subsistence shock, and the downstream
+    propagation of an upstream loss for the input shortage.
+    """
+    shock = subsistence_shock(parameters=parameters)
+    shortage = input_shortage(parameters=parameters)
+
+    shock_region = shock.regions[LOCAL_REGION]
+    meal_prices = shock.series(LOCAL_REGION, MEALS)
+    after = meal_prices[SHOCK_DAY + 1 :]
+    basket_shortfall = sum(shock.ledger.basket_shortfall.values())
+
+    yayo_prices = shortage.series(LOCAL_REGION, COMMODITY)
+    leaf_prices = shortage.series(LOCAL_REGION, LEAVES)
+
+    return {
+        # Meal scarcity raises the meal price; the wage is the basket at
+        # current prices, so it follows.
+        "subsistence_shock.local.meals.price_peak": _metric(
+            max(after), "silver"
+        ),
+        "subsistence_shock.local.wage_rate": _metric(
+            shock_region.wage_rate(), "silver"
+        ),
+        # Labor-power paid below its reproduction cost, made visible.
+        "subsistence_shock.basket_shortfall": _metric(
+            basket_shortfall, "units"
+        ),
+        "subsistence_shock.terminal_meal_price": _metric(
+            meal_prices[-1], "silver"
+        ),
+        # An upstream loss has to reach the downstream price or the
+        # propagation the scenario exists to show is not happening.
+        "input_shortage.local.psychoid_leaves.price_peak": _metric(
+            max(leaf_prices[SHOCK_DAY + 1 :]), "silver"
+        ),
+        "input_shortage.local.yayo.price_peak": _metric(
+            max(yayo_prices[SHOCK_DAY + 1 :]), "silver"
+        ),
+        "input_shortage.terminal_yayo_price": _metric(
+            yayo_prices[-1], "silver"
+        ),
+    }
+
+
 def _scale_metrics() -> Dict[str, Dict[str, object]]:
     """Structural facts about the scale harness (docs/32, docs/33).
 
@@ -492,7 +554,9 @@ def _scale_metrics() -> Dict[str, Dict[str, object]]:
     }
 
 
-def _turnover_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
+def _turnover_metrics(
+    *, stable: Economy, parameters: ScenarioParameters
+) -> Dict[str, Dict[str, object]]:
     """Observe capital advanced against capital consumed (docs/30).
 
     The two that carry the session's result are `realized_days` — how long
@@ -506,7 +570,7 @@ def _turnover_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
         * stable.labor_values[name]
         for name in stable.commodities
     }
-    perishable = perishable_meals()
+    perishable = perishable_meals(parameters=parameters)
     system = perishable.prices_of_production(numeraire=MEALS)
     base = system["prices"][MEALS]
     return {
@@ -553,7 +617,9 @@ def _turnover_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
     }
 
 
-def _subsistence_basket_metrics(*, stable: Economy) -> Dict[str, Dict[str, object]]:
+def _subsistence_basket_metrics(
+    *, stable: Economy, parameters: ScenarioParameters
+) -> Dict[str, Dict[str, object]]:
     """Observe the enlarged subsistence basket (docs/28).
 
     The two that carry the session's result are
@@ -565,7 +631,7 @@ def _subsistence_basket_metrics(*, stable: Economy) -> Dict[str, Dict[str, objec
     region = stable.regions[LOCAL_REGION]
     basket = region.subsistence_basket
     embodied = stable.basket_labor_value(region)
-    generous = generous_basket()
+    generous = generous_basket(parameters=parameters)
     return {
         "equilibrium.basket.commodities": _metric(float(len(basket)), "count"),
         "equilibrium.basket.labor_ticks": _metric(embodied, "ticks"),

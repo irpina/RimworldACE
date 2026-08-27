@@ -15,12 +15,28 @@ from .scenarios import ScenarioParameters
 DEFAULT_CSV = Path(__file__).with_name("sensitivity_results.csv")
 DEFAULT_RANKING = Path(__file__).with_name("sensitivity_ranking.txt")
 PERTURBATION = 0.10
-INTEGER_PARAMETERS = {
-    "standard_travel_days",
-    "loss_travel_days",
-    "investment_interval_days",
-    "investment_lead_days",
-}
+
+
+def integer_parameters(baseline: ScenarioParameters) -> set:
+    """Fields that must stay whole, read off the dataclass rather than listed.
+
+    This used to be four names typed by hand, and by the time the model had
+    grown to 129 parameters it was missing five: `technique_change_day`,
+    `cost_competition_day`, `history_every`, `labor_value_max_iterations`
+    and `production_price_max_iterations`.  Perturbing those produced a
+    float where an int was required, and the sweep reported the resulting
+    `TypeError` under the heading "refused to seed" — which reads as a
+    finding about the model and was a bug in the harness.
+
+    `bool` is a subclass of `int` in Python and is excluded separately, so
+    the check has to run after `excluded_parameters`.
+    """
+    return {
+        parameter.name
+        for parameter in fields(baseline)
+        if isinstance(getattr(baseline, parameter.name), int)
+        and not isinstance(getattr(baseline, parameter.name), bool)
+    }
 
 
 def excluded_parameters(
@@ -50,6 +66,7 @@ def parameter_variants(
     baseline: ScenarioParameters,
 ) -> Iterable[Tuple[str, str, float, float, ScenarioParameters]]:
     skip = excluded_parameters(baseline)
+    whole = integer_parameters(baseline)
     for parameter in fields(baseline):
         name = parameter.name
         if name in skip:
@@ -57,14 +74,15 @@ def parameter_variants(
         original = float(getattr(baseline, name))
         for direction, factor in (("minus", 1.0 - PERTURBATION), ("plus", 1.0 + PERTURBATION)):
             perturbed = original * factor
-            if name in INTEGER_PARAMETERS:
+            if name in whole:
                 perturbed = float(max(1, round(perturbed)))
+            value = int(perturbed) if name in whole else perturbed
             yield (
                 name,
                 direction,
                 original,
                 perturbed,
-                replace(baseline, **{name: perturbed}),
+                replace(baseline, **{name: value}),
             )
 
 
@@ -167,6 +185,38 @@ def parameter_ranking(
     )
 
 
+def parameter_reach(rows: List[Dict[str, object]]) -> Dict[str, int]:
+    """How many metric readings a parameter moves at all.
+
+    The primary ranking, and the reason is that the elasticity is not one.
+    An elasticity divides by the metric's baseline, so a metric whose
+    baseline happens to sit near zero turns any absolute movement into a
+    huge number: `glut.local.employment_trough` has a baseline of 0.000412
+    worker-days, and a move of 0.017 scores 418. That put `daily_demand` and
+    `producer_capacity_per_day` at the top of the ranking on an artifact of
+    the denominator, and filled the next fifteen places with event *timings*
+    -- trough and peak day indices -- which are step functions of the
+    parameters and jump by a hundred days at a time.
+
+    Reach cannot be gamed by one denominator. It answers "does this
+    parameter matter anywhere", which is what a screening sweep is for, and
+    the ordering it produces is legible: the working day first, then the
+    subsistence basket, then the techniques of the wage goods. That is what
+    a model whose central quantity is the value of labor-power ought to say.
+
+    The elasticity is kept beside it, because where the baseline is a real
+    magnitude it is the more informative number.
+    """
+    reach: Dict[str, int] = {}
+    for row in rows:
+        if row["metric"] == "REFUSED":
+            continue
+        if abs(float(row["normalized_output_change"])) > 1e-9:
+            name = str(row["parameter"])
+            reach[name] = reach.get(name, 0) + 1
+    return reach
+
+
 def refusals(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
     """Perturbations the circuit refused to seed, in parameter order."""
     return sorted(
@@ -177,29 +227,49 @@ def refusals(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
 
 def ranking_text(rows: List[Dict[str, object]]) -> str:
     ranking = parameter_ranking(rows)
+    reach = parameter_reach(rows)
+    readings = len({str(row["metric"]) for row in rows if row["metric"] != "REFUSED"}) * 2
     lines = [
         "Stage 0 one-at-a-time parameter sensitivity (nominally +/-10%)",
         "",
-        "Score is the largest normalized output response divided by the actual",
-        "input change. Nonzero outputs use proportional change. The equilibrium",
-        "price-range baselines are zero, so their absolute movement is normalized",
-        "to the 21-silver reference price. Integer day parameters are rounded and",
-        "their actual perturbation is reported in the CSV.",
+        "Ranked by REACH: how many of the metric readings a parameter moves at",
+        f"all, out of {readings} (every metric, both directions). Reach is the",
+        "primary score because the elasticity beside it is not trustworthy as a",
+        "ranking: it divides by the metric's baseline, and a metric whose",
+        "baseline sits near zero turns any absolute movement into a huge number.",
+        "glut.local.employment_trough has a baseline of 0.000412 worker-days, so",
+        "a move of 0.017 scores 418 -- which is what put daily_demand and",
+        "producer_capacity_per_day on top of the old ranking, and filled the next",
+        "fifteen places with peak and trough DAY INDICES, which are step",
+        "functions that jump a hundred days at a time.",
         "",
-        f"{'rank':>4}  {'parameter':38} {'score':>10}  {'direction':9} {'strongest output'}",
-        "-" * 112,
+        "Elasticity is still reported, because where the baseline is a real",
+        "magnitude it is the more informative number. Integer parameters are",
+        "rounded and their actual perturbation is in the CSV.",
+        "",
+        f"{'rank':>4}  {'parameter':38} {'reach':>7} {'elasticity':>12}  {'strongest output'}",
+        "-" * 120,
     ]
-    for index, row in enumerate(ranking, start=1):
+    ordered = sorted(
+        ranking,
+        key=lambda row: (
+            -reach.get(str(row["parameter"]), 0),
+            -float(row["elasticity"]),
+            str(row["parameter"]),
+        ),
+    )
+    for index, row in enumerate(ordered, start=1):
+        name = str(row["parameter"])
         lines.append(
-            f"{index:4}  {str(row['parameter']):38} "
-            f"{float(row['elasticity']):10.4f}  {str(row['direction']):9} "
+            f"{index:4}  {name:38} "
+            f"{reach.get(name, 0):7} {float(row['elasticity']):12.4f}  "
             f"{row['metric']} ({float(row['absolute_delta']):+.6f} {row['unit']})"
         )
 
     inert = [
         str(row["parameter"])
         for row in ranking
-        if float(row["elasticity"]) == 0.0
+        if reach.get(str(row["parameter"]), 0) == 0
     ]
     lines.extend(
         [

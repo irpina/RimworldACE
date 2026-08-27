@@ -1,44 +1,161 @@
 Stage 0 one-at-a-time parameter sensitivity (nominally +/-10%)
 
-Score is the largest normalized output response divided by the actual
-input change. Nonzero outputs use proportional change. The equilibrium
-price-range baselines are zero, so their absolute movement is normalized
-to the 21-silver reference price. Integer day parameters are rounded and
-their actual perturbation is reported in the CSV.
+Ranked by REACH: how many of the metric readings a parameter moves at
+all, out of 378 (every metric, both directions). Reach is the
+primary score because the elasticity beside it is not trustworthy as a
+ranking: it divides by the metric's baseline, and a metric whose
+baseline sits near zero turns any absolute movement into a huge number.
+glut.local.employment_trough has a baseline of 0.000412 worker-days, so
+a move of 0.017 scores 418 -- which is what put daily_demand and
+producer_capacity_per_day on top of the old ranking, and filled the next
+fifteen places with peak and trough DAY INDICES, which are step
+functions that jump a hundred days at a time.
 
-rank  parameter                                   score  direction strongest output
-----------------------------------------------------------------------------------------------------------------
-   1  daily_demand                               2.3077  plus      arbitrage.export_volume (+3.000000 units)
-   2  producer_capacity_per_day                  2.3077  minus     arbitrage.export_volume (+3.000000 units)
-   3  reference_price                            2.2222  minus     glut.local_half_recovery_days (-2.000000 days)
-   4  dust_unit_cost                             2.2222  plus      glut.local_half_recovery_days (-2.000000 days)
-   5  investment_interval_days                   2.0000  plus      producer_loss.capacity_recovery_quadrums (-0.666667 quadrums)
-   6  investment_fraction_of_shortfall           2.0000  minus     producer_loss.capacity_recovery_days (+15.000000 days)
-   7  full_utilization_price_ratio               1.5385  minus     arbitrage.export_volume (+2.000000 units)
-   8  inventory_price_sensitivity                1.1111  minus     glut.local_half_recovery_quadrums (+0.066667 quadrums)
-   9  demand_elasticity                          1.1111  minus     glut.local_half_recovery_quadrums (+0.066667 quadrums)
-  10  target_inventory_days                      1.1111  minus     glut.local_half_recovery_quadrums (-0.066667 quadrums)
-  11  standard_route_capacity_per_day            1.0000  plus      arbitrage.export_volume (+1.300000 units)
-  12  producer_loss_fraction                     0.8663  plus      producer_loss.local_peak_price (+3.346602 silver)
-  13  zero_utilization_price_ratio               0.7692  minus     arbitrage.export_volume (+1.000000 units)
-  14  price_adjustment_speed                     0.7692  minus     arbitrage.export_volume (+1.000000 units)
-  15  standard_freight_per_unit                  0.7692  minus     arbitrage.export_volume (+1.000000 units)
-  16  investment_lead_days                       0.6000  minus     producer_loss.capacity_recovery_days (-5.000000 days)
-  17  glut_fraction_of_annual_demand             0.4309  minus     glut.local_trough_price (+0.551189 silver)
-  18  standard_travel_days                       0.3175  plus      arbitrage.export_volume (+0.688005 units)
-  19  risk_markup                                0.2128  minus     arbitrage.export_volume (+0.276672 units)
-  20  expectation_alpha                          0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  21  initial_cash                               0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  22  investment_margin_threshold                0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  23  labor_value                                0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  24  loss_freight_per_unit                      0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  25  loss_route_capacity_per_day                0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  26  loss_travel_days                           0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  27  maximum_price_factor                       0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  28  minimum_price_factor                       0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  29  river_unit_cost                            0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  30  speculative_inventory_limit                0.0000  minus     arbitrage.export_volume (+0.000000 units)
-  31  unmet_demand_price_pressure                0.0000  minus     arbitrage.export_volume (+0.000000 units)
+Elasticity is still reported, because where the baseline is a real
+magnitude it is the more informative number. Integer parameters are
+rounded and their actual perturbation is in the CSV.
+
+rank  parameter                                reach   elasticity  strongest output
+------------------------------------------------------------------------------------------------------------------------
+   1  ticks_per_worker_day                       241       5.3784  subsistence_shock.terminal_meal_price (+8.522590 silver)
+   2  meals_per_worker_day                       207       7.3736  subsistence_shock.terminal_meal_price (+11.684224 silver)
+   3  meal_direct_labor                          203       3.7369  subsistence_shock.terminal_meal_price (+5.921555 silver)
+   4  garments_per_worker_day                    199       0.8758  perishable_meals.production.yayo_relative_to_meals (+41.672588 ratio)
+   5  medicine_per_worker_day                    197      16.7213  glut.local.chemfuel.inventory_trough_day (+102.000000 day)
+   6  chemfuel_direct_labor                      190       3.8579  subsistence_shock.terminal_meal_price (+6.113226 silver)
+   7  garment_direct_labor                       184      15.9016  glut.local.chemfuel.inventory_peak_day (+97.000000 day)
+   8  chemfuel_per_garment                       180       1.9672  glut.local.chemfuel.inventory_peak_day (+12.000000 day)
+   9  producer_capacity_per_day                  179     416.8447  glut.local.employment_trough (+0.017174 worker-days)
+  10  daily_demand                               177     417.8155  glut.local.employment_trough (+0.017214 worker-days)
+  11  medicine_direct_labor                      174       1.3385  subsistence_shock.terminal_meal_price (+2.121018 silver)
+  12  target_inventory_days                      168      11.1475  glut.local.chemfuel.inventory_trough_day (+68.000000 day)
+  13  leaves_per_yayo                            165      13.6066  glut.local.chemfuel.inventory_peak_day (+83.000000 day)
+  14  chemfuel_per_leaf                          149       1.3112  subsistence_shock.terminal_meal_price (+2.077782 silver)
+  15  yayo_direct_labor                          148       3.8213  subsistence_shock.terminal_meal_price (+6.055318 silver)
+  16  leaves_direct_labor                        147      18.0328  glut.local.chemfuel.inventory_peak_day (+110.000000 day)
+  17  chemfuel_per_yayo                          145       0.4401  producer_loss.local.chemfuel.inventory_peak (+6.151029 units)
+  18  capital_service_life_days                  134       1.1119  rent.chemfuel_organic_composition (+0.005582 ratio)
+  19  meal_target_inventory_days                 122       4.9390  subsistence_shock.terminal_meal_price (+7.826363 silver)
+  20  meal_reference_price                       102      16.5574  glut.local.chemfuel.inventory_peak_day (+101.000000 day)
+  21  garment_reference_price                     96       0.8182  equilibrium.realized.garments_money_rate (-2.332939 ratio)
+  22  reference_price                             93       6.8852  glut.local.chemfuel.inventory_peak_day (+42.000000 day)
+  23  medicine_reference_price                    91      19.0164  glut.local.chemfuel.inventory_trough_day (+116.000000 day)
+  24  garment_capacity_per_day                    80      12.7869  glut.local.chemfuel.inventory_trough_day (+78.000000 day)
+  25  meal_capacity_per_day                       79       3.0720  subsistence_shock.basket_shortfall (+1.751253 units)
+  26  provisioner_capital_labor                   74       0.0243  equilibrium.advance.fixed_share (+0.000086 fraction)
+  27  dust_unit_cost                              73       1.1006  equilibrium.wedge.psychoid_leaves_share_of_price (+0.066667 fraction)
+  28  chemfuel_reference_price                    70       1.0197  equilibrium.realized.chemfuel_money_rate (+5.260901 ratio)
+  29  competitive_price_intensity                 68       0.5882  producer_loss.local.psychoid_leaves.price_peak_day (-9.000000 day)
+  30  leaves_reference_price                      67      16.2295  glut.local.chemfuel.inventory_trough_day (+99.000000 day)
+  31  inventory_price_sensitivity                 66       7.0492  glut.local.chemfuel.inventory_peak_day (+43.000000 day)
+  32  price_adjustment_speed                      61       1.2500  glut.local_half_recovery_days (-1.000000 days)
+  33  refinery_capital_labor                      61       0.0198  equilibrium.value_ledger.fixed_share_of_constant (-0.000007 fraction)
+  34  replenishment_rate                          60       9.6602  glut.local.employment_trough (-0.000398 worker-days)
+  35  demand_elasticity                           52       7.0492  glut.local.chemfuel.inventory_peak_day (+43.000000 day)
+  36  investment_interval_days                    52       6.2211  subsistence_shock.basket_shortfall (-2.364322 units)
+  37  investment_lead_days                        52       2.0899  subsistence_shock.terminal_meal_price (+3.679651 silver)
+  38  medicine_capacity_per_day                   52       1.3438  subsistence_shock.terminal_meal_price (+2.129407 silver)
+  39  tailoring_bench_capital_labor               49       0.0071  equilibrium.advance.fixed_share (+0.000025 fraction)
+  40  production_period_days                      46       0.9991  equilibrium.advance.wage_share (-0.000114 fraction)
+  41  employment_quantum                          43      16.3934  glut.local.chemfuel.inventory_trough_day (+100.000000 day)
+  42  psychoid_field_capital_labor                40       0.2408  equilibrium.value_ledger.fixed_share_of_constant (+0.000085 fraction)
+  43  producer_loss_fraction                      39       3.0512  producer_loss.local.psychoid_leaves.price_trough (+0.211583 silver)
+  44  drug_lab_capital_labor                      36       0.7225  equilibrium.value_ledger.fixed_capital_consumed (-242.710417 ticks)
+  45  investment_fraction_of_shortfall            35       5.8424  subsistence_shock.terminal_meal_price (+9.257922 silver)
+  46  component_direct_labor                      34       0.8883  capital_goods.value.components (+502.300043 ticks)
+  47  steel_per_component                         34       0.5972  capacity_exit.components.final_price (-2.290100 silver)
+  48  plant_pot_capital_labor                     34       0.0003  equilibrium.advance.fixed_share (-0.000001 fraction)
+  49  buffer_refill_horizon_days                  32       4.7745  subsistence_shock.terminal_meal_price (+7.565743 silver)
+  50  zero_utilization_price_ratio                30      15.9016  glut.local.chemfuel.inventory_peak_day (+97.000000 day)
+  51  steel_direct_labor                          30       1.0000  capital_goods.value.steel (-4.750000 ticks)
+  52  risk_markup                                 29       0.3262  arbitrage.export_volume (+0.336701 units)
+  53  chemfuel_per_component                      28       0.1720  capacity_exit.components.final_price (-0.659625 silver)
+  54  full_utilization_price_ratio                27      40.0000  capacity_exit.sectors_that_lost_capacity (+4.000000 commodities)
+  55  wood_direct_labor                           26       1.0000  capital_goods.value.wood (-2.250000 ticks)
+  56  loss_freight_per_unit                       25       0.0002  producer_loss.local.meals.price_trough (+0.000295 silver)
+  57  competitive_share_elasticity                24       0.2720  cost_competition.local.meals.cheap_producer_share (-0.019677 fraction)
+  58  component_capacity_per_day                  18       0.0623  capital_goods.department_one.steel_per_day (+0.000912 units)
+  59  meal_efficient_direct_labor                 16       0.3543  technique_change.value.meals_adopter_ticks (-8.044941 ticks)
+  60  unmet_demand_price_pressure                 14       0.0876  input_shortage.local.psychoid_leaves.price_peak (-0.058900 silver)
+  61  standard_freight_per_unit                   12       1.2810  arbitrage.export_volume (-1.322317 units)
+  62  perishable_meal_days                        12       1.0929  perishable_meals.production.yayo_relative_to_meals (+52.002998 ratio)
+  63  standard_travel_days                        12       0.3022  arbitrage.export_volume (+0.519835 units)
+  64  loss_travel_days                            12       0.0000  producer_loss.local.chemfuel.price_peak (-0.000002 silver)
+  65  glut_fraction_of_annual_demand              11      18.5246  glut.local.chemfuel.inventory_trough_day (+113.000000 day)
+  66  generous_meals_per_worker_day               10       0.5398  generous_basket.rate_of_surplus_value (+0.614500 ratio)
+  67  generous_garments_per_worker_day            10       0.4940  generous_basket.production.gross_markup (+0.526183 ratio)
+  68  generous_medicine_per_worker_day            10       0.1134  generous_basket.rate_of_surplus_value (+0.129150 ratio)
+  69  standard_route_capacity_per_day              8      19.5082  glut.local.chemfuel.inventory_trough_day (+119.000000 day)
+  70  subsistence_loss_fraction                    8       7.0963  subsistence_shock.basket_shortfall (+4.045454 units)
+  71  min_investment_capacity                      8       5.3587  subsistence_shock.terminal_meal_price (+8.491467 silver)
+  72  maximum_price_factor                         8       0.9888  subsistence_shock.local.meals.price_peak (+7.359209 silver)
+  73  cheap_provisioner_overhead_fraction          8       0.8142  cost_competition.local.meals.cost_ratio (-0.058636 ratio)
+  74  yayo_per_worker_day                          6       0.1219  recreation.production.profit_rate (+0.005475 ratio)
+  75  drug_lab_capital_money                       4       1.0097  equilibrium.wedge.yayo_share_of_price (-0.000052 fraction)
+  76  technique_change_day                         4       0.0192  technique_change.local.rate_of_surplus_value (+0.055210 ratio)
+  77  psychoid_field_capital_money                 4       0.0006  equilibrium.wedge.psychoid_leaves_share_of_price (+0.000039 fraction)
+  78  provisioner_capital_money                    4       0.0005  equilibrium.wedge.meals_share_of_price (+0.000032 fraction)
+  79  refinery_capital_money                       4       0.0005  equilibrium.wedge.chemfuel_share_of_price (+0.000030 fraction)
+  80  steel_reference_price                        3       0.5990  capacity_exit.components.final_price (-2.296983 silver)
+  81  recreation_capacity_per_day                  3       0.0003  recreation.wage_per_worker_day (+0.001090 silver)
+  82  river_unit_cost                              3       0.0000  input_shortage.local.yayo.price_peak (-0.000009 silver)
+  83  tailoring_bench_capital_money                2       0.0002  equilibrium.realized.garments_money_rate (-0.000624 ratio)
+  84  plant_pot_capital_money                      2       0.0001  equilibrium.realized.herbal_medicine_money_rate (+0.000163 ratio)
+  85  component_reference_price                    2       0.0000  capacity_exit.components.final_price (-0.000064 silver)
+  86  steel_capacity_per_day                       1       0.0003  capital_goods.advance.fixed_share (+0.000001 fraction)
+  87  chemfuel_expensive_cost_multiplier           0       0.0000  arbitrage.export_volume (+0.000000 units)
+  88  chemfuel_labor_value                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+  89  chemfuel_mass                                0       0.0000  arbitrage.export_volume (+0.000000 units)
+  90  chemfuel_reserve_per_region                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+  91  component_labor_value                        0       0.0000  arbitrage.export_volume (+0.000000 units)
+  92  component_mass                               0       0.0000  arbitrage.export_volume (+0.000000 units)
+  93  construction_cost_multiplier                 0       0.0000  arbitrage.export_volume (+0.000000 units)
+  94  cost_competition_day                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+  95  expectation_alpha                            0       0.0000  arbitrage.export_volume (+0.000000 units)
+  96  garment_labor_value                          0       0.0000  arbitrage.export_volume (+0.000000 units)
+  97  garment_mass                                 0       0.0000  arbitrage.export_volume (+0.000000 units)
+  98  history_every                                0       0.0000  arbitrage.export_volume (+0.000000 units)
+  99  initial_cash                                 0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 100  investment_margin_threshold                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 101  labor_pool_worker_days                       0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 102  labor_value                                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 103  labor_value_max_iterations                   0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 104  labor_value_per_tick                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 105  labor_value_tolerance                        0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 106  leaves_labor_value                           0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 107  leaves_mass                                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 108  loss_route_capacity_per_day                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 109  meal_labor_value                             0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 110  meal_mass                                    0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 111  medicine_labor_value                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 112  medicine_mass                                0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 113  minimum_price_factor                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 114  production_price_max_iterations              0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 115  production_price_tolerance                   0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 116  speculative_inventory_limit                  0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 117  steel_labor_value                            0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 118  steel_mass                                   0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 119  wood_capacity_per_day                        0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 120  wood_labor_value                             0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 121  wood_mass                                    0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 122  wood_reference_price                         0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 123  worker_initial_cash_days                     0       0.0000  arbitrage.export_volume (+0.000000 units)
+ 124  yayo_mass                                    0       0.0000  arbitrage.export_volume (+0.000000 units)
 
 No measured effect on the captured outputs:
-  expectation_alpha, initial_cash, investment_margin_threshold, labor_value, loss_freight_per_unit, loss_route_capacity_per_day, loss_travel_days, maximum_price_factor, minimum_price_factor, river_unit_cost, speculative_inventory_limit, unmet_demand_price_pressure
+  chemfuel_expensive_cost_multiplier, chemfuel_labor_value, chemfuel_mass, chemfuel_reserve_per_region, component_labor_value, component_mass, construction_cost_multiplier, cost_competition_day, expectation_alpha, garment_labor_value, garment_mass, history_every, initial_cash, investment_margin_threshold, labor_pool_worker_days, labor_value, labor_value_max_iterations, labor_value_per_tick, labor_value_tolerance, leaves_labor_value, leaves_mass, loss_route_capacity_per_day, meal_labor_value, meal_mass, medicine_labor_value, medicine_mass, minimum_price_factor, production_price_max_iterations, production_price_tolerance, speculative_inventory_limit, steel_labor_value, steel_mass, wood_capacity_per_day, wood_labor_value, wood_mass, wood_reference_price, worker_initial_cash_days, yayo_mass
+
+Refused to seed (a result, not a crash):
+  none
+
+Not swept, and why:
+  capacity_exit                    regime switch, not a magnitude: a boolean has no +/-10%
+  capital_goods                    regime switch, not a magnitude: a boolean has no +/-10%
+  chemfuel_expensive_reserve       zero at baseline, so a proportional perturbation is zero
+  record_history                   regime switch, not a magnitude: a boolean has no +/-10%
+  recreation_basket                regime switch, not a magnitude: a boolean has no +/-10%
+
+Scale metrics read out/embodied_labor.csv rather than a scenario,
+so they are parameter-independent by construction.  Their zeros
+in this sweep are structural and are not evidence about any
+parameter.
