@@ -27,6 +27,7 @@ from economy_lab.scenarios import (
     capital_goods,
     circuit_processes,
     cost_competition,
+    demand_boom,
     equilibrium,
     generous_basket,
     input_shortage,
@@ -35,9 +36,11 @@ from economy_lab.scenarios import (
     regional_glut,
     recreation_basket,
     recreation_sweep,
+    reserve_army_sweep,
     reserve_depletion,
     seeded_two_region_economy,
     subsistence_shock,
+    wage_slump,
     summary,
     technique_change,
 )
@@ -3264,3 +3267,119 @@ class AbsoluteRentTests(unittest.TestCase):
         for name in before:
             with self.subTest(commodity=name):
                 self.assertEqual(before[name], after[name])
+
+
+class WageDeviationTests(unittest.TestCase):
+    """Wages off the value of labor-power, regulated by the reserve army (docs/46).
+
+    The wage has been the basket at current prices since docs/17; the value
+    of labor-power is the same basket at social labor values.  The rule lets
+    the first move with the employment rate while the second stays put, and
+    every test here is some form of "the wage moved and the value did not".
+    """
+
+    def test_off_by_default(self):
+        """The default is wages at value, and the paid wage is the basket."""
+        self.assertEqual(ScenarioParameters().wage_bargaining_strength, 0.0)
+        economy = demand_boom(days_after_boom=30)
+        for region in economy.regions.values():
+            with self.subTest(region=region.name):
+                self.assertEqual(region.wage_premium, 0.0)
+                self.assertEqual(region.wage_rate(), region.basket_cost())
+        self.assertEqual(economy.ledger.wage_premium_paid, {})
+        self.assertEqual(
+            economy.realized_rate_of_surplus_value("Dust Basin"),
+            economy.rate_of_surplus_value("Dust Basin"),
+        )
+
+    def test_the_rule_is_exactly_stationary_where_the_circuit_is(self):
+        """docs/46 s2: the reference is the seeded rate on the identical float.
+
+        The equilibrium scenario must keep its exactly-zero price range with
+        bargaining switched on.  If this ever fails the rule has an
+        asymmetry and the check is not to be loosened.
+        """
+        parameters = replace(ScenarioParameters(), wage_bargaining_strength=1.0)
+        economy = equilibrium(days=240, parameters=parameters)
+        for entry in economy.history:
+            for name, region in entry["regions"].items():
+                self.assertEqual(region["wage_premium"], 0.0, name)
+        prices = economy.series("Dust Basin", YAYO)
+        self.assertEqual(max(prices) - min(prices), 0.0)
+
+    def test_an_infinite_reserve_army_pins_the_wage_to_value(self):
+        """Marx's limiting case, and it is the arithmetic of the rate."""
+        economy = demand_boom(bargaining=True, labor_pool=float("inf"))
+        for entry in economy.history:
+            self.assertEqual(entry["regions"]["Dust Basin"]["wage_premium"], 0.0)
+
+    def test_the_boom_lifts_the_wage_and_not_the_value(self):
+        """docs/46 s5.2 and s5.3.
+
+        The premium is positive and lags the employment it follows.  The
+        value of labor-power is read in both runs: docs/46 predicted
+        identity to the bit and docs/47 measured one ulp, because the value
+        solve's output weights differ between two runs whose investment
+        differs.  The bound here is float noise, not equality, and the
+        difference is recorded there rather than hidden here.
+        """
+        without = demand_boom()
+        with_rule = demand_boom(bargaining=True)
+        premium = [h["regions"]["Dust Basin"]["wage_premium"] for h in with_rule.history]
+        employment = [h["regions"]["Dust Basin"]["employment"] for h in with_rule.history]
+        self.assertGreater(max(premium), 0.05)
+        self.assertGreaterEqual(premium.index(max(premium)), employment.index(max(employment)))
+        value_off = without.basket_labor_value(without.regions["Dust Basin"])
+        value_on = with_rule.basket_labor_value(with_rule.regions["Dust Basin"])
+        self.assertLess(abs(value_on - value_off) / value_off, 1e-12)
+
+    def test_the_premium_is_a_deduction_from_surplus_value(self):
+        """docs/46 s3: the living labor is what it was; the line moved.
+
+        Above value the realized rate sits below the value rate; below
+        value it sits above it.  The value rate itself is a ratio of two
+        labor-time quantities the premium never touches.
+        """
+        boom = demand_boom(bargaining=True)
+        self.assertLess(
+            boom.realized_rate_of_surplus_value("Dust Basin"),
+            boom.rate_of_surplus_value("Dust Basin"),
+        )
+        self.assertGreater(boom.ledger.wage_deviation_labor["Dust Basin"], 0.0)
+        slump = wage_slump()
+        self.assertGreater(
+            slump.realized_rate_of_surplus_value("Dust Basin"),
+            slump.rate_of_surplus_value("Dust Basin"),
+        )
+        self.assertLess(slump.ledger.wage_deviation_labor["Dust Basin"], 0.0)
+
+    def test_the_slump_pushes_the_wage_below_value_and_lets_it_back(self):
+        """docs/46 s5.6: negative, brief, and gone within a hundred days."""
+        economy = wage_slump()
+        premium = [h["regions"]["Dust Basin"]["wage_premium"] for h in economy.history]
+        trough = min(premium)
+        self.assertLess(trough, -0.05)
+        trough_day = premium.index(trough)
+        self.assertLess(abs(premium[trough_day + 100]), 0.01)
+
+    def test_the_ledgers_close_with_a_premium(self):
+        """docs/46 s5.8: the premium is spent, not hoarded."""
+        for economy in (demand_boom(bargaining=True), wage_slump()):
+            with self.subTest(day=economy.day):
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-6)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)
+
+    def test_the_reserve_army_sets_the_magnitude(self):
+        """docs/46 s5.5: half the pool, roughly twice the premium."""
+        sweep = reserve_army_sweep(pools=(1.0, 0.5))
+        peaks = {
+            pool: max(
+                h["regions"]["Dust Basin"]["wage_premium"] for h in economy.history
+            )
+            for pool, economy in sweep.items()
+        }
+        ratio = peaks[0.5] / peaks[1.0]
+        self.assertGreater(ratio, 1.7)
+        self.assertLessEqual(ratio, 2.0)

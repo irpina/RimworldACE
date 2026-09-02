@@ -6,6 +6,94 @@
       "unit": "units",
       "value": 10.322317
     },
+    "bargaining.boom.employment_end_with_rule": {
+      "unit": "worker-days",
+      "value": 0.395919
+    },
+    "bargaining.boom.employment_end_without_rule": {
+      "unit": "worker-days",
+      "value": 0.396914
+    },
+    "bargaining.boom.employment_peak_day": {
+      "unit": "day",
+      "value": 354
+    },
+    "bargaining.boom.meals_price_end_with_rule": {
+      "unit": "silver",
+      "value": 15.599154
+    },
+    "bargaining.boom.meals_price_end_without_rule": {
+      "unit": "silver",
+      "value": 15.000012
+    },
+    "bargaining.boom.meals_wage_cost_gain": {
+      "unit": "silver",
+      "value": 0.064798
+    },
+    "bargaining.boom.premium_peak": {
+      "unit": "fraction",
+      "value": 0.078378
+    },
+    "bargaining.boom.premium_peak_day": {
+      "unit": "day",
+      "value": 360
+    },
+    "bargaining.boom.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 26.708223
+    },
+    "bargaining.boom.realized_rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 25.679606
+    },
+    "bargaining.boom.value_of_labor_power_gap": {
+      "unit": "fraction",
+      "value": 0.0
+    },
+    "bargaining.boom.worker_cash_ratio": {
+      "unit": "ratio",
+      "value": 1.001058
+    },
+    "bargaining.equilibrium.premium_max_abs": {
+      "unit": "fraction",
+      "value": 0.0
+    },
+    "bargaining.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "bargaining.reserve_army.premium_peak_at_half_pool": {
+      "unit": "fraction",
+      "value": 0.154581
+    },
+    "bargaining.reserve_army.premium_peak_at_infinite_pool": {
+      "unit": "fraction",
+      "value": 0.0
+    },
+    "bargaining.reserve_army.premium_ratio_half_to_full": {
+      "unit": "ratio",
+      "value": 1.972248
+    },
+    "bargaining.slump.deviation_labor": {
+      "unit": "ticks",
+      "value": -445.699212
+    },
+    "bargaining.slump.premium_end": {
+      "unit": "fraction",
+      "value": -0.0
+    },
+    "bargaining.slump.premium_trough": {
+      "unit": "fraction",
+      "value": -0.11323
+    },
+    "bargaining.slump.premium_trough_day": {
+      "unit": "day",
+      "value": 70
+    },
+    "bargaining.slump.realized_rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 26.835836
+    },
     "capacity_exit.components.coverage": {
       "unit": "fraction",
       "value": 1.0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Dict, Iterable
 
 from .model import Economy
@@ -15,6 +16,7 @@ from .scenarios import (
     equilibrium,
     LEAVES,
     cost_competition,
+    demand_boom,
     GARMENTS,
     generous_basket,
     input_shortage,
@@ -22,9 +24,11 @@ from .scenarios import (
     perishable_meals,
     producer_loss,
     regional_glut,
+    reserve_army_sweep,
     reserve_depletion,
     subsistence_shock,
     technique_change,
+    wage_slump,
     YAYO,
 )
 
@@ -209,6 +213,7 @@ def collect_behavioral_metrics(
     metrics.update(_capacity_exit_metrics(parameters))
     metrics.update(_recreation_basket_metrics(parameters))
     metrics.update(_absolute_rent_metrics(parameters))
+    metrics.update(_wage_deviation_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -443,6 +448,130 @@ def _absolute_rent_metrics(
         ),
         "rent.chemfuel_organic_composition": _metric(
             plant.sector_organic_composition()[CHEMFUEL], "ratio"
+        ),
+    }
+
+
+def _premium_series(economy: Economy, region: str) -> list:
+    return [h["regions"][region]["wage_premium"] for h in economy.history]
+
+
+def _wage_deviation_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Wages off the value of labor-power (docs/46, docs/47).
+
+    The reserve-army rule is off by default, so nothing here is a change to
+    existing behavior; these are the readings the rule exists to produce,
+    each a difference between the same shock run with and without it.  The
+    value of labor-power is read in both runs and the *gap* is frozen,
+    because the whole account rests on the wage moving while the value does
+    not: if that gap ever grows past float noise, the premium has reached
+    the value solve and docs/46 section 7 says what that means.
+    """
+    without = demand_boom(parameters=parameters)
+    with_rule = demand_boom(bargaining=True, parameters=parameters)
+    slump = wage_slump(parameters=parameters)
+    sweep = reserve_army_sweep(pools=(0.5, float("inf")), parameters=parameters)
+    stationary = equilibrium(
+        parameters=replace(
+            parameters,
+            wage_bargaining_strength=parameters.bargaining_scenario_strength,
+        )
+    )
+
+    off_region = without.regions[LOCAL_REGION]
+    on_region = with_rule.regions[LOCAL_REGION]
+    premium = _premium_series(with_rule, LOCAL_REGION)
+    employment = _employment_series(with_rule, LOCAL_REGION)
+    slump_premium = _premium_series(slump, LOCAL_REGION)
+    value_off = without.basket_labor_value(off_region)
+    value_on = with_rule.basket_labor_value(on_region)
+    half = max(_premium_series(sweep[0.5], LOCAL_REGION))
+    stationary_prices = stationary.series(LOCAL_REGION, YAYO)
+
+    def wage_cost(economy: Economy, commodity: str) -> float:
+        region = economy.regions[LOCAL_REGION]
+        producers = [
+            p for p in region.producers if p.active and p.commodity == commodity
+        ]
+        return producers[0].wage_cost_per_unit
+
+    return {
+        # The rule on, and the seeded circuit still exactly stationary.
+        "bargaining.equilibrium.premium_max_abs": _metric(
+            max(abs(x) for x in _premium_series(stationary, LOCAL_REGION)),
+            "fraction",
+        ),
+        "bargaining.equilibrium.price_range": _metric(
+            max(stationary_prices) - min(stationary_prices), "silver"
+        ),
+        # --- the boom: wages above value ---------------------------------
+        "bargaining.boom.premium_peak": _metric(max(premium), "fraction"),
+        "bargaining.boom.premium_peak_day": _metric(
+            premium.index(max(premium)), "day"
+        ),
+        "bargaining.boom.employment_peak_day": _metric(
+            employment.index(max(employment)), "day"
+        ),
+        "bargaining.boom.employment_end_with_rule": _metric(
+            on_region.worker_days_earned, "worker-days"
+        ),
+        "bargaining.boom.employment_end_without_rule": _metric(
+            off_region.worker_days_earned, "worker-days"
+        ),
+        # The wage moved; the value did not.  Frozen as the relative gap.
+        "bargaining.boom.value_of_labor_power_gap": _metric(
+            abs(value_on - value_off) / value_off, "fraction"
+        ),
+        "bargaining.boom.rate_of_surplus_value": _metric(
+            with_rule.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "bargaining.boom.realized_rate_of_surplus_value": _metric(
+            with_rule.realized_rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        # Cost-push against the price actually reached: the premium's
+        # effect on the meal's *wage cost* is a fraction of a percent, and
+        # the meal price moves by far more, because workers paid above
+        # value eat more meals (docs/47).
+        "bargaining.boom.meals_price_end_with_rule": _metric(
+            on_region.prices[MEALS], "silver"
+        ),
+        "bargaining.boom.meals_price_end_without_rule": _metric(
+            off_region.prices[MEALS], "silver"
+        ),
+        "bargaining.boom.meals_wage_cost_gain": _metric(
+            wage_cost(with_rule, MEALS) - wage_cost(without, MEALS), "silver"
+        ),
+        "bargaining.boom.worker_cash_ratio": _metric(
+            on_region.worker_cash / off_region.worker_cash, "ratio"
+        ),
+        # --- the slump: wages below value --------------------------------
+        "bargaining.slump.premium_trough": _metric(
+            min(slump_premium), "fraction"
+        ),
+        "bargaining.slump.premium_trough_day": _metric(
+            slump_premium.index(min(slump_premium)), "day"
+        ),
+        "bargaining.slump.premium_end": _metric(
+            slump_premium[-1], "fraction"
+        ),
+        "bargaining.slump.deviation_labor": _metric(
+            slump.ledger.wage_deviation_labor.get(LOCAL_REGION, 0.0), "ticks"
+        ),
+        "bargaining.slump.realized_rate_of_surplus_value": _metric(
+            slump.realized_rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        # --- the reserve army sets the magnitude -------------------------
+        "bargaining.reserve_army.premium_peak_at_half_pool": _metric(
+            half, "fraction"
+        ),
+        "bargaining.reserve_army.premium_ratio_half_to_full": _metric(
+            half / max(premium), "ratio"
+        ),
+        "bargaining.reserve_army.premium_peak_at_infinite_pool": _metric(
+            max(abs(x) for x in _premium_series(sweep[float("inf")], LOCAL_REGION)),
+            "fraction",
         ),
     }
 

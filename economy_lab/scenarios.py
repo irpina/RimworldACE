@@ -127,6 +127,20 @@ class ScenarioParameters:
     employment_quantum: float = 2.0 ** -20
     subsistence_loss_fraction: float = 0.70
 
+    # --- wages off the value of labor-power (docs/46) -----------------------
+    #: The reserve-army rule.  Strength is the wage premium per unit change
+    #: in the employment rate; speed is the fraction of the gap closed a
+    #: day.  Zero strength -- the default -- is wages at value and is
+    #: bit-identical.  The bargaining scenarios switch it to
+    #: ``bargaining_scenario_strength`` so the same shock can be run with
+    #: and without the rule.
+    wage_bargaining_strength: float = 0.0
+    wage_bargaining_speed: float = 0.1
+    bargaining_scenario_strength: float = 1.0
+    #: Final demand for yayo in the local region rises by this factor on
+    #: the shock day; investment meets it and employment climbs.
+    boom_demand_multiplier: float = 1.25
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -782,6 +796,9 @@ def _region(
     equilibrium_days = _equilibrium_worker_days(region, parameters)
     region.worker_days_due = equilibrium_days
     region.worker_days_earned = equilibrium_days
+    # The employment rate the wage rule measures against (docs/46), taken
+    # with the same expression the rule uses so the two agree to the bit.
+    region.reference_employment_rate = region.employment_rate()
     # Seed every stock at its own target, so the circuit opens stationary
     # rather than working off an arbitrary initial imbalance.  The target is
     # the *commodity's* inventory life, not the global default: they were
@@ -1010,6 +1027,8 @@ def seeded_two_region_economy(
         production_period_days=parameters.production_period_days,
         record_history=parameters.record_history,
         history_every=parameters.history_every,
+        wage_bargaining_strength=parameters.wage_bargaining_strength,
+        wage_bargaining_speed=parameters.wage_bargaining_speed,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1261,6 +1280,77 @@ def regional_glut(
     )
     economy.step(days_after_injection)
     return economy
+
+
+def _bargaining(parameters: ScenarioParameters) -> ScenarioParameters:
+    """The same parameters with the reserve-army wage rule switched on."""
+    return replace(
+        parameters,
+        wage_bargaining_strength=parameters.bargaining_scenario_strength,
+    )
+
+
+def demand_boom(
+    days_after_boom: int = 300,
+    *,
+    bargaining: bool = False,
+    labor_pool: float | None = None,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """Raise the local region's final demand and let investment meet it.
+
+    Yayo is already at capacity, so the extra demand is met by building
+    plant, and employment climbs with it.  With ``bargaining`` the tighter
+    labor market lifts the wage above the value of labor-power (docs/46);
+    without it the same shock runs with the wage pinned to the basket, so
+    every effect of the rule is a difference between the two runs.
+    ``labor_pool`` overrides the reserve army's size for the sweep.
+    """
+    parameters = parameters or ScenarioParameters()
+    if labor_pool is not None:
+        parameters = replace(parameters, labor_pool_worker_days=labor_pool)
+    if bargaining:
+        parameters = _bargaining(parameters)
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    economy.step(60)
+    region = economy.regions["Dust Basin"]
+    region.base_daily_demand[YAYO] *= parameters.boom_demand_multiplier
+    economy.step(days_after_boom)
+    return economy
+
+
+def wage_slump(
+    days_after_injection: int = 300,
+    *,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """The regional glut with the wage rule on: a crisis throws the yayo
+    sector's workers out, and the wage falls below value (docs/46)."""
+    parameters = _bargaining(parameters or ScenarioParameters())
+    return regional_glut(days_after_injection, parameters=parameters)
+
+
+def reserve_army_sweep(
+    pools: Tuple[float, ...] = (1.0, 0.5, float("inf")),
+    *,
+    parameters: ScenarioParameters | None = None,
+) -> Dict[float, Economy]:
+    """The boom, with bargaining, against reserve armies of different size.
+
+    Marx's claim is that the reserve army regulates the wage's movement;
+    the same shock against a smaller pool should move the wage further,
+    and against an unbounded one not at all.
+    """
+    parameters = parameters or ScenarioParameters()
+    return {
+        pool: demand_boom(bargaining=True, labor_pool=pool, parameters=parameters)
+        for pool in pools
+    }
 
 
 def producer_loss(
@@ -1562,6 +1652,7 @@ def summary(economy: Economy) -> Dict[str, object]:
             "exports": round(region.exported_total["yayo"], 3),
             "employment_worker_days": round(region.worker_days_earned, 6),
             "wage_rate": round(region.wage_rate(), 3),
+            "wage_premium": round(region.wage_premium, 6),
             "worker_cash": round(region.worker_cash, 3),
             "wages_paid": round(
                 economy.ledger.wages_paid.get(name, 0.0), 3
@@ -1573,6 +1664,13 @@ def summary(economy: Economy) -> Dict[str, object]:
                 None
                 if economy.rate_of_surplus_value(name) is None
                 else round(economy.rate_of_surplus_value(name), 3)
+            ),
+            # Wages as paid rather than at value (docs/46); equal to the
+            # line above whenever there is no premium.
+            "realized_rate_of_surplus_value": (
+                None
+                if economy.realized_rate_of_surplus_value(name) is None
+                else round(economy.realized_rate_of_surplus_value(name), 3)
             ),
             "commodities": {
                 key: {

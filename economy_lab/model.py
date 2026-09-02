@@ -440,6 +440,17 @@ class Region:
     worker_days_due: float = 0.0
     #: Worker-days earned today, stored for tomorrow's basket demand.
     worker_days_earned: float = 0.0
+    #: The wage premium (docs/46): the paid wage's deviation from the
+    #: basket at current prices, as a fraction.  Zero is wages at the value
+    #: of labor-power; it is driven by the employment rate against the
+    #: seeded reference and can go negative in a slump.
+    wage_premium: float = 0.0
+    #: The premium the wages now being spent carried (wages today, bread
+    #: tomorrow), so that consumption scales with what was actually paid.
+    wage_premium_due: float = 0.0
+    #: Employment rate at seeding.  Measured state, like ``seed_unit_cost``,
+    #: not a coefficient: it is whatever the seeded circuit repeats.
+    reference_employment_rate: float = 0.0
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -547,12 +558,39 @@ class Region:
             if p.active
         )
 
-    def wage_rate(self) -> float:
-        """Silver per worker-day: the subsistence basket at current prices."""
+    def basket_cost(self) -> float:
+        """Silver per worker-day: the subsistence basket at current prices.
+
+        The money form of the value of labor-power -- what reproducing a
+        day of labor-power costs at today's prices, with no premium on it.
+        """
         return sum(
             quantity * self.prices.get(name, 0.0)
             for name, quantity in sorted(self.subsistence_basket.items())
         )
+
+    def wage_rate(self) -> float:
+        """Silver per worker-day actually paid: the basket times one plus
+        the wage premium (docs/46).
+
+        Skipped rather than multiplied by one when there is no premium, so
+        a model without bargaining is bit-identical to what it was.
+        """
+        basket = self.basket_cost()
+        if self.wage_premium != 0.0:
+            return basket * (1.0 + self.wage_premium)
+        return basket
+
+    def employment_rate(self) -> float:
+        """Yesterday's employment as a fraction of the labor pool.
+
+        Zero when the pool is infinite: an unbounded reserve army means no
+        tightening of the labor market is possible, which is the limiting
+        case in which the wage stays pinned to value (docs/46 section 2).
+        """
+        if self.labor_pool == float("inf"):
+            return 0.0
+        return self.worker_days_earned / self.labor_pool
 
     def daily_demand(self, commodity: Commodity) -> float:
         base = self.base_daily_demand.get(commodity.name, 0.0)
@@ -636,6 +674,14 @@ class Ledger:
     unattributed_margin: Dict[str, float] = field(default_factory=dict)
     #: Silver actually paid as wages (money form of variable capital).
     wages_paid: Dict[str, float] = field(default_factory=dict)
+    #: The part of the wage bill that is premium over the basket, in silver
+    #: (docs/46).  Signed: negative when wages are below value.
+    wage_premium_paid: Dict[str, float] = field(default_factory=dict)
+    #: The labor value workers appropriate beyond -- or short of -- the
+    #: reproduction of their labor-power, in work-ticks (docs/46).  Part of
+    #: the surplus the wage deviation redistributes; ``necessary_labor``
+    #: stays the value of labor-power and this sits beside it.
+    wage_deviation_labor: Dict[str, float] = field(default_factory=dict)
     #: Silver workers spent on the basket.
     worker_spending: Dict[str, float] = field(default_factory=dict)
     #: Basket units workers could not obtain — labor-power paid below its
@@ -713,6 +759,8 @@ class Economy:
         production_period_days: float = 1.0,
         record_history: bool = True,
         history_every: int = 1,
+        wage_bargaining_strength: float = 0.0,
+        wage_bargaining_speed: float = 0.1,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -753,6 +801,16 @@ class Economy:
         #: on deletes the component sector, which is a real consequence
         #: of a real RimWorld price and is the scenario's whole point.
         self.capacity_exit = capacity_exit
+        #: The reserve-army wage rule (docs/46).  ``strength`` is how far
+        #: the wage premium moves per unit change in the employment rate;
+        #: ``speed`` is the fraction of the gap to that target closed each
+        #: day.  Zero strength is wages at value, and bit-identical.
+        if wage_bargaining_strength < 0.0:
+            raise ValueError("wage_bargaining_strength must be non-negative")
+        if not 0.0 <= wage_bargaining_speed <= 1.0:
+            raise ValueError("wage_bargaining_speed must be between zero and one")
+        self.wage_bargaining_strength = wage_bargaining_strength
+        self.wage_bargaining_speed = wage_bargaining_speed
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -1086,6 +1144,32 @@ class Economy:
             return None
         living = sum(self.ledger.living_labor.get(n, 0.0) for n in names)
         return (living - necessary) / necessary
+
+    def realized_rate_of_surplus_value(
+        self, region: Optional[str] = None
+    ) -> Optional[float]:
+        """Cumulative s/v with wages as actually paid (docs/46).
+
+        ``rate_of_surplus_value`` takes the wage at the value of labor-power.
+        This one moves the line by the labor value the wage premium bought:
+        ``(L - v - d) / (v + d)`` with ``d`` the signed
+        ``wage_deviation_labor``.  A premium is a deduction from surplus
+        value, never a creation of it -- the living labor is what it was --
+        which is the same shape as absolute rent in docs/43.  Identical to
+        the value rate when there is no premium.
+        """
+        names = [region] if region is not None else list(self.regions)
+        necessary = sum(self.ledger.necessary_labor.get(n, 0.0) for n in names)
+        if necessary <= EPSILON:
+            return None
+        deviation = sum(
+            self.ledger.wage_deviation_labor.get(n, 0.0) for n in names
+        )
+        living = sum(self.ledger.living_labor.get(n, 0.0) for n in names)
+        paid = necessary + deviation
+        if paid <= EPSILON:
+            return None
+        return (living - paid) / paid
 
     def social_technique(
         self, *, use_capacity: bool = False
@@ -2046,6 +2130,9 @@ class Economy:
                 if producer.active:
                     self._set_capital_consumption(producer, region)
 
+            # Yesterday's employment moves today's wage premium, and only
+            # then is the day's labor priced (docs/46).
+            self._bargain(region)
             self._update_wage_costs(region)
 
             opening = dict(region.inventory)
@@ -2277,6 +2364,21 @@ class Economy:
                     region.name,
                     worker_days * necessary_per_day,
                 )
+                # The deviation of the wage from that value (docs/46), in
+                # silver and in the labor value of what the premium buys.
+                # Booked apart from ``necessary_labor`` so the value of
+                # labor-power never absorbs a bargained premium.
+                if region.wage_premium != 0.0:
+                    Ledger.add(
+                        self.ledger.wage_premium_paid,
+                        region.name,
+                        worker_days * region.basket_cost() * region.wage_premium,
+                    )
+                    Ledger.add(
+                        self.ledger.wage_deviation_labor,
+                        region.name,
+                        worker_days * necessary_per_day * region.wage_premium,
+                    )
 
     def _workers_consume(self) -> None:
         """Workers spend yesterday's wages on the subsistence basket.
@@ -2298,6 +2400,12 @@ class Economy:
                     if name not in self.commodities:
                         continue
                     desired = quantity * worker_days
+                    # Wages above value buy more than the basket and wages
+                    # below it buy less (docs/46 section 3): the premium is
+                    # spent, not hoarded, so the silver returns to
+                    # producers and the circuit stays closed.
+                    if region.wage_premium_due != 0.0:
+                        desired *= 1.0 + region.wage_premium_due
                     if desired <= 0.0:
                         continue
                     bought = min(desired, region.inventory.get(name, 0.0))
@@ -2337,6 +2445,7 @@ class Economy:
                         self.ledger.worker_spending, region.name, spend
                     )
             region.worker_days_due = region.worker_days_earned
+            region.wage_premium_due = region.wage_premium
 
     def _track_differential_rent(self) -> None:
         """Compute Ricardian differential rent across regions.
@@ -2727,6 +2836,28 @@ class Economy:
         )
         producer.capital_cost_per_unit = money
         producer.capital_labor_per_unit = labor
+
+    def _bargain(self, region: Region) -> None:
+        """Move the wage premium toward what the reserve army allows (docs/46).
+
+        The target premium is proportional to how far yesterday's
+        employment rate sits from the seeded reference, and the premium
+        closes a fixed fraction of the gap to it each day.  At the seeded
+        equilibrium the rate equals the reference to the bit, so the target
+        is exactly zero and the premium never leaves it: the rule is
+        exactly stationary where the circuit is.
+
+        Zero strength returns before touching anything, which keeps a
+        model without bargaining bit-identical rather than merely close.
+        """
+        if self.wage_bargaining_strength == 0.0 or not region.subsistence_basket:
+            return
+        target = self.wage_bargaining_strength * (
+            region.employment_rate() - region.reference_employment_rate
+        )
+        region.wage_premium += self.wage_bargaining_speed * (
+            target - region.wage_premium
+        )
 
     def _update_wage_costs(self, region: Region) -> None:
         """Price each producer's living labor at the current basket cost.
@@ -3346,6 +3477,7 @@ class Economy:
                         "cost_ratio": dict(region.cost_ratio),
                         "employment": region.worker_days_earned,
                         "wage_rate": region.wage_rate(),
+                        "wage_premium": region.wage_premium,
                         "reserves": {
                             cname: {
                                 "remaining": reserve.remaining,
