@@ -10,23 +10,47 @@
     <Deterministic>true</Deterministic>
     <DebugType>none</DebugType>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\..\1.6\Assemblies\</OutputPath>
-    <RimWorldDir Condition="'$(RimWorldDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\RimWorld</RimWorldDir>
-    <ManagedDir>$(RimWorldDir)\RimWorldWin64_Data\Managed</ManagedDir>
+    <OutputPath>../../1.6/Assemblies/</OutputPath>
   </PropertyGroup>
+
+  <!--
+    Where RimWorld is installed, and where inside that install its managed
+    assemblies sit. Both differ by platform, so both are conditioned rather
+    than hardcoded. Override RimWorldDir on the command line for a
+    non-default install:
+
+      dotnet build ... -p:RimWorldDir=/path/to/RimWorld
+
+    Forward slashes throughout: MSBuild accepts them on Windows too, and a
+    backslash is a literal character on Unix rather than a separator.
+  -->
+  <PropertyGroup Condition="'$([MSBuild]::IsOSPlatform(OSX))' == 'true'">
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld</RimWorldDir>
+    <ManagedDir>$(RimWorldDir)/RimWorldMac.app/Contents/Resources/Data/Managed</ManagedDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$([MSBuild]::IsOSPlatform(OSX))' != 'true'">
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">C:/Program Files (x86)/Steam/steamapps/common/RimWorld</RimWorldDir>
+    <ManagedDir>$(RimWorldDir)/RimWorldWin64_Data/Managed</ManagedDir>
+  </PropertyGroup>
+
+  <Target Name="CheckRimWorldAssemblies" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(ManagedDir)/Assembly-CSharp.dll')"
+           Text="No RimWorld assemblies at $(ManagedDir). Pass -p:RimWorldDir=&lt;install path&gt;." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
     <Reference Include="Assembly-CSharp">
-      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(ManagedDir)/Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(ManagedDir)/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <HintPath>$(ManagedDir)/UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

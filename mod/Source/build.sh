@@ -1,60 +1,59 @@
 #!/bin/sh
 # Build Labor Content's one assembly, then verify what was built.
 #
-# Uses the C# compiler Windows already ships with the .NET Framework
-# rather than the .NET SDK, which HANDOFF.md says not to install. That
-# constrains the source to C# 5 — no interpolated strings, no
-# expression-bodied members — which is why StatWorker_LaborContent.cs is
-# written the way it is.
+# This used to invoke the csc.exe that Windows ships with the .NET
+# Framework, because HANDOFF.md said not to install the .NET SDK. That
+# constraint lapsed when Stage 1 needed the SDK anyway, so the build now
+# goes through LaborContent.csproj like economy_mod's does, and works on
+# macOS as well as Windows.
 #
-# This csc predates Roslyn's -deterministic, so it stamps a fresh MVID
-# into every build: two builds of identical source differ in their bytes.
-# The committed DLL therefore cannot be checked against the committed
-# source by hash. What can be checked is its *content*, which is what
-# verify.py does and what this script runs afterwards.
+# Two properties changed with the compiler, and both are improvements.
+# Roslyn honours -deterministic, so two builds of identical source are
+# byte-identical and the committed DLL *can* now be checked against the
+# committed source by rebuilding — the warning HANDOFF.md carried about
+# that applies only to the old csc builds. And Roslyn reads source as
+# UTF-8, so the U+00B7 separator no longer depends on the ANSI codepage.
+# verify.py still checks the separator; that failure mode was real once.
 #
-# CS1684 is suppressed and nothing else is. RimWorld's assembly
-# references System.Span<T>, which the .NET Framework mscorlib this
-# compiler binds against does not define. We never touch those types;
-# the warning is about a reference we do not follow. Everything else
-# is still an error.
+# The source stays at C# 5 (LangVersion 5 in the csproj) so a Windows
+# machine with no SDK can still build it the old way.
 #
 # Usage:  sh mod/Source/build.sh  [path to RimWorld]
 set -e
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-RIMWORLD="${1:-/c/Program Files (x86)/Steam/steamapps/common/RimWorld}"
-MANAGED="$RIMWORLD/RimWorldWin64_Data/Managed"
-CSC="/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe"
 
-if [ ! -f "$MANAGED/Assembly-CSharp.dll" ]; then
-    echo "no RimWorld assemblies at: $MANAGED" >&2
-    exit 1
+DOTNET="${DOTNET:-dotnet}"
+if ! command -v "$DOTNET" >/dev/null 2>&1; then
+    if [ -x "$HOME/.dotnet/dotnet" ]; then
+        DOTNET="$HOME/.dotnet/dotnet"
+    else
+        echo "no dotnet on PATH and none at ~/.dotnet/dotnet" >&2
+        echo "see economy_mod/README.md for the toolchain" >&2
+        exit 1
+    fi
 fi
 
-# RimWorld memory-maps the assembly while it runs, so csc cannot replace
-# it and reports CS0016 "user-mapped section open", which reads like a
-# permissions problem and is not one.
-if tasklist 2>/dev/null | grep -qi "RimWorldWin64"; then
+# RimWorld memory-maps the assembly while it runs, so the compiler cannot
+# replace it. On Windows that surfaces as CS0016 "user-mapped section
+# open", which reads like a permissions problem and is not one.
+if pgrep -qi "RimWorld" 2>/dev/null || tasklist 2>/dev/null | grep -qi "RimWorldWin64"; then
     echo "RimWorld is running; it holds the assembly open." >&2
     echo "Close the game and run this again." >&2
     exit 1
 fi
 
-mkdir -p "$ROOT/mod/Assemblies"
+# The csproj defaults to each platform's usual Steam install. A path
+# argument overrides it.
+if [ -n "$1" ]; then
+    set -- -p:RimWorldDir="$1"
+else
+    set --
+fi
 
-"$CSC" \
-    -target:library \
-    -optimize+ \
-    -nologo \
-    -warnaserror+ \
-    -nowarn:1684 \
-    -out:"$(cygpath -w "$ROOT/mod/Assemblies/SocialProduction.LaborContent.dll")" \
-    -reference:"$(cygpath -w "$MANAGED/Assembly-CSharp.dll")" \
-    -reference:"$(cygpath -w "$MANAGED/UnityEngine.CoreModule.dll")" \
-    "$(cygpath -w "$ROOT/mod/Source/LaborContent/StatWorker_LaborContent.cs")" \
-    "$(cygpath -w "$ROOT/mod/Source/LaborContent/GeneratedDefs.cs")"
+"$DOTNET" build "$ROOT/mod/Source/LaborContent/LaborContent.csproj" \
+    --configuration Release --nologo "$@"
 
 echo "built mod/Assemblies/SocialProduction.LaborContent.dll"
 
-cd "$ROOT" && python mod/Source/verify.py
+cd "$ROOT" && "${PYTHON:-python3}" mod/Source/verify.py

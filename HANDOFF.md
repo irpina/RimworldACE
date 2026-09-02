@@ -214,8 +214,15 @@ Seven modelling errors were already found and fixed. Important traps include:
 - `MarketValue` inherits rounding over 200;
 - butchery has flat work against body-size-scaled yield.
 
-Do not install a decompiler or .NET SDK. The repository contains its own
-ECMA-335 metadata/IL reader in `cli_reader.py` and `dump_method.py`.
+Do not install a decompiler. The repository contains its own ECMA-335
+metadata/IL reader in `cli_reader.py` and `dump_method.py`, and that reader
+is what `verify.py` uses to check both mods' built assemblies.
+
+This rule used to forbid the .NET SDK as well. **It no longer does** — Stage 1
+needs an SDK to build `economy_mod` at all, and both mods now build through
+it. The reason for the original rule survives the change: the *analysis* of
+RimWorld's own assemblies is done with the repository's own reader, not by
+decompiling.
 
 ---
 
@@ -299,16 +306,29 @@ binds to exactly two RimWorld symbols, `RimWorld.StatWorker` and
 `Verse.ToStringNumberSense` — and `formatString` and `toStringStyle` are
 kept in the defs so the stat still renders if the worker ever fails to load.
 
-**Build:** `sh mod/Source/build.sh`. It uses `csc.exe` from the .NET
-Framework that Windows already ships, *not* the .NET SDK, which this
-document says not to install. That constrains the source to C# 5 — no
-interpolated strings — which is why it is written the way it is.
+**Build:** `sh mod/Source/build.sh`. It used to invoke the `csc.exe` that
+Windows ships with the .NET Framework, because this document said not to
+install the .NET SDK — a constraint that lapsed the moment Stage 1 needed
+the SDK anyway. Since 2026-08-26 the build goes through
+`mod/Source/LaborContent/LaborContent.csproj`, exactly as `economy_mod`'s
+does, and works on macOS as well as Windows. `LangVersion` stays at **5**
+so the source is still buildable by the old compiler on a Windows machine
+with no SDK, which is why it has no interpolated strings.
 
-**The build is not reproducible, and the DLL is committed.** That csc
-predates Roslyn's `-deterministic`, so it stamps a fresh MVID into every
-build: two builds of identical source differ in their bytes, and the
-committed binary cannot be checked against the committed source by hash.
-Do not treat a changed DLL hash as evidence of a changed build.
+**The build is reproducible now, and the DLL is committed.** The old csc
+predated Roslyn's `-deterministic` and stamped a fresh MVID into every
+build, so two builds of identical source differed in their bytes and the
+committed binary could not be checked against the committed source by
+hash. That is no longer true of builds made through the csproj: two
+consecutive Release builds are byte-identical (verified 2026-08-26). The
+committed DLL was last built by the old csc, so it does not match a fresh
+build's hash — the first rebuild replaces it, and from then on the hash is
+evidence.
+
+The other thing that changed with the compiler is **encoding**. Roslyn
+reads source as UTF-8, so the ANSI-codepage trap below no longer applies
+to this build path. `verify.py` still checks the separator, because the
+failure mode was real and the check is free.
 
 What *can* be checked is content, and `mod/Source/verify.py` checks it
 after every build using the repository's own ECMA-335 reader: that the
@@ -581,6 +601,20 @@ exact shipped bug makes it refuse.
 `RimWorld/Mods/SNLT` is a **directory junction** to this repository's `mod/`,
 matching how `SocialProductionEconomy` points at `economy_mod/`. Rebuild or
 regenerate and the game sees it; there is no copy step to forget.
+
+On macOS the same two names are **symlinks**, and the `Mods` folder is
+inside the app bundle:
+
+```sh
+MODS="$HOME/Library/Application Support/Steam/steamapps/common/RimWorld/RimWorldMac.app/Mods"
+ln -sfn "$PWD/mod"         "$MODS/SNLT"
+ln -sfn "$PWD/economy_mod" "$MODS/SocialProductionEconomy"
+```
+
+Because they live inside the bundle, a Steam validation or update can remove
+them. If the game stops seeing either mod, check the links before anything
+else — and re-read the false-pass story below, because a missing link is the
+same class of failure as a stale copy.
 
 This was not always so, and it cost a false pass. The first in-game check of
 the multi-unit stat worker *looked* correct — the rows rendered plausible
@@ -1342,12 +1376,13 @@ and the reload check, none of which has been seen running.
 5. **An old save.** A save written before `585bf09` should load clean and
    report `nothing saved to compare` rather than erroring.
 
-The local build toolchain is:
+The build toolchain is:
 
-- .NET SDK 8.0.424 at
-  `C:\Users\PintS\Documents\Codex\tools\dotnet-sdk-8`;
+- .NET SDK 8.0.424 — at `C:\Users\PintS\Documents\Codex\tools\dotnet-sdk-8`
+  on the Windows machine, at `~/.dotnet` on the Mac;
 - target framework `net472`;
-- official `Microsoft.NETFramework.ReferenceAssemblies` 1.0.3 build package;
+- official `Microsoft.NETFramework.ReferenceAssemblies` 1.0.3 build package,
+  which is what makes `net472` a valid target on macOS without Mono;
 - direct references to RimWorld's shipped managed assemblies.
 
 The user explicitly approved installing these required build dependencies.
@@ -1355,6 +1390,39 @@ The user explicitly approved installing these required build dependencies.
 The mod is development-linked into RimWorld's `Mods` folder as
 `SocialProductionEconomy`. The build command and overrideable game path are
 documented in `economy_mod/README.md`.
+
+### The project is now cross-platform (2026-08-26)
+
+The repository is synced through OneDrive and is worked on from both a
+Windows machine and a Mac. Everything needed to build, verify and run both
+mods exists on both. What had to change:
+
+- **`Economy.csproj` and the new `LaborContent.csproj` condition on the OS.**
+  The managed assemblies are under `RimWorldWin64_Data/Managed` on Windows
+  and `RimWorldMac.app/Contents/Resources/Data/Managed` on macOS, and the
+  default Steam install path differs too. All paths use forward slashes,
+  which MSBuild accepts on Windows and which are the only separator on Unix.
+  Both projects now fail with a named error if the assemblies are missing,
+  instead of a wall of unresolved types.
+- **`mod/Source/build.sh` no longer calls `csc.exe`.** See the Labor Content
+  build section above; the short version is that it uses the SDK now, is
+  reproducible, and runs on either platform.
+- **`verify.py` needs a venv on macOS.** `cli_reader.py` imports `pefile`,
+  and Homebrew's Python refuses installs (PEP 668). `.venv/` is gitignored;
+  `python3 -m venv .venv && .venv/bin/pip install pefile` is the whole setup.
+
+**Line endings are an open trap.** The Windows checkout has
+`autocrlf=true`, so OneDrive delivers CRLF files to a Mac that has no
+`.gitattributes` — and `git status` there shows **every text file in the
+repository as modified** with zero real changes. `git diff
+--ignore-cr-at-eol --stat` is empty, which is how to tell. Do not mistake
+this for uncommitted work, and do not "resolve" it by committing the
+churn. The fix is a `.gitattributes` with `* text=auto` plus a
+`git add --renormalize .`, in its own commit, on a clean tree.
+
+**The installed game differs between machines**: the Windows machine is on
+RimWorld 1.6.4871 **rev590/591**, the Mac on **rev595**. All five
+expansions are present on both. Any in-game observation should record which.
 
 This is intentionally a runtime shell, not integration of the incomplete
 Stage 0 production model.

@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Labor Content's one assembly, built the same way economy_mod's is.
+
+    This project did not always exist. The mod was built by the csc.exe that
+    Windows ships with the .NET Framework, because HANDOFF.md said not to
+    install the .NET SDK — a constraint that lapsed when Stage 1 needed the
+    SDK anyway. Two things follow from the change, and both are improvements:
+
+      * Roslyn honours -deterministic, so two builds of identical source are
+        now byte-identical. HANDOFF.md's warning that the committed DLL
+        cannot be checked against the committed source by hash no longer
+        applies to builds made this way.
+      * Roslyn reads source as UTF-8 rather than the ANSI codepage, so the
+        U+00B7 separator survives without the encoding dance the old build
+        needed. verify.py still checks it; the check is cheap and the
+        failure mode was real.
+
+    LangVersion stays at 5 so the source remains buildable by the old
+    compiler on a Windows machine that has no SDK.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>SocialProduction.LaborContent</AssemblyName>
+    <RootNamespace>SocialProduction.LaborContent</RootNamespace>
+    <LangVersion>5</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      CS1684 only. RimWorld's assembly references System.Span<T>, which the
+      .NET Framework 4.7.2 reference assemblies do not define. We never touch
+      those types; the warning is about a reference we do not follow.
+      Everything else is still an error.
+    -->
+    <NoWarn>1684</NoWarn>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>../../Assemblies/</OutputPath>
+  </PropertyGroup>
+
+  <!-- Same platform conditioning as economy_mod/Source/Economy/Economy.csproj. -->
+  <PropertyGroup Condition="'$([MSBuild]::IsOSPlatform(OSX))' == 'true'">
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/RimWorld</RimWorldDir>
+    <ManagedDir>$(RimWorldDir)/RimWorldMac.app/Contents/Resources/Data/Managed</ManagedDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$([MSBuild]::IsOSPlatform(OSX))' != 'true'">
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">C:/Program Files (x86)/Steam/steamapps/common/RimWorld</RimWorldDir>
+    <ManagedDir>$(RimWorldDir)/RimWorldWin64_Data/Managed</ManagedDir>
+  </PropertyGroup>
+
+  <Target Name="CheckRimWorldAssemblies" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(ManagedDir)/Assembly-CSharp.dll')"
+           Text="No RimWorld assemblies at $(ManagedDir). Pass -p:RimWorldDir=&lt;install path&gt;." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedDir)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
