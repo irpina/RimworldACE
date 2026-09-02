@@ -1,11 +1,13 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-08-26  
+**Last updated:** 2026-09-02  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
-**Latest Stage 0 model commit:** `HEAD` (absolute rent)
-**Behavioral baseline:** `HEAD` (182 metrics; 6 of them the absolute-rent measurements)
+**Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
+**Behavioral baseline:** `HEAD` (211 metrics; 22 of them the wage-deviation readings)
+**Wage-deviation design / results:** `docs/46`, `docs/47`
+**Sensitivity sweep, re-run:** `docs/45` (124 parameters, 0 refusals, ranked by reach)
 **Capital-goods design / results:** `docs/36`, `docs/37`
 **Capacity-exit design / results:** `docs/38`, `docs/39`
 **Recreation-basket design / results:** `docs/40`, `docs/41`
@@ -114,12 +116,13 @@ docs/29, docs/31), and so is the capital-goods sector (docs/37). The
 two numbers the project reports as rates of profit are now rates, and
 the price system's is 0.518 per day rather than 1.17 because fixed
 capital is finally inside it. Capacity depreciation and exit are done
-too (docs/39), and so is recreation in the basket (docs/41). What is
-left is the stale sensitivity sweep, which is now the last thing
-standing between Stage 0 and a stable model, and which has a new
-parameter worth sweeping: `yayo_per_worker_day` moves the rate of
-profit a lot and continuously. Absolute rent is measured (docs/43);
-monopoly rent proper, credit and bankruptcy remain optional.
+too (docs/39), and so is recreation in the basket (docs/41). The
+sensitivity sweep has been re-run (docs/45): 124 parameters, no
+refusals, and the ranking now says what the model is — the working day
+and the subsistence basket on top. Absolute rent is measured (docs/43),
+and wages now deviate from the value of labor-power under a reserve-army
+rule (docs/47). Monopoly rent proper, credit and bankruptcy, and the
+habituation of a sustained wage premium into the basket remain optional.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -1684,20 +1687,41 @@ above. The scale question that section carried as its largest open risk is
     `recreation.production.profit_rate_at_epsilon` beside
     `basics_at_epsilon`, because the pair is the whole argument.
 
-    Other candidates: labor content of resource grades; wage deviations
-    from the value of labor-power; absolute rent; credit and bankruptcy.
+    *~~Wage deviations from the value of labor-power~~* — done
+    (`docs/47`). A reserve-army rule: the wage premium follows the
+    employment rate against its seeded reference, proportionally and
+    damped, off by default. Three things to carry forward:
 
-The sensitivity sweep has not been re-run since the cost floor landed;
-`sensitivity_results.csv` describes the free-production model. Re-run it once
-the model stabilizes. New parameters to include: `construction_cost_multiplier`,
-`min_investment_capacity`, `buffer_refill_horizon_days`,
-`chemfuel_reserve_per_region`, `chemfuel_expensive_cost_multiplier`,
-`meal_capacity_per_day`, `meals_per_worker_day`, `ticks_per_worker_day`,
-`labor_pool_worker_days`, `worker_initial_cash_days`. Note that
-`meals_per_worker_day` and `meal_capacity_per_day` are part of the
-exact-stationarity engineering (docs/17 §7): a ±10% perturbation will break
-the exact zero equilibrium range by design, which the sweep should report,
-not "fix".
+    **The wage moved and the value did not**, to one ulp — the value
+    solve's output weights differ between two runs whose investment
+    differs, so "identical" is 1.3e-16 and the metric freezes the gap.
+
+    **A wage above value reaches prices through demand, not cost.** A
+    7.8% premium moved the meal price 4.0%; the cost-push part is 0.43%
+    and the rest is workers eating more. `docs/22`'s "wages barely reach
+    prices" measured the cost channel on a wage that could not move in
+    real terms; the real-wage channel is eight times larger for wage
+    goods and does not exist for anything else.
+
+    **The deviation is permanent under a permanent shock.** No rule yet
+    lets a sustained premium become the habitual basket; that is the
+    next rule in this family and needs a speed of its own.
+
+    Other candidates: labor content of resource grades; habituation of
+    the wage premium; credit and bankruptcy.
+
+The sensitivity sweep has been re-run (`docs/45`), and the harness that
+runs it was repaired first: five integer parameters were being perturbed
+to floats and reported as "refused", four metric groups and two scenarios
+ignored the perturbation, and two scenarios had no metrics at all. Nine
+parameters were being reported inert that are not. The ranking is by
+*reach* now — how many readings a parameter moves — because the
+elasticity divided by near-zero baselines and put `daily_demand` on top
+for moving one denominator. `meals_per_worker_day` and
+`meal_capacity_per_day` did **not** refuse at ±10%: the exact-stationarity
+engineering (docs/17 §7) re-solves the fixed point for any basket, so
+that caution was out of date. The sweep is not a per-commit check; it is
+about half an hour, and `capacity_exit()` is most of it.
 
 Two safe tracks can now proceed independently:
 
@@ -1786,7 +1810,12 @@ it is not intended for per-commit testing.
   remaining understatement is small: shelter is under 20 ticks a
   worker-day and recreation was deferred deliberately. s/v is 26.71 and
   the honest reading is that it is roughly RimWorld's own figure;
-- wage deviations from value: bargaining, the reserve army, worker mobility;
+- ~~wage deviations from value~~ — the reserve army is done (`docs/47`):
+  the wage premium follows the employment rate, is a deduction from
+  surplus value rather than a change in it, and reaches the price of
+  wage goods through demand eight times more than through cost. Worker
+  mobility between regions and the habituation of a sustained premium
+  into the basket are still absent;
 - credit, bankruptcy, and liquidity-constrained consumption (workers are
   cash-constrained on the basket, but nothing else is);
 - ~~capacity depreciation~~ — done (`docs/39`). Mothballing is still absent

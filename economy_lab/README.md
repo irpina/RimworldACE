@@ -241,7 +241,8 @@ markup rather than a rate of profit.
 - labor content of resource grades, so depletion moves value as well as
   cost and rent;
 - absolute (monopoly) rent;
-- wage deviations from value: bargaining, the reserve army, mobility;
+- wage deviations from value: the reserve army is done (docs/46, docs/47);
+  worker mobility and the habituation of a premium into the basket are not;
 - credit and bankruptcy;
 - capacity depreciation or mothballing;
 - individual producer cash accounts and transfer pricing;
