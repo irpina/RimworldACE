@@ -278,7 +278,10 @@ class ServerTests(unittest.TestCase):
 
     def test_the_reference_metrics_and_the_sweep_are_served(self):
         metrics = self.get("/api/metrics")["metrics"]
-        self.assertEqual(len(metrics), 231)
+        from economy_lab.baseline import DEFAULT_REFERENCE
+
+        frozen = json.loads(DEFAULT_REFERENCE.read_text(encoding="utf-8"))["metrics"]
+        self.assertEqual(len(metrics), len(frozen))
         ranking = self.get("/api/sensitivity")
         self.assertTrue(ranking["available"])
         self.assertEqual(ranking["ranking"][0]["parameter"], "ticks_per_worker_day")

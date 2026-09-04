@@ -5,10 +5,12 @@
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
-**Behavioral baseline:** `HEAD` (251 metrics; 22 wage-deviation, 20 habituation and 20 producer-cash readings)
+**Behavioral baseline:** `HEAD` (263 metrics; 22 wage-deviation, 20 habituation, 20 producer-cash and 12 posted-price readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
 **Habituation design / results:** `docs/51`, `docs/52`
 **Producer-level cash design / results:** `docs/55`, `docs/56`
+**Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
+**Procurement design (not yet built):** `docs/59`
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1885,6 +1887,16 @@ to RimWorld's authored `MarketValue` while costs are built from a wage the
 authored prices never knew about. Every other component has been carved out
 and named; what remains is the seam `FINDINGS.md` found, and closing it
 means deriving prices rather than importing them.
+
+**That work has started, under the ACE Trading World framing** (the three
+imposed conditions named in `docs/55` §1). Producer cash is done
+(`docs/56`). Firm-posted prices are built and measured (`docs/58`): exactly
+stationary, cost passes through in full with every markup preserved — and
+unusable as a default, because a posted price needs a stock its poster owns
+to respond to, and a shared pool gives a contested sector the wrong signal;
+shocks also leave their price level behind, because entry responds only to
+shortfall and not to margin. Both point at the same next step: procurement
+(`docs/59`, designed, not built), with entry-on-margin after it.
 
 ---
 
