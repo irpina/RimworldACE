@@ -141,6 +141,19 @@ class ScenarioParameters:
     #: the shock day; investment meets it and employment climbs.
     boom_demand_multiplier: float = 1.25
 
+    # --- habituation (docs/51) ----------------------------------------------
+    #: How fast a sustained premium becomes the habitual standard: the
+    #: fraction of the gap between the standard and the paid real wage
+    #: that becomes habit each day, upward only.  Zero, the default, is
+    #: bit-identical to no rule; the scenarios use
+    #: ``habituation_scenario_speed``, a fifty-day time constant against
+    #: the reserve army's ten, so habits form more slowly than wages move.
+    habituation_speed: float = 0.0
+    habituation_scenario_speed: float = 0.02
+    #: The day the boom's final demand returns to its seeded level in the
+    #: reversal scenario.
+    boom_reversal_day: int = 210
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -1029,6 +1042,7 @@ def seeded_two_region_economy(
         history_every=parameters.history_every,
         wage_bargaining_strength=parameters.wage_bargaining_strength,
         wage_bargaining_speed=parameters.wage_bargaining_speed,
+        habituation_speed=parameters.habituation_speed,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1290,10 +1304,19 @@ def _bargaining(parameters: ScenarioParameters) -> ScenarioParameters:
     )
 
 
+def _habituating(parameters: ScenarioParameters) -> ScenarioParameters:
+    """The same parameters with both wage rules switched on (docs/51)."""
+    return replace(
+        _bargaining(parameters),
+        habituation_speed=parameters.habituation_scenario_speed,
+    )
+
+
 def demand_boom(
     days_after_boom: int = 300,
     *,
     bargaining: bool = False,
+    habituation: bool = False,
     labor_pool: float | None = None,
     parameters: ScenarioParameters | None = None,
 ) -> Economy:
@@ -1304,12 +1327,17 @@ def demand_boom(
     labor market lifts the wage above the value of labor-power (docs/46);
     without it the same shock runs with the wage pinned to the basket, so
     every effect of the rule is a difference between the two runs.
-    ``labor_pool`` overrides the reserve army's size for the sweep.
+    With ``habituation`` the sustained premium becomes the habitual
+    standard as well (docs/51); it implies bargaining, since there is
+    nothing to habituate to without it.  ``labor_pool`` overrides the
+    reserve army's size for the sweep.
     """
     parameters = parameters or ScenarioParameters()
     if labor_pool is not None:
         parameters = replace(parameters, labor_pool_worker_days=labor_pool)
-    if bargaining:
+    if habituation:
+        parameters = _habituating(parameters)
+    elif bargaining:
         parameters = _bargaining(parameters)
     economy = seeded_two_region_economy(
         route_capacity_per_day=parameters.standard_route_capacity_per_day,
@@ -1321,6 +1349,42 @@ def demand_boom(
     region = economy.regions["Dust Basin"]
     region.base_daily_demand[YAYO] *= parameters.boom_demand_multiplier
     economy.step(days_after_boom)
+    return economy
+
+
+def boom_reversal(
+    days_after_boom: int = 300,
+    *,
+    habituation: bool = True,
+    parameters: ScenarioParameters | None = None,
+) -> Economy:
+    """The boom, and then final demand returns to where it was (docs/51).
+
+    Bargaining is on either way.  Without habituation the premium falls
+    back and the accounting returns to where it started; with it the
+    standard stays where the boom left it and the paid wage does not, so
+    the wage is below value for the rest of the run in a region that is
+    not in crisis.  The scenario the upward-only rule exists for.
+    """
+    parameters = parameters or ScenarioParameters()
+    parameters = (
+        _habituating(parameters) if habituation else _bargaining(parameters)
+    )
+    economy = seeded_two_region_economy(
+        route_capacity_per_day=parameters.standard_route_capacity_per_day,
+        freight_per_unit=parameters.standard_freight_per_unit,
+        travel_days=parameters.standard_travel_days,
+        parameters=parameters,
+    )
+    economy.step(60)
+    region = economy.regions["Dust Basin"]
+    seeded_demand = region.base_daily_demand[YAYO]
+    region.base_daily_demand[YAYO] = seeded_demand * parameters.boom_demand_multiplier
+    reversal = parameters.boom_reversal_day
+    economy.step(reversal - 60)
+    # Restored to the identical float, not divided back.
+    region.base_daily_demand[YAYO] = seeded_demand
+    economy.step(60 + days_after_boom - reversal)
     return economy
 
 
@@ -1653,6 +1717,13 @@ def summary(economy: Economy) -> Dict[str, object]:
             "employment_worker_days": round(region.worker_days_earned, 6),
             "wage_rate": round(region.wage_rate(), 3),
             "wage_premium": round(region.wage_premium, 6),
+            # The habitual standard and what the premium still carries
+            # above it (docs/51); the premium itself while no habit formed.
+            "habitual_scale": round(region.habitual_scale, 6),
+            "premium_over_value": round(region.premium_over_value(), 6),
+            "value_of_labor_power_ticks": round(
+                economy.value_of_labor_power(region), 4
+            ),
             "worker_cash": round(region.worker_cash, 3),
             "wages_paid": round(
                 economy.ledger.wages_paid.get(name, 0.0), 3

@@ -451,6 +451,12 @@ class Region:
     #: Employment rate at seeding.  Measured state, like ``seed_unit_cost``,
     #: not a coefficient: it is whatever the seeded circuit repeats.
     reference_employment_rate: float = 0.0
+    #: The habitual standard (docs/51): a scale on the basket that a
+    #: sustained premium raises and nothing lowers.  The value of
+    #: labor-power is the basket times this at social values; the paid
+    #: wage is untouched by it.  One at seeding, and every place it enters
+    #: is skipped rather than multiplied by one while it stays there.
+    habitual_scale: float = 1.0
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -497,6 +503,9 @@ class Region:
             # Worker demand for a basket good, at full-capacity employment —
             # the same full-capacity convention the derived-input component
             # uses, so targets do not collapse when a shock idles labor.
+            # At the habitual standard, where one has formed (docs/51).
+            if self.habitual_scale != 1.0:
+                basket_quantity = basket_quantity * self.habitual_scale
             total += basket_quantity * (
                 self.full_capacity_labor_ticks() / max(self.ticks_per_worker_day, EPSILON)
             )
@@ -546,6 +555,8 @@ class Region:
             )
             quantity = self.subsistence_basket.get(name, 0.0)
             if quantity > 0.0:
+                if self.habitual_scale != 1.0:
+                    quantity = quantity * self.habitual_scale
                 total += quantity * workers
             totals[name] = total
         return totals
@@ -591,6 +602,19 @@ class Region:
         if self.labor_pool == float("inf"):
             return 0.0
         return self.worker_days_earned / self.labor_pool
+
+    def premium_over_value(self) -> float:
+        """What the paid wage carries above the *habitual* standard (docs/51).
+
+        ``(1 + π) / h − 1``: the whole premium while the standard is where
+        it was seeded, and what habituation has not yet absorbed once it
+        has moved.  Returned as the premium itself while ``h`` is one, so
+        the reading is identical to ``wage_premium`` for a model without
+        the rule.
+        """
+        if self.habitual_scale == 1.0:
+            return self.wage_premium
+        return (1.0 + self.wage_premium) / self.habitual_scale - 1.0
 
     def daily_demand(self, commodity: Commodity) -> float:
         base = self.base_daily_demand.get(commodity.name, 0.0)
@@ -761,6 +785,7 @@ class Economy:
         history_every: int = 1,
         wage_bargaining_strength: float = 0.0,
         wage_bargaining_speed: float = 0.1,
+        habituation_speed: float = 0.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -811,6 +836,11 @@ class Economy:
             raise ValueError("wage_bargaining_speed must be between zero and one")
         self.wage_bargaining_strength = wage_bargaining_strength
         self.wage_bargaining_speed = wage_bargaining_speed
+        if not 0.0 <= habituation_speed <= 1.0:
+            raise ValueError("habituation_speed must be between zero and one")
+        #: How fast a sustained premium becomes the habitual standard
+        #: (docs/51).  Zero, the default, is bit-identical to no rule.
+        self.habituation_speed = habituation_speed
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -1352,6 +1382,10 @@ class Economy:
             ticks = max(region.ticks_per_worker_day, EPSILON)
             for commodity, quantity in sorted(region.subsistence_basket.items()):
                 if commodity in self.commodities:
+                    # The long-run real wage is the *habitual* standard
+                    # (docs/51 section 3); the premium stays out.
+                    if region.habitual_scale != 1.0:
+                        quantity = quantity * region.habitual_scale
                     bundle[commodity] = (
                         bundle.get(commodity, 0.0)
                         + performed * quantity / ticks
@@ -1949,7 +1983,7 @@ class Economy:
             if not region.subsistence_basket:
                 continue
             ticks = max(region.ticks_per_worker_day, EPSILON)
-            necessary += self.basket_labor_value(region) / ticks
+            necessary += self.value_of_labor_power(region) / ticks
             weight += 1.0
         if weight <= 0.0:
             return {}
@@ -2131,8 +2165,11 @@ class Economy:
                     self._set_capital_consumption(producer, region)
 
             # Yesterday's employment moves today's wage premium, and only
-            # then is the day's labor priced (docs/46).
+            # then is the day's labor priced (docs/46).  A sustained premium
+            # then moves the habitual standard, which prices nothing today
+            # but is what the value of labor-power reads (docs/51).
             self._bargain(region)
+            self._habituate(region)
             self._update_wage_costs(region)
 
             opening = dict(region.inventory)
@@ -2359,25 +2396,36 @@ class Economy:
                 # wage goods move.  This is what makes s/v an outcome rather
                 # than a coefficient (docs/19 section 6).
                 necessary_per_day = self.basket_labor_value(region)
+                # ... times the habitual standard, where one has formed
+                # (docs/51).  The basket at value is what the standard
+                # scales; the two are kept as separate readings.
                 Ledger.add(
                     self.ledger.necessary_labor,
                     region.name,
-                    worker_days * necessary_per_day,
+                    worker_days * self.value_of_labor_power(region),
                 )
                 # The deviation of the wage from that value (docs/46), in
                 # silver and in the labor value of what the premium buys.
                 # Booked apart from ``necessary_labor`` so the value of
-                # labor-power never absorbs a bargained premium.
-                if region.wage_premium != 0.0:
+                # labor-power never absorbs a bargained premium -- except
+                # through habituation, which moves the line deliberately
+                # and leaves the two summing to the wage as paid.
+                if region.wage_premium != 0.0 or region.habitual_scale != 1.0:
                     Ledger.add(
                         self.ledger.wage_premium_paid,
                         region.name,
                         worker_days * region.basket_cost() * region.wage_premium,
                     )
+                    if region.habitual_scale == 1.0:
+                        deviation = necessary_per_day * region.wage_premium
+                    else:
+                        deviation = necessary_per_day * (
+                            1.0 + region.wage_premium - region.habitual_scale
+                        )
                     Ledger.add(
                         self.ledger.wage_deviation_labor,
                         region.name,
-                        worker_days * necessary_per_day * region.wage_premium,
+                        worker_days * deviation,
                     )
 
     def _workers_consume(self) -> None:
@@ -2859,6 +2907,24 @@ class Economy:
             target - region.wage_premium
         )
 
+    def _habituate(self, region: Region) -> None:
+        """Let a sustained premium become the habitual standard (docs/51).
+
+        The standard closes a fixed fraction of the gap to the paid real
+        wage each day, and only upward: a standard that has risen does not
+        fall when the premium goes, so a wage that falls back afterwards is
+        a wage below the value of labor-power, reported and not prevented.
+
+        Zero speed returns before touching anything.  At the seeded
+        equilibrium the premium is exactly zero, so the gap is exactly zero
+        and the standard stays at one to the bit.
+        """
+        if self.habituation_speed == 0.0 or not region.subsistence_basket:
+            return
+        gap = (1.0 + region.wage_premium) - region.habitual_scale
+        if gap > 0.0:
+            region.habitual_scale += self.habituation_speed * gap
+
     def _update_wage_costs(self, region: Region) -> None:
         """Price each producer's living labor at the current basket cost.
 
@@ -2946,6 +3012,18 @@ class Economy:
             if name in self.commodities
         )
 
+    def value_of_labor_power(self, region: Region) -> float:
+        """The basket at social values, times the habitual standard (docs/51).
+
+        Identical to ``basket_labor_value`` while the standard is one; the
+        multiply is skipped rather than done by one so that a model without
+        habituation reads the same bits it always has.
+        """
+        basket = self.basket_labor_value(region)
+        if region.habitual_scale == 1.0:
+            return basket
+        return basket * region.habitual_scale
+
     def _planned_runs(
         self,
         region: Region,
@@ -3001,6 +3079,8 @@ class Economy:
             # new coupling to the fixed point.
             for name, quantity in sorted(region.subsistence_basket.items()):
                 if name in intended_outflow:
+                    if region.habitual_scale != 1.0:
+                        quantity = quantity * region.habitual_scale
                     intended_outflow[name] += quantity * region.worker_days_due
 
             requested_output: Dict[str, float] = {}
@@ -3478,6 +3558,8 @@ class Economy:
                         "employment": region.worker_days_earned,
                         "wage_rate": region.wage_rate(),
                         "wage_premium": region.wage_premium,
+                        "habitual_scale": region.habitual_scale,
+                        "premium_over_value": region.premium_over_value(),
                         "reserves": {
                             cname: {
                                 "remaining": reserve.remaining,
