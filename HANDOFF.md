@@ -5,8 +5,10 @@
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
-**Behavioral baseline:** `HEAD` (211 metrics; 22 of them the wage-deviation readings)
+**Behavioral baseline:** `HEAD` (231 metrics; 22 wage-deviation and 20 habituation readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
+**Habituation design / results:** `docs/51`, `docs/52`
+**Phase D (gameplay layer) design:** `docs/50`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
 **Sensitivity sweep, re-run:** `docs/45` (124 parameters, 0 refusals, ranked by reach)
 **Capital-goods design / results:** `docs/36`, `docs/37`
@@ -122,8 +124,8 @@ sensitivity sweep has been re-run (docs/45): 124 parameters, no
 refusals, and the ranking now says what the model is — the working day
 and the subsistence basket on top. Absolute rent is measured (docs/43),
 and wages now deviate from the value of labor-power under a reserve-army
-rule (docs/47). Monopoly rent proper, credit and bankruptcy, and the
-habituation of a sustained wage premium into the basket remain optional.
+rule (docs/47), with a sustained premium becoming the habitual standard
+(docs/52). Monopoly rent proper and credit and bankruptcy remain optional.
 
 **Phase B — scale test: DONE** (docs/33, one session). The lab was six
 commodities and two regions; the harness now runs 647 commodities across 100
@@ -149,11 +151,12 @@ constraints are now measured rather than guessed: the daily update must be
 scale, against a 60,000-tick day), and the history design must change before
 anything is ported.
 
-**Phase D — the gameplay layer** (~4–8 sessions, least defined). Hired-worker
+**Phase D — the gameplay layer** (~4–8 sessions). Hired-worker
 contracts: pawns arrive, work, are paid in silver or explicit in-kind, do not
-own their output, and leave. Then the class consequences — the least
-specified part of the whole project. No design document exists for what a
-player actually *does* about any of it.
+own their output, and leave. Then the class consequences. **The design now
+exists** (`docs/50`): four decisions a player makes, what reaches them from
+which ledger, and three Stage 0 omissions it puts on the critical path —
+habituation (done), worker mobility, and producer-level cash.
 
 ### Rough position: 35–40% of the suite
 
@@ -178,10 +181,10 @@ open risk turned out to be a constant factor rather than a rewrite.
    wrong makes the mod feel broken rather than interesting. Already flagged
    under "What vanilla RimWorld's economy actually does"; it constrains the
    whole Stage 1 design.
-3. **Phase D has no design.** Everything else has a clear next step; "class
-   consequences for the player colony" does not. Write that design document
-   *early*, while the economics is still malleable, rather than discovering
-   at the end that the simulation computes the wrong things for the game.
+3. ~~**Phase D has no design.**~~ It does now (`docs/50`), written while the
+   economics is still malleable. What replaces it on this list is the
+   design's own §8: whether the value solve runs per region at game scale in
+   C#, which `docs/53` starts to answer.
 
 ### Recommended ordering
 
@@ -1707,9 +1710,13 @@ above. The scale question that section carried as its largest open risk is
     real terms; the real-wage channel is eight times larger for wage
     goods and does not exist for anything else.
 
-    **The deviation is permanent under a permanent shock.** No rule yet
-    lets a sustained premium become the habitual basket; that is the
-    next rule in this family and needs a speed of its own.
+    **The deviation is permanent under a permanent shock.** ~~No rule yet
+    lets a sustained premium become the habitual basket.~~ Done
+    (`docs/52`): the standard follows the premium on a fifty-day habit,
+    upward only, and the value of labor-power rises 7.5% while the
+    premium is unchanged. **Read `docs/52` §3 before quoting the
+    eight-to-one ratio above**: most of that demand-channel price rise
+    was an inventory target that never followed the standard.
 
     Other candidates: labor content of resource grades; habituation of
     the wage premium; credit and bankruptcy.
@@ -1817,9 +1824,10 @@ it is not intended for per-commit testing.
 - ~~wage deviations from value~~ — the reserve army is done (`docs/47`):
   the wage premium follows the employment rate, is a deduction from
   surplus value rather than a change in it, and reaches the price of
-  wage goods through demand eight times more than through cost. Worker
-  mobility between regions and the habituation of a sustained premium
-  into the basket are still absent;
+  wage goods through demand eight times more than through cost -- a
+  ratio `docs/52` §3 shows to be a fact about buffer targets, not about
+  the channel. Habituation is done (`docs/52`); worker mobility between
+  regions is still absent, and `docs/50` puts it on Phase D's path;
 - credit, bankruptcy, and liquidity-constrained consumption (workers are
   cash-constrained on the basket, but nothing else is);
 - ~~capacity depreciation~~ — done (`docs/39`). Mothballing is still absent
