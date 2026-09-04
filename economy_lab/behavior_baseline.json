@@ -574,6 +574,86 @@
       "unit": "silver",
       "value": 14.372385
     },
+    "habituation.boom.meals_price_end": {
+      "unit": "silver",
+      "value": 15.08606
+    },
+    "habituation.boom.premium_end": {
+      "unit": "fraction",
+      "value": 0.079066
+    },
+    "habituation.boom.premium_over_value_end": {
+      "unit": "fraction",
+      "value": 0.004145
+    },
+    "habituation.boom.production.profit_rate": {
+      "unit": "ratio",
+      "value": 1.127455
+    },
+    "habituation.boom.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 25.952793
+    },
+    "habituation.boom.realized_rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 25.672447
+    },
+    "habituation.boom.scale_end": {
+      "unit": "ratio",
+      "value": 1.074612
+    },
+    "habituation.boom.scale_overshoot": {
+      "unit": "fraction",
+      "value": -0.004454
+    },
+    "habituation.boom.value_of_labor_power_ratio": {
+      "unit": "ratio",
+      "value": 1.074612
+    },
+    "habituation.boom.wage_rate_ratio": {
+      "unit": "ratio",
+      "value": 0.967715
+    },
+    "habituation.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "habituation.equilibrium.scale_max_deviation": {
+      "unit": "fraction",
+      "value": 0.0
+    },
+    "habituation.reversal.premium_end": {
+      "unit": "fraction",
+      "value": 0.000116
+    },
+    "habituation.reversal.premium_end_without_rule": {
+      "unit": "fraction",
+      "value": -0.0
+    },
+    "habituation.reversal.premium_over_value_end": {
+      "unit": "fraction",
+      "value": -0.021699
+    },
+    "habituation.reversal.rate_gap_without_rule": {
+      "unit": "ratio",
+      "value": 0.130837
+    },
+    "habituation.reversal.rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 26.403377
+    },
+    "habituation.reversal.realized_rate_of_surplus_value": {
+      "unit": "ratio",
+      "value": 26.575497
+    },
+    "habituation.reversal.scale_end": {
+      "unit": "ratio",
+      "value": 1.022299
+    },
+    "habituation.reversal.scale_moved_after_reversal": {
+      "unit": "fraction",
+      "value": 0.001077
+    },
     "input_shortage.local.psychoid_leaves.price_peak": {
       "unit": "silver",
       "value": 6.720485

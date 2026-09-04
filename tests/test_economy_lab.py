@@ -23,6 +23,7 @@ from economy_lab.scenarios import (
     YAYO,
     ScenarioParameters,
     arbitrage,
+    boom_reversal,
     capacity_exit,
     capital_goods,
     circuit_processes,
@@ -3383,3 +3384,150 @@ class WageDeviationTests(unittest.TestCase):
         ratio = peaks[0.5] / peaks[1.0]
         self.assertGreater(ratio, 1.7)
         self.assertLessEqual(ratio, 2.0)
+
+
+class HabituationTests(unittest.TestCase):
+    """A sustained premium becomes the value of labor-power (docs/51).
+
+    The paid wage is the reserve army's business and this rule never touches
+    it.  What moves is the habitual standard the value of labor-power is
+    read against, so every test here is some form of "the value moved and
+    the wage did not" -- the mirror of docs/46.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pinned = demand_boom()
+        cls.bargaining = demand_boom(bargaining=True)
+        cls.habituated = demand_boom(habituation=True)
+
+    def test_off_by_default(self):
+        """No standard forms, and every reading is the bargaining reading."""
+        self.assertEqual(ScenarioParameters().habituation_speed, 0.0)
+        for entry in self.bargaining.history:
+            for name, region in entry["regions"].items():
+                self.assertEqual(region["habitual_scale"], 1.0, name)
+                self.assertEqual(
+                    region["premium_over_value"], region["wage_premium"], name
+                )
+        dust = self.bargaining.regions["Dust Basin"]
+        self.assertEqual(
+            self.bargaining.value_of_labor_power(dust),
+            self.bargaining.basket_labor_value(dust),
+        )
+
+    def test_both_rules_are_exactly_stationary_where_the_circuit_is(self):
+        """docs/51 s5.2: the gap is exactly zero, so the standard never moves."""
+        parameters = replace(
+            ScenarioParameters(),
+            wage_bargaining_strength=1.0,
+            habituation_speed=0.02,
+        )
+        economy = equilibrium(days=240, parameters=parameters)
+        for entry in economy.history:
+            for name, region in entry["regions"].items():
+                self.assertEqual(region["habitual_scale"], 1.0, name)
+        prices = economy.series("Dust Basin", YAYO)
+        self.assertEqual(max(prices) - min(prices), 0.0)
+
+    def test_the_standard_follows_the_premium_without_overshoot(self):
+        """docs/51 s5.3: a lag behind the premium, never above it."""
+        scale = [h["regions"]["Dust Basin"]["habitual_scale"] for h in self.habituated.history]
+        premium = [h["regions"]["Dust Basin"]["wage_premium"] for h in self.habituated.history]
+        self.assertGreater(scale[-1], 1.05)
+        self.assertLessEqual(max(scale), 1.0 + max(premium))
+        for earlier, later in zip(scale, scale[1:]):
+            self.assertGreaterEqual(later, earlier)
+
+    def test_the_premium_over_value_is_absorbed(self):
+        """docs/51 s5.4: what the paid wage still carries above the standard."""
+        dust = self.habituated.regions["Dust Basin"]
+        self.assertGreater(dust.wage_premium, 0.05)
+        self.assertLess(dust.premium_over_value(), 0.015)
+        self.assertGreater(dust.premium_over_value(), 0.0)
+
+    def test_the_value_moved_and_the_premium_did_not(self):
+        """docs/51 s5.5, the mirror of docs/46's claim -- and docs/52 s3.
+
+        The rule never touches the premium, and the premium is the same to
+        within a percent.  The *money* wage is not: docs/51 predicted it
+        within 1% and it moved 3%, because the buffer target following the
+        standard takes most of docs/47's demand-channel price rise out of
+        the wage goods.  The meal price lands between the wage-at-value run
+        and the bargaining-only run, and that ordering is the finding.
+        """
+        habit = self.habituated.regions["Dust Basin"]
+        bargained = self.bargaining.regions["Dust Basin"]
+        pinned = self.pinned.regions["Dust Basin"]
+        value_ratio = self.habituated.value_of_labor_power(habit) / (
+            self.bargaining.value_of_labor_power(bargained)
+        )
+        self.assertGreater(value_ratio, 1.05)
+        self.assertLess(value_ratio, 1.08)
+        self.assertLess(
+            abs(habit.wage_premium / bargained.wage_premium - 1.0), 0.02
+        )
+        wage_ratio = habit.wage_rate() / bargained.wage_rate()
+        self.assertLess(abs(wage_ratio - 1.0), value_ratio - 1.0)
+        self.assertLess(pinned.prices[MEALS], habit.prices[MEALS])
+        self.assertLess(habit.prices[MEALS], bargained.prices[MEALS])
+
+    def test_the_value_rate_falls_toward_the_realized_rate(self):
+        """docs/51 s5.6: the line moved the other way; the wage as paid is the same."""
+        self.assertLess(
+            self.habituated.rate_of_surplus_value("Dust Basin"),
+            self.bargaining.rate_of_surplus_value("Dust Basin"),
+        )
+        realized = self.habituated.realized_rate_of_surplus_value("Dust Basin")
+        reference = self.bargaining.realized_rate_of_surplus_value("Dust Basin")
+        self.assertLess(abs(realized - reference) / reference, 0.005)
+        # v + s is the living labor whatever the split.
+        self.assertLess(abs(self.habituated.value_balance()), 1e-6)
+
+    def test_the_general_rate_of_profit_falls(self):
+        """docs/51 s5.7: the standard is the long-run real wage the price system reads."""
+        with_habit = self.habituated.prices_of_production()["profit_rate"]
+        without = self.bargaining.prices_of_production()["profit_rate"]
+        self.assertLess(with_habit, without)
+        self.assertGreater(with_habit / without, 0.90)
+
+    def test_the_reversal_leaves_the_wage_below_value(self):
+        """docs/51 s5.9: the standard stays, the wage falls back, and the
+        slump ordering appears in a region that is not in crisis."""
+        economy = boom_reversal(habituation=True)
+        scale = [h["regions"]["Dust Basin"]["habitual_scale"] for h in economy.history]
+        premium = [h["regions"]["Dust Basin"]["wage_premium"] for h in economy.history]
+        reversal = ScenarioParameters().boom_reversal_day
+        self.assertGreater(scale[reversal], 1.015)
+        # Upward only: the standard keeps forming for the few days the
+        # premium is still above it after demand reverses, then stops.
+        for earlier, later in zip(scale, scale[1:]):
+            self.assertGreaterEqual(later, earlier)
+        self.assertLess(scale[-1] - scale[reversal], 0.005)
+        settled = next(
+            day for day in range(reversal, len(scale))
+            if 1.0 + premium[day] <= scale[day]
+        )
+        self.assertEqual(scale[-1], scale[settled])
+        dust = economy.regions["Dust Basin"]
+        self.assertLess(abs(dust.wage_premium), 1e-3)
+        self.assertLess(dust.premium_over_value(), -0.015)
+        self.assertGreater(
+            economy.realized_rate_of_surplus_value("Dust Basin"),
+            economy.rate_of_surplus_value("Dust Basin"),
+        )
+        # Without the rule the wage is back at value: the premium is gone
+        # and there is no standard for it to sit below.
+        without = boom_reversal(habituation=False)
+        other = without.regions["Dust Basin"]
+        self.assertLess(abs(other.wage_premium), 1e-3)
+        self.assertEqual(other.premium_over_value(), other.wage_premium)
+
+    def test_the_ledgers_close_with_a_standard(self):
+        """docs/51 s5.10."""
+        for economy in (self.habituated, boom_reversal(habituation=True)):
+            with self.subTest(day=economy.day):
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-6)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)

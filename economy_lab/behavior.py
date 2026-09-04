@@ -12,6 +12,7 @@ from .scenarios import (
     MEALS,
     ScenarioParameters,
     arbitrage,
+    boom_reversal,
     CHEMFUEL,
     equilibrium,
     LEAVES,
@@ -214,6 +215,7 @@ def collect_behavioral_metrics(
     metrics.update(_recreation_basket_metrics(parameters))
     metrics.update(_absolute_rent_metrics(parameters))
     metrics.update(_wage_deviation_metrics(parameters))
+    metrics.update(_habituation_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -572,6 +574,117 @@ def _wage_deviation_metrics(
         "bargaining.reserve_army.premium_peak_at_infinite_pool": _metric(
             max(abs(x) for x in _premium_series(sweep[float("inf")], LOCAL_REGION)),
             "fraction",
+        ),
+    }
+
+
+def _scale_series(economy: Economy, region: str) -> list:
+    return [h["regions"][region]["habitual_scale"] for h in economy.history]
+
+
+def _habituation_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """A sustained premium becoming the value of labor-power (docs/51).
+
+    Off by default, so every reading here is the rule's own.  Each boom
+    figure is read against the bargaining-only run of the same shock: the
+    claim is that the wage as paid is the same wage and the value moved,
+    which is the mirror of docs/46's claim, and the reversal readings
+    freeze the ordering the upward-only rule produces -- a wage below value
+    in a region that is not in crisis.
+    """
+    bargaining = demand_boom(bargaining=True, parameters=parameters)
+    habituated = demand_boom(habituation=True, parameters=parameters)
+    reversal = boom_reversal(habituation=True, parameters=parameters)
+    reversal_without = boom_reversal(habituation=False, parameters=parameters)
+    stationary = equilibrium(
+        parameters=replace(
+            parameters,
+            wage_bargaining_strength=parameters.bargaining_scenario_strength,
+            habituation_speed=parameters.habituation_scenario_speed,
+        )
+    )
+
+    bargained = bargaining.regions[LOCAL_REGION]
+    habit = habituated.regions[LOCAL_REGION]
+    scale = _scale_series(habituated, LOCAL_REGION)
+    premium = _premium_series(habituated, LOCAL_REGION)
+    reversal_scale = _scale_series(reversal, LOCAL_REGION)
+    reversal_day = parameters.boom_reversal_day
+    stationary_prices = stationary.series(LOCAL_REGION, YAYO)
+    without_region = reversal_without.regions[LOCAL_REGION]
+
+    return {
+        # Both rules on, and the seeded circuit still exactly stationary.
+        "habituation.equilibrium.scale_max_deviation": _metric(
+            max(abs(x - 1.0) for x in _scale_series(stationary, LOCAL_REGION)),
+            "fraction",
+        ),
+        "habituation.equilibrium.price_range": _metric(
+            max(stationary_prices) - min(stationary_prices), "silver"
+        ),
+        # --- the boom: the standard follows the premium -------------------
+        "habituation.boom.scale_end": _metric(scale[-1], "ratio"),
+        # Never above one plus the highest premium seen: zero or negative.
+        "habituation.boom.scale_overshoot": _metric(
+            max(scale) - (1.0 + max(premium)), "fraction"
+        ),
+        "habituation.boom.premium_end": _metric(premium[-1], "fraction"),
+        "habituation.boom.premium_over_value_end": _metric(
+            habit.premium_over_value(), "fraction"
+        ),
+        # The value moved and the wage did not, each as a ratio to the
+        # bargaining-only run of the same shock.
+        "habituation.boom.value_of_labor_power_ratio": _metric(
+            habituated.value_of_labor_power(habit)
+            / bargaining.value_of_labor_power(bargained),
+            "ratio",
+        ),
+        "habituation.boom.wage_rate_ratio": _metric(
+            habit.wage_rate() / bargained.wage_rate(), "ratio"
+        ),
+        "habituation.boom.rate_of_surplus_value": _metric(
+            habituated.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "habituation.boom.realized_rate_of_surplus_value": _metric(
+            habituated.realized_rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        # The standard is the long-run real wage the price system reads.
+        "habituation.boom.production.profit_rate": _metric(
+            habituated.prices_of_production()["profit_rate"], "ratio"
+        ),
+        "habituation.boom.meals_price_end": _metric(
+            habit.prices[MEALS], "silver"
+        ),
+        # --- the reversal: the wage falls back and the standard does not --
+        "habituation.reversal.scale_end": _metric(reversal_scale[-1], "ratio"),
+        "habituation.reversal.scale_moved_after_reversal": _metric(
+            reversal_scale[-1] - reversal_scale[reversal_day], "fraction"
+        ),
+        "habituation.reversal.premium_end": _metric(
+            reversal.regions[LOCAL_REGION].wage_premium, "fraction"
+        ),
+        "habituation.reversal.premium_over_value_end": _metric(
+            reversal.regions[LOCAL_REGION].premium_over_value(), "fraction"
+        ),
+        "habituation.reversal.rate_of_surplus_value": _metric(
+            reversal.rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        "habituation.reversal.realized_rate_of_surplus_value": _metric(
+            reversal.realized_rate_of_surplus_value(LOCAL_REGION), "ratio"
+        ),
+        # Without the rule the two rates meet again once the premium is
+        # gone; frozen so the contrast is a number.
+        "habituation.reversal.rate_gap_without_rule": _metric(
+            abs(
+                reversal_without.realized_rate_of_surplus_value(LOCAL_REGION)
+                - reversal_without.rate_of_surplus_value(LOCAL_REGION)
+            ),
+            "ratio",
+        ),
+        "habituation.reversal.premium_end_without_rule": _metric(
+            without_region.wage_premium, "fraction"
         ),
     }
 
