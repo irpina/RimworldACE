@@ -282,6 +282,14 @@ class Producer:
     #: carry the maintenance; less when either fails, and the shortfall
     #: is what capacity is lost by.
     replacement_supplied: float = 1.0
+    #: Producer cash (docs/55).  The working capital target is the purse a
+    #: producer keeps before distributing the rest to the owners' fund,
+    #: recomputed daily from current prices; the idle count is consecutive
+    #: days on which runs were planned and none could be paid for, and
+    #: reaching ``bankruptcy_idle_days`` removes the producer.
+    cash_target: float = 0.0
+    liquidity_idle_days: int = 0
+    distributed_total: float = 0.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -731,6 +739,14 @@ class Ledger:
     construction_labor: Dict[str, float] = field(default_factory=dict)
     transport_cash: float = 0.0
     initial_cash: float = 0.0
+    #: Producer cash (docs/55).  Silver distributed to each region's owners'
+    #: fund; runs a purse could not pay for, by commodity; wages the fund
+    #: covered where a purse fell short of its share; and the producers
+    #: that failed, as (day, region, name).
+    distributions: Dict[str, float] = field(default_factory=dict)
+    liquidity_curtailment: Dict[str, float] = field(default_factory=dict)
+    fund_wage_support: Dict[str, float] = field(default_factory=dict)
+    bankruptcies: List[Tuple[int, str, str]] = field(default_factory=list)
 
     def surplus_labor(self, region: str) -> float:
         """Living labor performed beyond the reproduction cost of labor-power."""
@@ -786,6 +802,9 @@ class Economy:
         wage_bargaining_strength: float = 0.0,
         wage_bargaining_speed: float = 0.1,
         habituation_speed: float = 0.0,
+        producer_cash: bool = False,
+        working_capital_days: float = 5.0,
+        bankruptcy_idle_days: int = 30,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -841,6 +860,14 @@ class Economy:
         #: How fast a sustained premium becomes the habitual standard
         #: (docs/51).  Zero, the default, is bit-identical to no rule.
         self.habituation_speed = habituation_speed
+        #: Whether producers hold silver and pay from it (docs/55).  Off by
+        #: default: every purse stays empty and every payment path is the
+        #: regional one, bit-identical.
+        self.producer_cash = producer_cash
+        if working_capital_days < 0.0:
+            raise ValueError("working_capital_days must be non-negative")
+        self.working_capital_days = working_capital_days
+        self.bankruptcy_idle_days = bankruptcy_idle_days
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -936,6 +963,8 @@ class Economy:
         self.opening_inventory = {
             name: self.system_inventory(name) for name in self.commodities
         }
+        if self.producer_cash:
+            self._seed_purses()
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -959,6 +988,9 @@ class Economy:
             self._workers_consume()
             self._update_prices()
             self._dispatch_arbitrage()
+            # Purses above their working capital hand the rest to the
+            # owners' fund, before the fund is asked to invest (docs/55).
+            self._settle_purses()
             self._update_expectations()
             if self.day % self.investment_interval_days == 0:
                 self._invest()
@@ -1049,6 +1081,7 @@ class Economy:
         return (
             sum(r.cash for r in self.regions.values())
             + sum(r.worker_cash for r in self.regions.values())
+            + sum(p.cash for r in self.regions.values() for p in r.producers)
             + self.ledger.transport_cash
             + self.ledger.investment_spending
             - self.ledger.initial_cash
@@ -2128,6 +2161,16 @@ class Economy:
                     or self.known_processes[project.commodity],
                 )
                 self._set_capital_consumption(entrant, region)
+                if self.producer_cash:
+                    # Capitalised from the fund, or with what the fund has
+                    # (docs/55).
+                    seed = min(
+                        max(region.cash, 0.0),
+                        self.working_capital_days
+                        * self._daily_outlay(entrant, region),
+                    )
+                    region.cash -= seed
+                    entrant.cash += seed
                 region.producers.append(entrant)
             region.projects = pending
 
@@ -2254,8 +2297,39 @@ class Economy:
                     for p in active:
                         planned[id(p)] *= labor_ration
 
+            # Liquidity rationing (docs/55): a producer pays for its inputs,
+            # its plant matter and its wages from its own purse, and runs
+            # only what it can pay for.  Proportional, like the reserve and
+            # labor rations; skipped entirely when producers hold no cash.
+            # Yesterday's supply shares say who is paid for today's draws,
+            # and are read before today's runs overwrite them.
+            yesterday: Dict[str, List[Tuple[Producer, float]]] = {}
+            if self.producer_cash:
+                yesterday = self._supply_shares(region)
+                for p in active:
+                    wanted = planned[id(p)]
+                    if wanted <= EPSILON:
+                        continue
+                    per_run = self._outlay_per_run(p, region)
+                    spendable = p.cash - self._plant_matter_cost(p, region)
+                    if per_run <= EPSILON:
+                        continue
+                    affordable = max(0.0, spendable) / per_run
+                    if affordable < wanted:
+                        Ledger.add(
+                            self.ledger.liquidity_curtailment,
+                            p.commodity,
+                            wanted - affordable,
+                        )
+                        planned[id(p)] = affordable
+                    if affordable <= EPSILON:
+                        p.liquidity_idle_days += 1
+                    else:
+                        p.liquidity_idle_days = 0
+
             drawn: Dict[str, float] = {}
             produced: Dict[str, float] = {}
+            labor_by_producer: Dict[int, float] = {}
             labor_performed = 0.0
             for producer in region.producers:
                 producer.last_runs = 0.0
@@ -2273,6 +2347,7 @@ class Economy:
                     continue
                 producer.last_runs = runs
                 labor_performed += runs * producer.process.direct_labor
+                labor_by_producer[id(producer)] = runs * producer.process.direct_labor
                 # Constant capital, in ticks and in silver (docs/23).  The
                 # circulating part is booked below from the material draw;
                 # the fixed part is the plant worn out making this output.
@@ -2310,9 +2385,19 @@ class Economy:
             # out too.  A shortfall is not throttled and never was; it is
             # taken out of capacity instead (docs/38 section 2.2).
             for producer in active:
-                labor_performed += self._replace_plant(
+                construction = self._replace_plant(
                     region, producer, ration, drawn
                 )
+                labor_performed += construction
+                if construction > 0.0:
+                    labor_by_producer[id(producer)] = (
+                        labor_by_producer.get(id(producer), 0.0) + construction
+                    )
+            # Inputs and plant matter are paid for out of the purse before
+            # anything is shed, because plant a producer cannot pay for is
+            # plant it does not get back (docs/55).
+            if self.producer_cash:
+                self._pay_for_draws(region, active, ration, yesterday)
             self._shed_capacity(region, active)
 
             for name, amount in drawn.items():
@@ -2377,16 +2462,22 @@ class Economy:
             region.worker_days_earned = worker_days
             if region.subsistence_basket:
                 wage_bill = worker_days * region.wage_rate()
-                if wage_bill > region.cash:
-                    # Credit and bankruptcy are deliberately absent.  A
-                    # scenario that bankrupts a region must fail loudly,
-                    # not silently stop paying workers.
-                    raise RuntimeError(
-                        f"region {region.name!r} cannot cover its wage bill "
-                        f"({wage_bill:.3f} silver against {region.cash:.3f})"
+                if self.producer_cash:
+                    # Each producer pays the labor it used (docs/55).
+                    self._pay_wages(
+                        region, active, labor_by_producer, labor_performed, wage_bill
                     )
-                region.cash -= wage_bill
-                region.worker_cash += wage_bill
+                else:
+                    if wage_bill > region.cash:
+                        # Credit and bankruptcy are deliberately absent.  A
+                        # scenario that bankrupts a region must fail loudly,
+                        # not silently stop paying workers.
+                        raise RuntimeError(
+                            f"region {region.name!r} cannot cover its wage bill "
+                            f"({wage_bill:.3f} silver against {region.cash:.3f})"
+                        )
+                    region.cash -= wage_bill
+                    region.worker_cash += wage_bill
                 Ledger.add(self.ledger.wages_paid, region.name, wage_bill)
                 Ledger.add(
                     self.ledger.living_labor, region.name, labor_performed
@@ -2442,6 +2533,9 @@ class Economy:
         for region in self.regions.values():
             if region.subsistence_basket:
                 worker_days = region.worker_days_due
+                basket_shares = (
+                    self._supply_shares(region) if self.producer_cash else {}
+                )
                 purchases: List[Tuple[str, float, float]] = []
                 total_cost = 0.0
                 for name, quantity in sorted(region.subsistence_basket.items()):
@@ -2487,8 +2581,15 @@ class Economy:
                     region.inventory[name] -= bought
                     region.consumed_total[name] += bought
                     Ledger.add(self.ledger.consumption, name, bought)
-                    region.worker_cash -= spend
-                    region.cash += spend
+                    if self.producer_cash:
+                        # The basket's sellers are paid (docs/55).
+                        spend = self._pay_sellers(
+                            region, name, spend, basket_shares, buyer_is_fund=False
+                        )
+                        region.worker_cash -= spend
+                    else:
+                        region.worker_cash -= spend
+                        region.cash += spend
                     Ledger.add(
                         self.ledger.worker_spending, region.name, spend
                     )
@@ -3230,15 +3331,292 @@ class Economy:
 
     def _consume(self) -> None:
         for region in self.regions.values():
+            shares = self._supply_shares(region) if self.producer_cash else {}
             for commodity in self.commodities.values():
                 desired = region.daily_demand(commodity)
                 available = region.inventory[commodity.name]
                 consumed = min(desired, available)
+                if self.producer_cash:
+                    # Final consumption is paid for by the owners' fund
+                    # (docs/55), and what the fund cannot pay for is not
+                    # consumed -- the same rule workers already face.
+                    price = region.prices[commodity.name]
+                    affordable = region.cash / max(price, EPSILON)
+                    if consumed > affordable:
+                        consumed = max(0.0, affordable)
+                    credited = self._pay_sellers(
+                        region, commodity.name, consumed * price, shares, buyer_is_fund=True
+                    )
+                    region.cash -= credited
                 unmet = desired - consumed
                 region.inventory[commodity.name] -= consumed
                 region.unmet_demand[commodity.name] += unmet
                 region.consumed_total[commodity.name] += consumed
                 Ledger.add(self.ledger.consumption, commodity.name, consumed)
+
+    # ------------------------------------------------------ producer cash
+
+    def _seed_purses(self) -> None:
+        """Give every producer its working capital out of the region's
+        silver (docs/55).  The economy's silver is what it was; the region
+        keeps the rest as the owners' fund."""
+        for region in self.regions.values():
+            for producer in region.producers:
+                if not producer.active:
+                    continue
+                producer.cash_target = (
+                    self.working_capital_days * self._daily_outlay(producer, region)
+                )
+                seed = min(max(region.cash, 0.0), producer.cash_target)
+                region.cash -= seed
+                producer.cash = seed
+
+    def _outlay_per_run(self, producer: Producer, region: Region) -> float:
+        """Silver one run costs in cash: inputs at regional prices and wages."""
+        wage_per_tick = (
+            region.wage_rate() / max(region.ticks_per_worker_day, EPSILON)
+            if region.subsistence_basket
+            else 0.0
+        )
+        return (
+            producer.process.input_cost_per_run(region.prices)
+            + producer.process.direct_labor * wage_per_tick
+        )
+
+    def _plant_matter_cost(self, producer: Producer, region: Region) -> float:
+        """Silver a day's plant replacement costs: the bill at regional
+        prices plus the construction labor at the regional wage.  Zero for
+        a process without a bill, which pays nothing in cash for the plant
+        the ledger charges it for."""
+        bill = producer.process.capital_bill_per_capacity()
+        if not bill or producer.capacity_per_day <= EPSILON:
+            return 0.0
+        per_capacity = producer.capacity_per_day / max(
+            self.capital_service_life_days, EPSILON
+        )
+        materials = sum(
+            per_capacity * quantity * region.prices.get(name, 0.0)
+            for name, quantity in bill.items()
+        )
+        wage_per_tick = (
+            region.wage_rate() / max(region.ticks_per_worker_day, EPSILON)
+            if region.subsistence_basket
+            else 0.0
+        )
+        construction = (
+            per_capacity
+            * producer.process.machines_per_capacity
+            * producer.process.capital_construction_labor
+            * wage_per_tick
+        )
+        return materials + construction
+
+    def _daily_outlay(self, producer: Producer, region: Region) -> float:
+        """What a day at full capacity costs in cash (docs/55)."""
+        runs = producer.process.runs_for(producer.capacity_per_day)
+        return runs * self._outlay_per_run(producer, region) + self._plant_matter_cost(
+            producer, region
+        )
+
+    def _supply_shares(
+        self, region: Region
+    ) -> Dict[str, List[Tuple[Producer, float]]]:
+        """Who is paid for a unit sold out of the region's pool (docs/55).
+
+        Each commodity's producers, weighted by their realized output --
+        the share the order book gave them (docs/21) -- or by capacity
+        where nobody ran.  A commodity nobody here makes has no sellers,
+        and the pool's owner, the fund, is paid instead.
+        """
+        shares: Dict[str, List[Tuple[Producer, float]]] = {}
+        for name in self.commodities:
+            producers = [
+                p for p in region.producers if p.active and p.commodity == name
+            ]
+            if not producers:
+                continue
+            weights = [
+                p.last_runs * p.process.outputs.get(name, 0.0) for p in producers
+            ]
+            total = sum(weights)
+            if total <= EPSILON:
+                weights = [p.capacity_per_day for p in producers]
+                total = sum(weights)
+            if total <= EPSILON:
+                continue
+            shares[name] = [
+                (p, w / total) for p, w in zip(producers, weights) if w > 0.0
+            ]
+        return shares
+
+    def _pay_sellers(
+        self,
+        region: Region,
+        commodity: str,
+        amount: float,
+        shares: Dict[str, List[Tuple[Producer, float]]],
+        *,
+        buyer_is_fund: bool,
+    ) -> float:
+        """Credit a commodity's sellers with a sale; return what was credited.
+
+        The buyer debits exactly what this returns, so every transfer
+        conserves silver to the bit.  With no local sellers the fund is
+        paid -- unless the fund is the buyer, in which case nothing moves.
+        """
+        if amount <= 0.0:
+            return 0.0
+        sellers = shares.get(commodity)
+        if not sellers:
+            if buyer_is_fund:
+                return 0.0
+            region.cash += amount
+            return amount
+        credited = 0.0
+        for producer, share in sellers:
+            paid = amount * share
+            producer.cash += paid
+            credited += paid
+        return credited
+
+    def _pay_for_draws(
+        self,
+        region: Region,
+        active: List[Producer],
+        ration: Dict[str, float],
+        shares: Dict[str, List[Tuple[Producer, float]]],
+    ) -> None:
+        """Each producer pays for today's inputs and plant matter (docs/55).
+
+        Inputs were paid for in the liquidity ration, so a purse covers
+        them.  Plant matter is taken on the calendar whether or not the
+        purse can pay; what it cannot pay for it does not get back, and
+        ``replacement_supplied`` says so to ``_shed_capacity``.
+        """
+        for producer in active:
+            runs = producer.last_runs
+            if runs > EPSILON:
+                for name, per_run in producer.process.inputs.items():
+                    credited = self._pay_sellers(
+                        region,
+                        name,
+                        runs * per_run * region.prices.get(name, 0.0),
+                        shares,
+                        buyer_is_fund=False,
+                    )
+                    producer.cash -= credited
+            bill = producer.process.capital_bill_per_capacity()
+            if not bill or producer.capacity_per_day <= EPSILON:
+                continue
+            per_capacity = producer.capacity_per_day / max(
+                self.capital_service_life_days, EPSILON
+            )
+            cost = 0.0
+            for name, quantity in bill.items():
+                cost += (
+                    per_capacity
+                    * quantity
+                    * ration.get(name, 1.0)
+                    * region.prices.get(name, 0.0)
+                )
+            if cost <= EPSILON:
+                continue
+            paid_fraction = min(1.0, max(producer.cash, 0.0) / cost)
+            for name, quantity in bill.items():
+                amount = (
+                    per_capacity
+                    * quantity
+                    * ration.get(name, 1.0)
+                    * region.prices.get(name, 0.0)
+                    * paid_fraction
+                )
+                credited = self._pay_sellers(
+                    region, name, amount, shares, buyer_is_fund=False
+                )
+                producer.cash -= credited
+            if paid_fraction < 1.0:
+                producer.replacement_supplied = min(
+                    producer.replacement_supplied, paid_fraction
+                )
+
+    def _pay_wages(
+        self,
+        region: Region,
+        active: List[Producer],
+        labor_by_producer: Dict[int, float],
+        labor_performed: float,
+        wage_bill: float,
+    ) -> None:
+        """Split the day's wage bill by the labor each producer used (docs/55).
+
+        A purse that cannot cover its share -- the employment quantum's
+        rounding, or a purse emptied by the day's inputs -- is topped up
+        by the fund, and the top-up is booked so that it can be seen.
+        """
+        if wage_bill <= 0.0:
+            return
+        credited = 0.0
+        if labor_performed > EPSILON:
+            for producer in active:
+                labor = labor_by_producer.get(id(producer), 0.0)
+                if labor <= 0.0:
+                    continue
+                share = wage_bill * labor / labor_performed
+                paid = min(share, max(producer.cash, 0.0))
+                if paid <= 0.0:
+                    continue
+                producer.cash -= paid
+                region.worker_cash += paid
+                credited += paid
+        residual = wage_bill - credited
+        if residual > 0.0:
+            if residual > region.cash:
+                raise RuntimeError(
+                    f"region {region.name!r} cannot cover its wage bill "
+                    f"({residual:.3f} silver against {region.cash:.3f})"
+                )
+            region.cash -= residual
+            region.worker_cash += residual
+            Ledger.add(self.ledger.fund_wage_support, region.name, residual)
+
+    def _settle_purses(self) -> None:
+        """Distribute what a purse holds above its working capital, and
+        remove producers that have been unable to pay for long enough
+        (docs/55).  The target is *set*, not subtracted to, so a
+        stationary producer's purse is the same float every day."""
+        if not self.producer_cash:
+            return
+        for region in self.regions.values():
+            for producer in region.producers:
+                if not producer.active:
+                    continue
+                if (
+                    self.bankruptcy_idle_days > 0
+                    and producer.liquidity_idle_days >= self.bankruptcy_idle_days
+                ):
+                    self._bankrupt(region, producer)
+                    continue
+                producer.cash_target = (
+                    self.working_capital_days * self._daily_outlay(producer, region)
+                )
+                if producer.cash > producer.cash_target:
+                    excess = producer.cash - producer.cash_target
+                    producer.cash = producer.cash_target
+                    region.cash += excess
+                    producer.distributed_total += excess
+                    Ledger.add(self.ledger.distributions, region.name, excess)
+
+    def _bankrupt(self, region: Region, producer: Producer) -> None:
+        """No credit, no rescue: capacity is lost and the residual purse
+        returns to the fund."""
+        Ledger.add(
+            self.ledger.capacity_lost, producer.commodity, producer.capacity_per_day
+        )
+        self.ledger.bankruptcies.append((self.day, region.name, producer.name))
+        producer.capacity_per_day = 0.0
+        producer.active = False
+        region.cash += producer.cash
+        producer.cash = 0.0
 
     def _update_prices(self) -> None:
         for region in self.regions.values():
@@ -3349,8 +3727,20 @@ class Economy:
                 source.exported_total[name] += quantity
                 payment = source.prices[name] * quantity
                 freight_payment = freight * quantity
-                destination.cash -= payment + freight_payment
-                source.cash += payment
+                if self.producer_cash:
+                    # The exporting producers are paid (docs/55); the
+                    # importing region's fund pays, as it always has.
+                    payment = self._pay_sellers(
+                        source,
+                        name,
+                        payment,
+                        self._supply_shares(source),
+                        buyer_is_fund=False,
+                    )
+                    destination.cash -= payment + freight_payment
+                else:
+                    destination.cash -= payment + freight_payment
+                    source.cash += payment
                 self.ledger.transport_cash += freight_payment
                 self.shipments.append(
                     Shipment(
@@ -3489,12 +3879,15 @@ class Economy:
                     continue
                 total_cost = amount * construction_unit
                 region.cash -= total_cost
-                self.ledger.investment_spending += total_cost
                 # The matter, out of stock.  Booked as a declared sink so
                 # the material identity closes, and deliberately *not* as
                 # circulating capital: the value it becomes is plant, and
                 # the model keeps no plant stock account for the value side
                 # to close against.  Named in docs/37 rather than hidden.
+                material_shares = (
+                    self._supply_shares(region) if self.producer_cash else {}
+                )
+                credited = 0.0
                 for material, quantity in bill.items():
                     take = amount * quantity
                     if take <= 0.0:
@@ -3506,6 +3899,17 @@ class Economy:
                         self.ledger.intermediate_consumption, material, take
                     )
                     Ledger.add(self.ledger.capital_construction, material, take)
+                    if self.producer_cash:
+                        # The fund buys the matter from whoever made it
+                        # (docs/55); the rest of the bill is construction.
+                        credited += self._pay_sellers(
+                            region,
+                            material,
+                            take * region.prices.get(material, 0.0),
+                            material_shares,
+                            buyer_is_fund=True,
+                        )
+                self.ledger.investment_spending += total_cost - credited
                 region.projects.append(
                     CapacityProject(
                         name,
@@ -3554,6 +3958,7 @@ class Economy:
                         },
                         "cash": region.cash,
                         "worker_cash": region.worker_cash,
+                        "producer_cash": sum(p.cash for p in region.producers),
                         "cost_ratio": dict(region.cost_ratio),
                         "employment": region.worker_days_earned,
                         "wage_rate": region.wage_rate(),

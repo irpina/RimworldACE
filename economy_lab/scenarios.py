@@ -154,6 +154,17 @@ class ScenarioParameters:
     #: reversal scenario.
     boom_reversal_day: int = 210
 
+    # --- producer cash (docs/55) --------------------------------------------
+    #: Whether producers hold silver, pay inputs, plant matter and wages
+    #: from it, and are removed when they cannot.  Off by default and
+    #: bit-identical off.  The working capital target is days of
+    #: full-capacity outlay a purse keeps before distributing the rest to
+    #: the owners' fund; the idle count is how many consecutive days a
+    #: producer may plan runs it cannot pay for before it is removed.
+    producer_cash: bool = False
+    working_capital_days: float = 5.0
+    bankruptcy_idle_days: int = 30
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -1043,6 +1054,9 @@ def seeded_two_region_economy(
         wage_bargaining_strength=parameters.wage_bargaining_strength,
         wage_bargaining_speed=parameters.wage_bargaining_speed,
         habituation_speed=parameters.habituation_speed,
+        producer_cash=parameters.producer_cash,
+        working_capital_days=parameters.working_capital_days,
+        bankruptcy_idle_days=parameters.bankruptcy_idle_days,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1179,6 +1193,31 @@ def capital_goods(
     """
     parameters = replace(
         parameters or ScenarioParameters(), capital_goods=True
+    )
+    return equilibrium(days, parameters=parameters)
+
+
+def cash_circuit(
+    days: int = 1200, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """Department I with producer cash (docs/55).
+
+    Every producer holds a purse, pays inputs, plant matter and wages from
+    it, and distributes what it holds above its working capital to the
+    owners' fund, which buys the final good.  docs/37 section 6 found the
+    component sector loses silver on every unit once the power stylization
+    is applied; here that loss is a draining purse, and the scenario says
+    what the rule does to a sector that does not pay.
+
+    Twelve hundred days, because the sector runs at three percent of
+    capacity and loses two hundredths of a silver a day: five days of
+    working capital take five hundred and fifty days to drain, and the
+    result is what happens after that (docs/56).
+    """
+    parameters = replace(
+        parameters or ScenarioParameters(),
+        capital_goods=True,
+        producer_cash=True,
     )
     return equilibrium(days, parameters=parameters)
 
@@ -1725,6 +1764,16 @@ def summary(economy: Economy) -> Dict[str, object]:
                 economy.value_of_labor_power(region), 4
             ),
             "worker_cash": round(region.worker_cash, 3),
+            # Producer cash (docs/55): the purses, what they distributed
+            # to the fund, and what the fund had to cover.  Zero throughout
+            # while the rule is off.
+            "producer_cash": round(sum(p.cash for p in region.producers), 3),
+            "distributed": round(
+                economy.ledger.distributions.get(name, 0.0), 3
+            ),
+            "fund_wage_support": round(
+                economy.ledger.fund_wage_support.get(name, 0.0), 3
+            ),
             "wages_paid": round(
                 economy.ledger.wages_paid.get(name, 0.0), 3
             ),
@@ -1764,6 +1813,13 @@ def summary(economy: Economy) -> Dict[str, object]:
             for key, value in sorted(economy.commodity_balances().items())
         },
         "cash_residual": round(economy.cash_balance(), 9),
+        "liquidity_curtailment_runs": {
+            key: round(value, 6)
+            for key, value in sorted(economy.ledger.liquidity_curtailment.items())
+        },
+        "bankruptcies": [
+            list(entry) for entry in economy.ledger.bankruptcies
+        ],
         # The classical magnitudes, in work-ticks (docs/23). Value ratios,
         # never money ones: the value rate of profit and money
         # profitability are different quantities.
