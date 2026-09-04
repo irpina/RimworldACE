@@ -27,10 +27,11 @@ const FIELD_UNITS = {
   price: "silver", inventory: "units", unmet: "units", capacity: "units/day",
   cost_ratio: "ratio", cash: "silver", worker_cash: "silver",
   employment: "worker-days", wage_rate: "silver/worker-day", wage_premium: "fraction",
+  habitual_scale: "ratio", premium_over_value: "fraction",
   remaining: "units", marginal_cost: "silver", labor_value: "work-ticks",
 };
 const PER_COMMODITY_FIELDS = ["price", "inventory", "unmet", "capacity", "cost_ratio"];
-const REGIONAL_FIELDS = ["employment", "wage_rate", "wage_premium", "cash", "worker_cash"];
+const REGIONAL_FIELDS = ["employment", "wage_rate", "wage_premium", "habitual_scale", "premium_over_value", "cash", "worker_cash"];
 
 // ------------------------------------------------------------------ utils
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -476,7 +477,7 @@ function renderRunView() {
   }
   for (const field of REGIONAL_FIELDS) {
     const series = doc.region_names.map((r) => ({ label: r, color: REGION_COLORS[r] || "#333", values: doc.regions[r][field] }));
-    charts.append(lineChart({ title: field, unit: FIELD_UNITS[field], days: doc.days, series, shockDay: doc.shock_day, zeroLine: field === "wage_premium" }));
+    charts.append(lineChart({ title: field, unit: FIELD_UNITS[field], days: doc.days, series, shockDay: doc.shock_day, zeroLine: field === "wage_premium" || field === "premium_over_value" }));
   }
   for (const region of doc.region_names) {
     for (const [commodity, reserve] of Object.entries(doc.regions[region].reserves)) {
@@ -587,6 +588,7 @@ function renderLedgers() {
   surplus.append(table(
     [{ key: "r", label: "region", name: true }, { key: "living_labor", label: "living", num: true }, { key: "necessary_labor", label: "necessary v", num: true },
       { key: "surplus_labor", label: "surplus s", num: true }, { key: "wage_deviation_labor", label: "wage deviation", num: true },
+      { key: "value_of_labor_power", label: "value of labor-power / day", num: true }, { key: "habitual_scale", label: "habitual scale", num: true },
       { key: "rate_of_surplus_value", label: "s/v", num: true }, { key: "realized_rate_of_surplus_value", label: "realized s/v", num: true },
       { key: "organic_composition", label: "c/v", num: true }, { key: "value_rate_of_profit", label: "s/(c+v)", num: true }],
     regions.map((r) => ({ r, ...S.regions[r] })),

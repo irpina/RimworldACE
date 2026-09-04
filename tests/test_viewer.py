@@ -29,13 +29,13 @@ class CatalogTests(unittest.TestCase):
             "technique_change", "cost_competition", "generous_basket",
             "perishable_meals", "capital_goods", "capacity_exit",
             "recreation_basket", "recreation_sweep", "demand_boom",
-            "wage_slump", "reserve_army_sweep",
+            "wage_slump", "reserve_army_sweep", "boom_reversal",
         }
         self.assertEqual(set(catalog.CATALOG), expected)
 
     def test_options_are_read_off_the_signatures(self):
         names = [o.name for o in catalog.CATALOG["demand_boom"].options]
-        self.assertEqual(names, ["days_after_boom", "bargaining", "labor_pool"])
+        self.assertEqual(names, ["days_after_boom", "bargaining", "habituation", "labor_pool"])
         types = {o.name: o.type for o in catalog.CATALOG["demand_boom"].options}
         self.assertEqual(types["bargaining"], "bool")
         self.assertEqual(types["labor_pool"], "float?")
@@ -245,7 +245,7 @@ class ServerTests(unittest.TestCase):
 
     def test_the_catalog_and_parameters(self):
         scenarios = self.get("/api/scenarios")
-        self.assertEqual(len(scenarios), 18)
+        self.assertEqual(len(scenarios), 19)
         boom = next(s for s in scenarios if s["name"] == "demand_boom")
         self.assertEqual(boom["docs"], [46, 47])
         self.assertEqual(boom["shock"], 60)
@@ -278,7 +278,7 @@ class ServerTests(unittest.TestCase):
 
     def test_the_reference_metrics_and_the_sweep_are_served(self):
         metrics = self.get("/api/metrics")["metrics"]
-        self.assertEqual(len(metrics), 211)
+        self.assertEqual(len(metrics), 231)
         ranking = self.get("/api/sensitivity")
         self.assertTrue(ranking["available"])
         self.assertEqual(ranking["ranking"][0]["parameter"], "ticks_per_worker_day")

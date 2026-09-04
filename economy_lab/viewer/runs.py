@@ -119,7 +119,10 @@ def _series_document(economy: Economy) -> Dict[str, object]:
     commodities = sorted(economy.commodities)
     region_names = sorted(economy.regions)
     per_commodity = ("price", "inventory", "unmet", "capacity", "cost_ratio")
-    scalars = ("cash", "worker_cash", "employment", "wage_rate", "wage_premium")
+    scalars = (
+        "cash", "worker_cash", "employment", "wage_rate", "wage_premium",
+        "habitual_scale", "premium_over_value",
+    )
     regions: Dict[str, object] = {}
     for name in region_names:
         states = [h["regions"][name] for h in snapshots]
@@ -256,6 +259,9 @@ def _ledgers(economy: Economy, report: Dict[str, object]) -> Dict[str, object]:
                 "constant_capital": ledger.constant_capital(r),
                 "circulating_capital": ledger.circulating_capital.get(r, 0.0),
                 "fixed_capital_consumed": ledger.fixed_capital_consumed.get(r, 0.0),
+                "value_of_labor_power": economy.value_of_labor_power(economy.regions[r]),
+                "habitual_scale": economy.regions[r].habitual_scale,
+                "premium_over_value": economy.regions[r].premium_over_value(),
                 "rate_of_surplus_value": rate(economy.rate_of_surplus_value(r)),
                 "realized_rate_of_surplus_value": rate(
                     economy.realized_rate_of_surplus_value(r)
