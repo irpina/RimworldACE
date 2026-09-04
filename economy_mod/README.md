@@ -57,6 +57,34 @@ playing is worth checking by reading.
 The deterministic economic model still lives in `economy_lab`. The runtime
 shell does not yet pretend that the Stage 0 model is ready for integration.
 
+## The port, so far: the value solve
+
+`Source/Economy.Core/` is the start of the Stage 0 model in C# (`docs/53`,
+`docs/54`): a library with no RimWorld and no Unity reference, built for
+`net472` (what the game's Mono loads) and `net8.0` (what the harness runs
+on). It holds the labor value solve, ported to the bit from
+`economy_lab/model.py`'s `_update_labor_values`, including CPython's
+compensated `sum()` where the laboratory uses it.
+
+It is checked against fixtures the laboratory writes from real economies:
+
+```sh
+python -m economy_lab.fixtures                       # Source/Fixtures/labor_values/*.json
+dotnet run --project economy_mod/Source/Economy.Core.Check --configuration Release
+```
+
+The harness reports, per fixture and per starting iterate, how many values
+matched exactly, the largest difference in units in the last place, and
+the largest relative difference. Exit code 0 is bit-exact everywhere, 1 is
+within `1e-9` but not exact, 3 is outside tolerance.
+`tests/test_port_fixtures.py` asserts the committed fixtures are what the
+laboratory computes today; when the model moves, regenerate them and re-run
+the harness, in that order.
+
+The library is **not** yet loaded by the game: nothing goes into
+`1.6/Assemblies` that has not been seen loading there, and the mod's own
+csproj does not reference it.
+
 ## Build
 
 The project targets .NET Framework 4.7.2, matching RimWorld's Mono runtime,

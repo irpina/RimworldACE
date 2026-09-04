@@ -9,6 +9,7 @@
 **Wage-deviation design / results:** `docs/46`, `docs/47`
 **Habituation design / results:** `docs/51`, `docs/52`
 **Phase D (gameplay layer) design:** `docs/50`
+**Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
 **Sensitivity sweep, re-run:** `docs/45` (124 parameters, 0 refusals, ranked by reach)
 **Capital-goods design / results:** `docs/36`, `docs/37`
@@ -1436,6 +1437,21 @@ expansions are present on both. Any in-game observation should record which.
 
 This is intentionally a runtime shell, not integration of the incomplete
 Stage 0 production model.
+
+### The port has started: the value solve, to the bit (2026-09-04)
+
+`economy_mod/Source/Economy.Core/` is a library with no RimWorld reference,
+built for `net472` and `net8.0`, holding `_update_labor_values` ported line
+by line — including CPython's compensated `sum()` where the laboratory
+uses it. A `net8.0` harness (`Economy.Core.Check`) checks it against
+fixtures `economy_lab/fixtures.py` writes from real economies, and every
+fixture reproduces **to the bit**: 1,494 values, zero ulps, the
+647-commodity solve in 4 ms (`docs/54`). The determinism contract for the
+rest of the port is therefore *transliterate, do not translate*. The
+library is not loaded by the game yet and `verify.py`'s surface is
+unchanged; loading it needs a human at the game and a new expected
+surface. `tests/test_port_fixtures.py` fails when the model moves and the
+fixtures have not been regenerated.
 
 ---
 
