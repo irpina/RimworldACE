@@ -1,0 +1,557 @@
+{
+ "name": "equilibrium_day60",
+ "day": 60,
+ "problem": {
+  "tolerance": 1e-12,
+  "max_iterations": 1000,
+  "service_life_days": 600.0,
+  "commodities": [
+   [
+    "yayo",
+    0.05
+   ],
+   [
+    "psychoid_leaves",
+    0.03
+   ],
+   [
+    "chemfuel",
+    0.05
+   ],
+   [
+    "meals",
+    0.44
+   ],
+   [
+    "garments",
+    0.6
+   ],
+   [
+    "herbal_medicine",
+    0.35
+   ]
+  ],
+  "regions": [
+   "Dust Basin",
+   "Green River"
+  ],
+  "contributors": [
+   {
+    "region": "Dust Basin",
+    "producer": "Dust cooperative",
+    "runs": 10.0,
+    "process": {
+     "name": "yayo refining",
+     "outputs": [
+      [
+       "yayo",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "psychoid_leaves",
+       8.0
+      ],
+      [
+       "chemfuel",
+       0.2
+      ]
+     ],
+     "direct_labor": 350.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 606.7760416666666,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Dust Basin",
+    "producer": "Dust psychoid fields",
+    "runs": 80.0,
+    "process": {
+     "name": "psychoid farming",
+     "outputs": [
+      [
+       "psychoid_leaves",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "chemfuel",
+       0.05
+      ]
+     ],
+     "direct_labor": 46.2,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 25.256,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Dust Basin",
+    "producer": "Dust refinery",
+    "runs": 6.036743050983973,
+    "process": {
+     "name": "chemfuel synthesis",
+     "outputs": [
+      [
+       "chemfuel",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 25.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 26.911458333333332,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Dust Basin",
+    "producer": "Dust provisioners",
+    "runs": 0.6350650787353516,
+    "process": {
+     "name": "provisioning",
+     "outputs": [
+      [
+       "meals",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 305.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 215.27916666666667,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Dust Basin",
+    "producer": "Dust tailors",
+    "runs": 0.03969156742095947,
+    "process": {
+     "name": "tailoring",
+     "outputs": [
+      [
+       "garments",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "chemfuel",
+       0.9257142857142857
+      ]
+     ],
+     "direct_labor": 1620.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 248.90625000000003,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Dust Basin",
+    "producer": "Dust herbalists",
+    "runs": 0.03969156742095947,
+    "process": {
+     "name": "herb gathering",
+     "outputs": [
+      [
+       "herbal_medicine",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 400.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 11.666666666666666,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River works",
+    "runs": 10.0,
+    "process": {
+     "name": "yayo refining",
+     "outputs": [
+      [
+       "yayo",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "psychoid_leaves",
+       8.0
+      ],
+      [
+       "chemfuel",
+       0.2
+      ]
+     ],
+     "direct_labor": 350.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 606.7760416666666,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River psychoid fields",
+    "runs": 80.0,
+    "process": {
+     "name": "psychoid farming",
+     "outputs": [
+      [
+       "psychoid_leaves",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "chemfuel",
+       0.05
+      ]
+     ],
+     "direct_labor": 46.2,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 25.256,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River refinery",
+    "runs": 6.036743050983973,
+    "process": {
+     "name": "chemfuel synthesis",
+     "outputs": [
+      [
+       "chemfuel",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 25.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 26.911458333333332,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River provisioners",
+    "runs": 0.6350650787353516,
+    "process": {
+     "name": "provisioning",
+     "outputs": [
+      [
+       "meals",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 305.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 215.27916666666667,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River tailors",
+    "runs": 0.03969156742095947,
+    "process": {
+     "name": "tailoring",
+     "outputs": [
+      [
+       "garments",
+       1.0
+      ]
+     ],
+     "inputs": [
+      [
+       "chemfuel",
+       0.9257142857142857
+      ]
+     ],
+     "direct_labor": 1620.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 248.90625000000003,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   },
+   {
+    "region": "Green River",
+    "producer": "River herbalists",
+    "runs": 0.03969156742095947,
+    "process": {
+     "name": "herb gathering",
+     "outputs": [
+      [
+       "herbal_medicine",
+       1.0
+      ]
+     ],
+     "inputs": [],
+     "direct_labor": 400.0,
+     "apportionment": "mass",
+     "capital_labor_per_capacity": 11.666666666666666,
+     "capital_bill": [],
+     "capital_construction_labor": 0.0,
+     "machines_per_capacity": 0.0
+    }
+   }
+  ]
+ },
+ "cases": [
+  {
+   "label": "warm",
+   "initial": [
+    [
+     "yayo",
+     735.9749515277779
+    ],
+    [
+     "psychoid_leaves",
+     47.494335954861114
+    ],
+    [
+     "chemfuel",
+     25.044852430555554
+    ],
+    [
+     "meals",
+     305.3587986111111
+    ],
+    [
+     "garments",
+     1643.5992214285714
+    ],
+    [
+     "herbal_medicine",
+     400.01944444444445
+    ]
+   ],
+   "expected": {
+    "labor_values": [
+     [
+      "yayo",
+      735.9749515277779
+     ],
+     [
+      "psychoid_leaves",
+      47.494335954861114
+     ],
+     [
+      "chemfuel",
+      25.044852430555554
+     ],
+     [
+      "meals",
+      305.3587986111111
+     ],
+     [
+      "garments",
+      1643.5992214285714
+     ],
+     [
+      "herbal_medicine",
+      400.01944444444445
+     ]
+    ],
+    "regional_labor_values": {
+     "Dust Basin": [
+      [
+       "chemfuel",
+       25.044852430555554
+      ],
+      [
+       "garments",
+       1643.5992214285714
+      ],
+      [
+       "herbal_medicine",
+       400.01944444444445
+      ],
+      [
+       "meals",
+       305.3587986111111
+      ],
+      [
+       "psychoid_leaves",
+       47.494335954861114
+      ],
+      [
+       "yayo",
+       735.9749515277779
+      ]
+     ],
+     "Green River": [
+      [
+       "chemfuel",
+       25.044852430555554
+      ],
+      [
+       "garments",
+       1643.5992214285714
+      ],
+      [
+       "herbal_medicine",
+       400.01944444444445
+      ],
+      [
+       "meals",
+       305.3587986111111
+      ],
+      [
+       "psychoid_leaves",
+       47.494335954861114
+      ],
+      [
+       "yayo",
+       735.9749515277779
+      ]
+     ]
+    },
+    "stale": []
+   }
+  },
+  {
+   "label": "cold",
+   "initial": [
+    [
+     "yayo",
+     0.0
+    ],
+    [
+     "psychoid_leaves",
+     0.0
+    ],
+    [
+     "chemfuel",
+     0.0
+    ],
+    [
+     "meals",
+     0.0
+    ],
+    [
+     "garments",
+     0.0
+    ],
+    [
+     "herbal_medicine",
+     0.0
+    ]
+   ],
+   "expected": {
+    "labor_values": [
+     [
+      "yayo",
+      735.9749515277779
+     ],
+     [
+      "psychoid_leaves",
+      47.494335954861114
+     ],
+     [
+      "chemfuel",
+      25.044852430555554
+     ],
+     [
+      "meals",
+      305.3587986111111
+     ],
+     [
+      "garments",
+      1643.5992214285714
+     ],
+     [
+      "herbal_medicine",
+      400.01944444444445
+     ]
+    ],
+    "regional_labor_values": {
+     "Dust Basin": [
+      [
+       "chemfuel",
+       25.044852430555554
+      ],
+      [
+       "garments",
+       1643.5992214285714
+      ],
+      [
+       "herbal_medicine",
+       400.01944444444445
+      ],
+      [
+       "meals",
+       305.3587986111111
+      ],
+      [
+       "psychoid_leaves",
+       47.494335954861114
+      ],
+      [
+       "yayo",
+       735.9749515277779
+      ]
+     ],
+     "Green River": [
+      [
+       "chemfuel",
+       25.044852430555554
+      ],
+      [
+       "garments",
+       1643.5992214285714
+      ],
+      [
+       "herbal_medicine",
+       400.01944444444445
+      ],
+      [
+       "meals",
+       305.3587986111111
+      ],
+      [
+       "psychoid_leaves",
+       47.494335954861114
+      ],
+      [
+       "yayo",
+       735.9749515277779
+      ]
+     ]
+    },
+    "stale": []
+   }
+  }
+ ]
+}
