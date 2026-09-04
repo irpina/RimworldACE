@@ -219,6 +219,7 @@ def collect_behavioral_metrics(
     metrics.update(_wage_deviation_metrics(parameters))
     metrics.update(_habituation_metrics(parameters))
     metrics.update(_producer_cash_metrics(parameters))
+    metrics.update(_posted_price_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -805,6 +806,92 @@ def _producer_cash_metrics(
         "producer_cash.boom.fund_min": _metric(
             min(h["regions"][LOCAL_REGION]["cash"] for h in boom_with.history),
             "silver",
+        ),
+    }
+
+
+def _posted_price_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Firm-posted prices, off by default and experimental (docs/57, docs/58).
+
+    What is frozen is what the rule does and does not do: it is exactly
+    stationary, it passes cost through in full with every sector's markup
+    preserved, and it leaves every shock's price level where the shock put
+    it, because an integrated pressure has no restoring force and a shared
+    pool gives a contested sector the wrong signal.  docs/58 records why
+    the second and third are findings about the pool, and docs/59 is the
+    consequence.
+    """
+    posted = replace(parameters, posted_prices=True)
+    stationary = equilibrium(parameters=posted)
+    glut = regional_glut(parameters=posted)
+    loss = producer_loss(parameters=posted)
+    shock = subsistence_shock(parameters=posted)
+    technique = technique_change(parameters=posted)
+    competition = cost_competition(parameters=posted)
+
+    def markups(economy: Economy) -> Dict[str, float]:
+        region = economy.regions[LOCAL_REGION]
+        return {
+            p.commodity: p.posted_price / p.effective_unit_cost(region.prices)
+            for p in region.producers
+            if p.active
+        }
+
+    seeded = markups(stationary)
+    shocked = markups(shock)
+    preserved = max(
+        abs(shocked[name] - seeded[name])
+        for name in seeded
+        if name != MEALS
+    )
+    stationary_prices = stationary.series(LOCAL_REGION, YAYO)
+    reference = parameters.reference_price
+
+    def spread(economy: Economy) -> float:
+        asked = [
+            p.posted_price
+            for p in economy.regions[LOCAL_REGION].producers
+            if p.active and p.commodity == MEALS
+        ]
+        return max(asked) / min(asked) - 1.0
+
+    return {
+        "posted.equilibrium.price_range": _metric(
+            max(stationary_prices) - min(stationary_prices), "silver"
+        ),
+        "posted.equilibrium.yayo_markup": _metric(seeded[YAYO], "ratio"),
+        # Cost passes through in full: after the subsistence shock every
+        # sector but the shocked one asks the same markup it was seeded at.
+        "posted.subsistence.markup_max_drift": _metric(preserved, "ratio"),
+        "posted.subsistence.meals_markup_end": _metric(shocked[MEALS], "ratio"),
+        "posted.subsistence.yayo_price_end": _metric(
+            shock.regions[LOCAL_REGION].prices[YAYO], "silver"
+        ),
+        # A shock's level is permanent: an integrated pressure rests where
+        # the stock reaches its target, not where it started.
+        "posted.glut.trough_over_reference": _metric(
+            min(glut.series(LOCAL_REGION, YAYO)) / reference, "ratio"
+        ),
+        "posted.glut.end_over_reference": _metric(
+            glut.series(LOCAL_REGION, YAYO)[-1] / reference, "ratio"
+        ),
+        "posted.producer_loss.peak_over_reference": _metric(
+            max(loss.series(LOCAL_REGION, YAYO)) / reference, "ratio"
+        ),
+        "posted.producer_loss.end_over_reference": _metric(
+            loss.series(LOCAL_REGION, YAYO)[-1] / reference, "ratio"
+        ),
+        # A contested sector on one pool does not converge.
+        "posted.technique_change.meals_posted_spread": _metric(
+            spread(technique), "ratio"
+        ),
+        "posted.cost_competition.meals_posted_spread": _metric(
+            spread(competition), "ratio"
+        ),
+        "posted.cost_competition.meals_price_end": _metric(
+            competition.regions[LOCAL_REGION].prices[MEALS], "silver"
         ),
     }
 

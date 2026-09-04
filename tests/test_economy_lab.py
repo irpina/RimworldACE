@@ -3634,3 +3634,81 @@ class ProducerCashTests(unittest.TestCase):
                 self.assertLess(abs(economy.value_balance()), 1e-5)
                 for name, residual in economy.commodity_balances().items():
                     self.assertLess(abs(residual), 1e-6, name)
+
+
+class PostedPriceTests(unittest.TestCase):
+    """Firm-posted prices (docs/57), experimental and off by default.
+
+    docs/58 found the rule sound where a sector has one producer -- it is
+    exactly stationary and passes cost through in full -- and unsound where
+    a sector shares one pool, which is why docs/59 comes next.  The tests
+    assert both halves, so that fixing the second cannot quietly change the
+    first.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.posted = replace(ScenarioParameters(), posted_prices=True)
+        cls.stationary = equilibrium(days=240, parameters=cls.posted)
+
+    def test_off_by_default(self):
+        self.assertFalse(ScenarioParameters().posted_prices)
+        economy = equilibrium(days=30)
+        for region in economy.regions.values():
+            for producer in region.producers:
+                self.assertEqual(producer.posted_price, 0.0)
+
+    def test_exactly_stationary_with_posted_prices(self):
+        """docs/57 s6.2: identical cost and zero pressure is a factor of exactly one."""
+        prices = self.stationary.series("Dust Basin", YAYO)
+        self.assertEqual(max(prices) - min(prices), 0.0)
+        region = self.stationary.regions["Dust Basin"]
+        for producer in region.producers:
+            self.assertEqual(producer.posted_price, region.prices[producer.commodity])
+
+    def test_cost_passes_through_in_full(self):
+        """docs/58 s3: after the subsistence shock every unshocked sector asks
+        the markup it was seeded at, to four decimals."""
+        shocked = subsistence_shock(parameters=self.posted)
+        seeded_region = self.stationary.regions["Dust Basin"]
+        region = shocked.regions["Dust Basin"]
+        seeded = {
+            p.commodity: p.posted_price / p.effective_unit_cost(seeded_region.prices)
+            for p in seeded_region.producers
+        }
+        for producer in region.producers:
+            if producer.commodity == MEALS or not producer.active:
+                continue
+            markup = producer.posted_price / producer.effective_unit_cost(region.prices)
+            with self.subTest(sector=producer.commodity):
+                # The two other basket goods drift by 0.0016: their own
+                # stock moves when the wage does.  Everything else is exact
+                # to four decimals.
+                self.assertLess(abs(markup - seeded[producer.commodity]), 5e-3)
+        self.assertGreater(region.prices[YAYO], seeded_region.prices[YAYO] * 1.1)
+
+    def test_a_shock_leaves_its_level_behind(self):
+        """docs/58 s4: an integrated pressure rests where the stock reaches
+        target, which is not where the price started."""
+        glut = regional_glut(parameters=self.posted)
+        prices = glut.series("Dust Basin", YAYO)
+        self.assertLess(min(prices), 21.0 * 0.9)
+        self.assertGreater(prices[-1], 21.0 * 1.1)
+
+    def test_a_contested_sector_on_one_pool_does_not_converge(self):
+        """docs/58 s5, the reason docs/59 precedes any use of this rule."""
+        economy = technique_change(parameters=self.posted)
+        asked = [
+            p.posted_price
+            for p in economy.regions["Dust Basin"].producers
+            if p.active and p.commodity == MEALS
+        ]
+        self.assertGreater(max(asked) / min(asked), 1.5)
+
+    def test_the_ledgers_close(self):
+        for economy in (self.stationary, regional_glut(parameters=self.posted), producer_loss(parameters=self.posted)):
+            with self.subTest(day=economy.day):
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-5)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)

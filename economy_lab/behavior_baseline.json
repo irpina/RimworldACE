@@ -690,6 +690,54 @@
       "unit": "ratio",
       "value": 0.030905
     },
+    "posted.cost_competition.meals_posted_spread": {
+      "unit": "ratio",
+      "value": 4.261606
+    },
+    "posted.cost_competition.meals_price_end": {
+      "unit": "silver",
+      "value": 8.687902
+    },
+    "posted.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "posted.equilibrium.yayo_markup": {
+      "unit": "ratio",
+      "value": 1.290556
+    },
+    "posted.glut.end_over_reference": {
+      "unit": "ratio",
+      "value": 1.176893
+    },
+    "posted.glut.trough_over_reference": {
+      "unit": "ratio",
+      "value": 0.864626
+    },
+    "posted.producer_loss.end_over_reference": {
+      "unit": "ratio",
+      "value": 4.168471
+    },
+    "posted.producer_loss.peak_over_reference": {
+      "unit": "ratio",
+      "value": 4.168471
+    },
+    "posted.subsistence.markup_max_drift": {
+      "unit": "ratio",
+      "value": 0.001641
+    },
+    "posted.subsistence.meals_markup_end": {
+      "unit": "ratio",
+      "value": 5.0
+    },
+    "posted.subsistence.yayo_price_end": {
+      "unit": "silver",
+      "value": 25.244818
+    },
+    "posted.technique_change.meals_posted_spread": {
+      "unit": "ratio",
+      "value": 1.308647
+    },
     "producer_cash.boom.employment_gap": {
       "unit": "worker-days",
       "value": 0.0
