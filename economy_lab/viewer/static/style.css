@@ -216,7 +216,9 @@ a { color: var(--accent); }
 
 .empty { color: var(--muted); padding: 40px; text-align: center; background: var(--paper); border: 1px dashed var(--line); border-radius: 8px; }
 .sweep-table { max-width: 900px; }
-.filterbar { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.filterbar { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 .filterbar input { max-width: 360px; }
+.filterbar select { width: auto; }
+.filterbar button { white-space: nowrap; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 1100px) { .two, .ledgers-grid { grid-template-columns: 1fr; } }
