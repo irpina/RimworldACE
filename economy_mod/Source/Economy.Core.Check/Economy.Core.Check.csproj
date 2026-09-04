@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The harness that checks the port against the laboratory's fixtures
+    (docs/53).  net8.0 only: it runs on the build machine, never in the game.
+    Run it with `dotnet run` and this project's path (see economy_mod/README.md).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Economy.Core/Economy.Core.csproj" />
+  </ItemGroup>
+</Project>

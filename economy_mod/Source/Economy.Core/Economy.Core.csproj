@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The deterministic core of the Stage 0 model, ported (docs/53).  No
+    RimWorld and no Unity in here: net472 is what the game's Mono loads,
+    net8.0 is what the harness runs on the build machine, and the claim is
+    that the two produce the same bits.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net472;net8.0</TargetFrameworks>
+    <AssemblyName>SocialProduction.Economy.Core</AssemblyName>
+    <RootNamespace>SocialProduction.Economy.Core</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+  </ItemGroup>
+</Project>
