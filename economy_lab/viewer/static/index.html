@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Economy laboratory</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Economy laboratory <span class="sub">Stage 0 viewer</span></div>
+  <nav class="tabs">
+    <a href="#run" data-page="run">Run</a>
+    <a href="#ledgers" data-page="ledgers">Ledgers</a>
+    <a href="#compare" data-page="compare">Compare</a>
+    <a href="#metrics" data-page="metrics">Metrics</a>
+    <a href="#sensitivity" data-page="sensitivity">Sensitivity</a>
+    <a href="#docs" data-page="docs">Documents</a>
+  </nav>
+</header>
+
+<main>
+  <section id="page-run" class="page">
+    <aside class="side">
+      <h2>Scenario</h2>
+      <select id="scenario-select"></select>
+      <p id="scenario-description" class="muted"></p>
+      <p id="scenario-docs" class="doclinks"></p>
+      <h3>Options</h3>
+      <div id="scenario-options" class="form"></div>
+      <h3>Parameter overrides <span class="muted small">(blank keeps the default)</span></h3>
+      <input id="parameter-filter" type="search" placeholder="filter parameters">
+      <div id="parameter-form" class="form params"></div>
+      <div class="actions">
+        <button id="run-button" class="primary">Run</button>
+        <button id="clear-overrides" class="quiet">Clear overrides</button>
+      </div>
+      <p id="run-status" class="status"></p>
+      <h3>Runs this session</h3>
+      <ul id="run-list" class="runlist"></ul>
+    </aside>
+    <div id="run-view" class="content"></div>
+  </section>
+
+  <section id="page-ledgers" class="page">
+    <div id="ledgers-view" class="content wide"></div>
+  </section>
+
+  <section id="page-compare" class="page">
+    <div id="compare-view" class="content wide"></div>
+  </section>
+
+  <section id="page-metrics" class="page">
+    <div id="metrics-view" class="content wide"></div>
+  </section>
+
+  <section id="page-sensitivity" class="page">
+    <div id="sensitivity-view" class="content wide"></div>
+  </section>
+
+  <section id="page-docs" class="page">
+    <aside class="side">
+      <h2>Documents</h2>
+      <ul id="doc-list" class="doclist"></ul>
+    </aside>
+    <article id="doc-view" class="content doc"></article>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
