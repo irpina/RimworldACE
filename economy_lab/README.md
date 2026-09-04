@@ -257,7 +257,9 @@ markup rather than a rate of profit.
   (docs/51, docs/52); worker mobility is not;
 - credit and bankruptcy;
 - capacity depreciation or mothballing;
-- individual producer cash accounts and transfer pricing;
+- transfer pricing and producer-level inventory: producers hold cash
+  (docs/55, docs/56, off by default) but the regional pool is still a
+  consignment paid out by supply share;
 - more than six commodities or two regions;
 - RimWorld runtime integration.
 

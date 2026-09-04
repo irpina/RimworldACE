@@ -5,9 +5,10 @@
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
-**Behavioral baseline:** `HEAD` (231 metrics; 22 wage-deviation and 20 habituation readings)
+**Behavioral baseline:** `HEAD` (251 metrics; 22 wage-deviation, 20 habituation and 20 producer-cash readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
 **Habituation design / results:** `docs/51`, `docs/52`
+**Producer-level cash design / results:** `docs/55`, `docs/56`
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1825,9 +1826,9 @@ it is not intended for per-commit testing.
   sector-specific `K/cost` term ranging 11.88 to 38.60 across sectors. The
   bound on chemfuel is 75.7% of its value, 229 ticks a day, and the
   deviations sum to floating-point zero, so rent can only ever be a
-  deduction from surplus value. It cannot become a *flow* until producers
-  hold cash and a landowner has somewhere to spend it — the producer-cash
-  omission below is the blocker, not a missing rent rule. Monopoly rent
+  deduction from surplus value. It could not become a *flow* until
+  producers held cash; they do now (`docs/56`), so a landlord can be paid
+  out of a purse in a later slice. Monopoly rent
   proper, price *above* value rather than up to it, is still absent;
 - ~~labor supply and wages~~ — done: fixed regional pool, wage at the value
   of labor-power, surplus ledger;
@@ -1851,9 +1852,16 @@ it is not intended for per-commit testing.
   expected future demand, and expectations here are one exponentially
   smoothed price. Moral depreciation — plant devalued by a better technique
   appearing rather than by wear — is also still absent;
-- individual producer cash accounts and transfer pricing (wages are paid
-  from the regional pool; producer-level exploitation accounts need
-  producer-level cash);
+- ~~individual producer cash accounts~~ — done (`docs/56`), off by default:
+  producers hold purses, pay inputs, plant matter and wages from them, are
+  liquidity-rationed when they cannot, and distribute what they hold above
+  their working capital to an owners' fund that buys the final good. Money
+  profit is a flow now, and in the stationary circuit it is exactly what
+  the fund spends (210 silver a day, Kalecki's identity measured). The
+  component sector's purse takes 557 days to drain and then rests at 1.37×
+  its authored price, rationed and not bankrupted. Transfer pricing and
+  producer-level *inventory* are still absent — the pool is a consignment
+  paid out by supply share — and belong to the procurement slice;
 - more than six commodities or two regions;
 - RimWorld save/UI/runtime integration.
 
