@@ -29,7 +29,7 @@ class CatalogTests(unittest.TestCase):
             "technique_change", "cost_competition", "generous_basket",
             "perishable_meals", "capital_goods", "capacity_exit",
             "recreation_basket", "recreation_sweep", "demand_boom",
-            "wage_slump", "reserve_army_sweep", "boom_reversal",
+            "wage_slump", "reserve_army_sweep", "boom_reversal", "cash_circuit",
         }
         self.assertEqual(set(catalog.CATALOG), expected)
 
@@ -245,7 +245,7 @@ class ServerTests(unittest.TestCase):
 
     def test_the_catalog_and_parameters(self):
         scenarios = self.get("/api/scenarios")
-        self.assertEqual(len(scenarios), 19)
+        self.assertEqual(len(scenarios), 20)
         boom = next(s for s in scenarios if s["name"] == "demand_boom")
         self.assertEqual(boom["docs"], [46, 47])
         self.assertEqual(boom["shock"], 60)

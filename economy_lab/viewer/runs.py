@@ -120,8 +120,8 @@ def _series_document(economy: Economy) -> Dict[str, object]:
     region_names = sorted(economy.regions)
     per_commodity = ("price", "inventory", "unmet", "capacity", "cost_ratio")
     scalars = (
-        "cash", "worker_cash", "employment", "wage_rate", "wage_premium",
-        "habitual_scale", "premium_over_value",
+        "cash", "worker_cash", "producer_cash", "employment", "wage_rate",
+        "wage_premium", "habitual_scale", "premium_over_value",
     )
     regions: Dict[str, object] = {}
     for name in region_names:
@@ -217,11 +217,30 @@ def _ledgers(economy: Economy, report: Dict[str, object]) -> Dict[str, object]:
                 "worker_spending": ledger.worker_spending.get(r, 0.0),
                 "unattributed_margin": ledger.unattributed_margin.get(r, 0.0),
                 "fixed_capital_money": ledger.fixed_capital_money.get(r, 0.0),
+                # Producer cash (docs/55): purses, and the money profit
+                # that flowed to the owners' fund.  Zero with the rule off.
+                "producer_cash": sum(p.cash for p in economy.regions[r].producers),
+                "distributed_to_fund": ledger.distributions.get(r, 0.0),
+                "fund_wage_support": ledger.fund_wage_support.get(r, 0.0),
+                "purses": {
+                    p.name: {
+                        "commodity": p.commodity,
+                        "cash": p.cash,
+                        "target": p.cash_target,
+                        "distributed": p.distributed_total,
+                        "active": p.active,
+                    }
+                    for p in economy.regions[r].producers
+                },
             }
             for r in region_names
         },
         "investment_spending": ledger.investment_spending,
         "transport_cash": ledger.transport_cash,
+        "liquidity_curtailment_runs": {
+            c: v for c, v in sorted(ledger.liquidity_curtailment.items())
+        },
+        "bankruptcies": [list(entry) for entry in ledger.bankruptcies],
     }
 
     production = report.get("prices_of_production")

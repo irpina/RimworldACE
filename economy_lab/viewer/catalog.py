@@ -148,6 +148,7 @@ _DOCS: Dict[str, Tuple[int, ...]] = {
     "wage_slump": (46, 47),
     "reserve_army_sweep": (46, 47),
     "boom_reversal": (51, 52),
+    "cash_circuit": (55, 56),
 }
 
 #: Shock days: an int, a parameter name, a callable, or None.
@@ -195,6 +196,7 @@ _ORDER = (
     "wage_slump",
     "reserve_army_sweep",
     "boom_reversal",
+    "cash_circuit",
 )
 
 

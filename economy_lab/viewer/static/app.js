@@ -27,11 +27,11 @@ const FIELD_UNITS = {
   price: "silver", inventory: "units", unmet: "units", capacity: "units/day",
   cost_ratio: "ratio", cash: "silver", worker_cash: "silver",
   employment: "worker-days", wage_rate: "silver/worker-day", wage_premium: "fraction",
-  habitual_scale: "ratio", premium_over_value: "fraction",
+  habitual_scale: "ratio", premium_over_value: "fraction", producer_cash: "silver",
   remaining: "units", marginal_cost: "silver", labor_value: "work-ticks",
 };
 const PER_COMMODITY_FIELDS = ["price", "inventory", "unmet", "capacity", "cost_ratio"];
-const REGIONAL_FIELDS = ["employment", "wage_rate", "wage_premium", "habitual_scale", "premium_over_value", "cash", "worker_cash"];
+const REGIONAL_FIELDS = ["employment", "wage_rate", "wage_premium", "habitual_scale", "premium_over_value", "cash", "worker_cash", "producer_cash"];
 
 // ------------------------------------------------------------------ utils
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -555,9 +555,18 @@ function renderLedgers() {
       commodities.map((c) => ({ c, price: entry.prices[c], ...(entry.decomposition[c] || {}) })),
     ));
     price.append(kv([["wages paid", entry.wages_paid], ["of which premium over the basket", entry.wage_premium_paid], ["workers' basket spending", entry.worker_spending],
-      ["fixed capital consumed (silver)", entry.fixed_capital_money], ["unattributed margin accumulated", entry.unattributed_margin]]));
+      ["fixed capital consumed (silver)", entry.fixed_capital_money], ["unattributed margin accumulated", entry.unattributed_margin],
+      ["producer purses (silver)", entry.producer_cash], ["money profit distributed to the fund", entry.distributed_to_fund], ["wages the fund covered", entry.fund_wage_support]]));
+    if (entry.producer_cash > 0 || entry.distributed_to_fund > 0) {
+      price.append(table(
+        [{ key: "name", label: "producer", name: true }, { key: "commodity", label: "commodity" }, { key: "cash", label: "purse", num: true }, { key: "target", label: "working capital target", num: true }, { key: "distributed", label: "distributed", num: true }, { key: "active", label: "active" }],
+        Object.entries(entry.purses).map(([name, p]) => ({ name, ...p, active: p.active ? "yes" : "no", _class: p.active ? "" : "big" })),
+      ));
+    }
   }
   price.append(kv([["investment spending", L.market_price.investment_spending], ["freight paid", L.market_price.transport_cash]]));
+  if (L.market_price.bankruptcies && L.market_price.bankruptcies.length) price.append(el("p", { class: "warn" }, "Bankruptcies: " + L.market_price.bankruptcies.map((b) => `day ${b[0]} ${b[1]} ${b[2]}`).join("; ")));
+  if (L.market_price.liquidity_curtailment_runs && Object.keys(L.market_price.liquidity_curtailment_runs).length) price.append(el("p", { class: "note" }, "Runs a purse could not pay for: " + Object.entries(L.market_price.liquidity_curtailment_runs).map(([c, v]) => `${c} ${fmt(v)}`).join(", ")));
   grid.append(price);
 
   // --- prices of production
