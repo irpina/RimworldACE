@@ -13,7 +13,9 @@ from .scenarios import (
     ScenarioParameters,
     arbitrage,
     boom_reversal,
+    cash_circuit,
     CHEMFUEL,
+    COMPONENTS,
     equilibrium,
     LEAVES,
     cost_competition,
@@ -216,6 +218,7 @@ def collect_behavioral_metrics(
     metrics.update(_absolute_rent_metrics(parameters))
     metrics.update(_wage_deviation_metrics(parameters))
     metrics.update(_habituation_metrics(parameters))
+    metrics.update(_producer_cash_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -685,6 +688,123 @@ def _habituation_metrics(
         ),
         "habituation.reversal.premium_end_without_rule": _metric(
             without_region.wage_premium, "fraction"
+        ),
+    }
+
+
+def _producer_cash_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Producers hold silver, pay from it, and can fail (docs/55).
+
+    Off by default, so every reading here is the rule's own.  The
+    equilibrium readings freeze that a purse is exactly stationary and
+    that the money profit which now flows is the notional the price
+    decomposition has printed since docs/23.  The cash-circuit readings
+    freeze what the liquidity ration does to the one sector that sells
+    below its cash cost, and that it does nothing to anyone else.
+    """
+    with_cash = replace(parameters, producer_cash=True)
+    stationary = equilibrium(parameters=with_cash)
+    circuit = cash_circuit(parameters=parameters)
+    boom_with = demand_boom(parameters=with_cash)
+    boom_without = demand_boom(parameters=parameters)
+
+    region = stationary.regions[LOCAL_REGION]
+    purses = [h["regions"][LOCAL_REGION]["producer_cash"] for h in stationary.history]
+    fund = [h["regions"][LOCAL_REGION]["cash"] for h in stationary.history]
+    prices = stationary.series(LOCAL_REGION, YAYO)
+    days = stationary.day
+
+    def notional_gap() -> float:
+        worst = 0.0
+        for producer in region.producers:
+            parts = stationary.price_decomposition(LOCAL_REGION, producer.commodity)
+            output = producer.last_runs * producer.process.outputs[producer.commodity]
+            notional = output * (parts["price"] - parts["inputs"] - parts["wages"])
+            flow = producer.distributed_total / days
+            worst = max(worst, abs(flow - notional))
+        return worst
+
+    circuit_region = circuit.regions[LOCAL_REGION]
+    machinist = next(p for p in circuit_region.producers if p.commodity == COMPONENTS)
+    component_prices = circuit.series(LOCAL_REGION, COMPONENTS)
+    authored = circuit.commodities[COMPONENTS].reference_price
+    first_move = next(
+        (day for day, price in enumerate(component_prices) if price != authored),
+        -1,
+    )
+    others_below_target = sum(
+        1
+        for p in circuit_region.producers
+        if p.active and p.commodity != COMPONENTS and p.cash < p.cash_target
+    )
+    circuit_yayo = circuit.series(LOCAL_REGION, YAYO)
+
+    return {
+        # --- the seeded circuit with purses: exactly stationary ----------
+        "producer_cash.equilibrium.price_range": _metric(
+            max(prices) - min(prices), "silver"
+        ),
+        "producer_cash.equilibrium.purse_max_deviation": _metric(
+            max(abs(x - purses[1]) for x in purses[1:]), "silver"
+        ),
+        "producer_cash.equilibrium.fund_drift": _metric(fund[-1] - fund[0], "silver"),
+        "producer_cash.equilibrium.liquidity_curtailment": _metric(
+            sum(stationary.ledger.liquidity_curtailment.values()), "runs"
+        ),
+        # Money profit as a flow against the notional per-unit margin.
+        "producer_cash.equilibrium.distribution_gap_to_notional": _metric(
+            notional_gap(), "silver/day"
+        ),
+        "producer_cash.equilibrium.distributed_per_day": _metric(
+            stationary.ledger.distributions.get(LOCAL_REGION, 0.0) / days, "silver"
+        ),
+        # --- Department I with purses: the sector that does not pay ------
+        "producer_cash.circuit.components.price_first_move_day": _metric(
+            first_move, "day"
+        ),
+        "producer_cash.circuit.components.price_end_over_authored": _metric(
+            component_prices[-1] / authored, "ratio"
+        ),
+        "producer_cash.circuit.components.price_peak_over_authored": _metric(
+            max(component_prices) / authored, "ratio"
+        ),
+        "producer_cash.circuit.components.purse_end": _metric(machinist.cash, "silver"),
+        "producer_cash.circuit.components.utilization_end": _metric(
+            machinist.last_runs / machinist.process.runs_for(machinist.capacity_per_day),
+            "fraction",
+        ),
+        "producer_cash.circuit.components.capacity_end": _metric(
+            machinist.capacity_per_day, "units/day"
+        ),
+        "producer_cash.circuit.liquidity_curtailment": _metric(
+            sum(circuit.ledger.liquidity_curtailment.values()), "runs"
+        ),
+        "producer_cash.circuit.bankruptcies": _metric(
+            float(len(circuit.ledger.bankruptcies)), "producers"
+        ),
+        "producer_cash.circuit.sectors_that_lost_capacity": _metric(
+            float(len(circuit.ledger.capacity_lost)), "commodities"
+        ),
+        "producer_cash.circuit.other_purses_below_target": _metric(
+            float(others_below_target), "producers"
+        ),
+        "producer_cash.circuit.yayo_price_range": _metric(
+            max(circuit_yayo) - min(circuit_yayo), "silver"
+        ),
+        "producer_cash.circuit.employment_end": _metric(
+            circuit_region.worker_days_earned, "worker-days"
+        ),
+        # --- the boom, funded by the owners' fund --------------------------
+        "producer_cash.boom.employment_gap": _metric(
+            boom_with.regions[LOCAL_REGION].worker_days_earned
+            - boom_without.regions[LOCAL_REGION].worker_days_earned,
+            "worker-days",
+        ),
+        "producer_cash.boom.fund_min": _metric(
+            min(h["regions"][LOCAL_REGION]["cash"] for h in boom_with.history),
+            "silver",
         ),
     }
 

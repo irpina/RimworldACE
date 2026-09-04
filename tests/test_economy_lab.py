@@ -25,6 +25,7 @@ from economy_lab.scenarios import (
     arbitrage,
     boom_reversal,
     capacity_exit,
+    cash_circuit,
     capital_goods,
     circuit_processes,
     cost_competition,
@@ -3529,5 +3530,107 @@ class HabituationTests(unittest.TestCase):
             with self.subTest(day=economy.day):
                 self.assertLess(abs(economy.cash_balance()), 1e-6)
                 self.assertLess(abs(economy.value_balance()), 1e-6)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)
+
+
+class ProducerCashTests(unittest.TestCase):
+    """Producers hold silver, pay from it, and can fail (docs/55).
+
+    The purse reaches prices only through what is produced, so the seeded
+    circuit is exactly as stationary with purses as without; what the rule
+    adds is a flow where there was a notional, and a discipline for the one
+    sector that sells below its cash cost.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.with_cash = replace(ScenarioParameters(), producer_cash=True)
+        cls.stationary = equilibrium(days=240, parameters=cls.with_cash)
+        cls.circuit = cash_circuit()
+
+    def test_off_by_default(self):
+        """No purse holds anything and no purse is ever read."""
+        self.assertFalse(ScenarioParameters().producer_cash)
+        economy = equilibrium(days=30)
+        for region in economy.regions.values():
+            for producer in region.producers:
+                self.assertEqual(producer.cash, 0.0)
+        self.assertEqual(economy.ledger.distributions, {})
+        self.assertEqual(economy.ledger.bankruptcies, [])
+
+    def test_the_circuit_is_exactly_stationary_with_purses(self):
+        """docs/55 s6.2: prices see none of it; a purse is set, not subtracted to."""
+        prices = self.stationary.series("Dust Basin", YAYO)
+        self.assertEqual(max(prices) - min(prices), 0.0)
+        purses = [h["regions"]["Dust Basin"]["producer_cash"] for h in self.stationary.history]
+        self.assertGreater(purses[1], 0.0)
+        self.assertEqual(len(set(purses[1:])), 1)
+        fund = [h["regions"]["Dust Basin"]["cash"] for h in self.stationary.history]
+        self.assertLess(abs(fund[-1] - fund[0]), 1.0)
+
+    def test_nobody_is_rationed_where_every_price_covers_cash_cost(self):
+        """docs/55 s6.3."""
+        self.assertEqual(self.stationary.ledger.liquidity_curtailment, {})
+        self.assertEqual(self.stationary.ledger.fund_wage_support, {})
+        self.assertEqual(self.stationary.ledger.bankruptcies, [])
+
+    def test_money_profit_is_a_flow_that_matches_the_notional(self):
+        """docs/55 s6.7, to the employment quantum: the distribution per day
+        is output times price less inputs and wages per unit."""
+        region = self.stationary.regions["Dust Basin"]
+        for producer in region.producers:
+            parts = self.stationary.price_decomposition("Dust Basin", producer.commodity)
+            output = producer.last_runs * producer.process.outputs[producer.commodity]
+            notional = output * (parts["price"] - parts["inputs"] - parts["wages"])
+            flow = producer.distributed_total / self.stationary.day
+            with self.subTest(sector=producer.commodity):
+                self.assertLess(abs(flow - notional), 1e-4)
+                self.assertGreater(flow, 0.0)
+
+    def test_the_sector_that_does_not_pay_is_rationed_not_bankrupted(self):
+        """docs/55 s6.4, on a longer clock than the design expected."""
+        region = self.circuit.regions["Dust Basin"]
+        machinist = next(p for p in region.producers if p.commodity == COMPONENTS)
+        prices = self.circuit.series("Dust Basin", COMPONENTS)
+        self.assertGreater(sum(self.circuit.ledger.liquidity_curtailment.values()), 0.0)
+        self.assertEqual(self.circuit.ledger.bankruptcies, [])
+        self.assertTrue(machinist.active)
+        self.assertGreater(prices[-1] / 32.0, 1.1)
+        self.assertLess(prices[-1] / 32.0, 1.5)
+        # A rest point: the price stops moving once yesterday's revenue
+        # funds today's runs.
+        self.assertLess(abs(prices[-1] - prices[-100]), 1e-6)
+        self.assertLess(machinist.cash, machinist.cash_target)
+
+    def test_the_rest_of_department_one_is_untouched(self):
+        """docs/55 s6.5."""
+        region = self.circuit.regions["Dust Basin"]
+        self.assertEqual(self.circuit.ledger.capacity_lost, {})
+        for producer in region.producers:
+            if producer.commodity == COMPONENTS:
+                continue
+            with self.subTest(sector=producer.commodity):
+                self.assertEqual(producer.cash, producer.cash_target)
+                self.assertNotIn(producer.commodity, self.circuit.ledger.liquidity_curtailment)
+
+    def test_the_boom_is_funded(self):
+        """docs/55 s6.6."""
+        with_cash = demand_boom(parameters=self.with_cash)
+        without = demand_boom()
+        gap = abs(
+            with_cash.regions["Dust Basin"].worker_days_earned
+            - without.regions["Dust Basin"].worker_days_earned
+        )
+        self.assertLess(gap / without.regions["Dust Basin"].worker_days_earned, 0.02)
+        fund = [h["regions"]["Dust Basin"]["cash"] for h in with_cash.history]
+        self.assertGreater(min(fund), 0.0)
+
+    def test_silver_conserves_with_purses_inside_the_identity(self):
+        """docs/55 s6.8."""
+        for economy in (self.stationary, self.circuit, demand_boom(parameters=self.with_cash)):
+            with self.subTest(day=economy.day):
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-5)
                 for name, residual in economy.commodity_balances().items():
                     self.assertLess(abs(residual), 1e-6, name)

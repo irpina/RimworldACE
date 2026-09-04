@@ -690,6 +690,86 @@
       "unit": "ratio",
       "value": 0.030905
     },
+    "producer_cash.boom.employment_gap": {
+      "unit": "worker-days",
+      "value": 0.0
+    },
+    "producer_cash.boom.fund_min": {
+      "unit": "silver",
+      "value": 92710.878375
+    },
+    "producer_cash.circuit.bankruptcies": {
+      "unit": "producers",
+      "value": 0.0
+    },
+    "producer_cash.circuit.components.capacity_end": {
+      "unit": "units/day",
+      "value": 0.0625
+    },
+    "producer_cash.circuit.components.price_end_over_authored": {
+      "unit": "ratio",
+      "value": 1.365537
+    },
+    "producer_cash.circuit.components.price_first_move_day": {
+      "unit": "day",
+      "value": 557
+    },
+    "producer_cash.circuit.components.price_peak_over_authored": {
+      "unit": "ratio",
+      "value": 1.365537
+    },
+    "producer_cash.circuit.components.purse_end": {
+      "unit": "silver",
+      "value": 0.082951
+    },
+    "producer_cash.circuit.components.utilization_end": {
+      "unit": "fraction",
+      "value": 0.030373
+    },
+    "producer_cash.circuit.employment_end": {
+      "unit": "worker-days",
+      "value": 0.318189
+    },
+    "producer_cash.circuit.liquidity_curtailment": {
+      "unit": "runs",
+      "value": 1.451509
+    },
+    "producer_cash.circuit.other_purses_below_target": {
+      "unit": "producers",
+      "value": 0.0
+    },
+    "producer_cash.circuit.sectors_that_lost_capacity": {
+      "unit": "commodities",
+      "value": 0.0
+    },
+    "producer_cash.circuit.yayo_price_range": {
+      "unit": "silver",
+      "value": 7.2e-05
+    },
+    "producer_cash.equilibrium.distributed_per_day": {
+      "unit": "silver",
+      "value": 210.0
+    },
+    "producer_cash.equilibrium.distribution_gap_to_notional": {
+      "unit": "silver/day",
+      "value": 8e-06
+    },
+    "producer_cash.equilibrium.fund_drift": {
+      "unit": "silver",
+      "value": -0.0
+    },
+    "producer_cash.equilibrium.liquidity_curtailment": {
+      "unit": "runs",
+      "value": 0
+    },
+    "producer_cash.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "producer_cash.equilibrium.purse_max_deviation": {
+      "unit": "silver",
+      "value": 0.0
+    },
     "producer_loss.capacity_recovery_days": {
       "unit": "days",
       "value": 75
