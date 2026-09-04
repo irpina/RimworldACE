@@ -290,6 +290,17 @@ class Producer:
     cash_target: float = 0.0
     liquidity_idle_days: int = 0
     distributed_total: float = 0.0
+    #: Firm-posted prices (docs/57): what this producer asks, seeded at
+    #: the authored price and moved by its own cost and the pool's
+    #: pressure from then on; and the cost it last priced from, so a cost
+    #: change passes through in full.  Unread while the rule is off.
+    posted_price: float = 0.0
+    last_cost: float = 0.0
+    #: How much of what this producer offered the order book took today
+    #: (docs/58): one when it was allotted everything it wanted to make,
+    #: less when custom went elsewhere.  A producer below its sector's
+    #: average fill cuts what it asks.
+    order_fill: float = 1.0
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -805,6 +816,9 @@ class Economy:
         producer_cash: bool = False,
         working_capital_days: float = 5.0,
         bankruptcy_idle_days: int = 30,
+        posted_prices: bool = False,
+        posted_price_speed: float = 0.02,
+        posted_share_gain: float = 1.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -868,6 +882,19 @@ class Economy:
             raise ValueError("working_capital_days must be non-negative")
         self.working_capital_days = working_capital_days
         self.bankruptcy_idle_days = bankruptcy_idle_days
+        #: Whether producers post their own prices and the authored price
+        #: is only where they start (docs/57).  Off by default, and the
+        #: anchored rule of docs/21 is bit-identical.
+        self.posted_prices = posted_prices
+        #: The integral gain on the pool's pressure, and the weight on a
+        #: producer's own order fill against its sector's (docs/58).  The
+        #: anchored rule's speed is a proportional gain on a level and
+        #: cannot be reused as an integral gain: docs/58 section 2 records
+        #: what happened when it was.
+        if posted_price_speed < 0.0:
+            raise ValueError("posted_price_speed must be non-negative")
+        self.posted_price_speed = posted_price_speed
+        self.posted_share_gain = posted_share_gain
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -965,6 +992,8 @@ class Economy:
         }
         if self.producer_cash:
             self._seed_purses()
+        if self.posted_prices:
+            self._seed_posted_prices()
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -2161,6 +2190,11 @@ class Economy:
                     or self.known_processes[project.commodity],
                 )
                 self._set_capital_consumption(entrant, region)
+                if self.posted_prices:
+                    # An entrant posts the going price and prices from its
+                    # own cost thereafter (docs/57).
+                    entrant.posted_price = region.prices[entrant.commodity]
+                    entrant.last_cost = entrant.effective_unit_cost(region.prices)
                 if self.producer_cash:
                     # Capitalised from the fund, or with what the fund has
                     # (docs/55).
@@ -2230,6 +2264,14 @@ class Economy:
                 id(p): p.desired_runs(region.prices[p.commodity], region.prices) for p in active
             }
             planned = self._planned_runs(region, opening, active, desired)
+            if self.posted_prices:
+                # What the order book took of what each producer offered
+                # (docs/58); read by the posted-price rule tonight.
+                for p in active:
+                    offered = desired[id(p)]
+                    p.order_fill = (
+                        planned[id(p)] / offered if offered > EPSILON else 1.0
+                    )
 
             # Pro-rata by requirement, so contention for a scarce shared input
             # is order-independent. Single pass: a producer throttled by some
@@ -2584,7 +2626,12 @@ class Economy:
                     if self.producer_cash:
                         # The basket's sellers are paid (docs/55).
                         spend = self._pay_sellers(
-                            region, name, spend, basket_shares, buyer_is_fund=False
+                            region,
+                            name,
+                            spend,
+                            basket_shares,
+                            buyer_is_fund=False,
+                            units=bought,
                         )
                         region.worker_cash -= spend
                     else:
@@ -3287,10 +3334,20 @@ class Economy:
             if epsilon_share <= 0.0:
                 weights = dict(ceilings)
             else:
-                costs = {
-                    key: max(p.effective_unit_cost(region.prices), EPSILON)
-                    for key, p in zip(keys, producers)
-                }
+                # Custom goes to the cheaper producer: by cost under the
+                # anchored rule (docs/21), by what it asks under posted
+                # prices (docs/57), which is the only force that pulls a
+                # sector's posted prices together.
+                if self.posted_prices:
+                    costs = {
+                        key: max(p.posted_price, EPSILON)
+                        for key, p in zip(keys, producers)
+                    }
+                else:
+                    costs = {
+                        key: max(p.effective_unit_cost(region.prices), EPSILON)
+                        for key, p in zip(keys, producers)
+                    }
                 cheapest = min(costs.values())
                 weights = {
                     key: ceilings[key]
@@ -3345,7 +3402,12 @@ class Economy:
                     if consumed > affordable:
                         consumed = max(0.0, affordable)
                     credited = self._pay_sellers(
-                        region, commodity.name, consumed * price, shares, buyer_is_fund=True
+                        region,
+                        commodity.name,
+                        consumed * price,
+                        shares,
+                        buyer_is_fund=True,
+                        units=consumed,
                     )
                     region.cash -= credited
                 unmet = desired - consumed
@@ -3457,6 +3519,7 @@ class Economy:
         shares: Dict[str, List[Tuple[Producer, float]]],
         *,
         buyer_is_fund: bool,
+        units: Optional[float] = None,
     ) -> float:
         """Credit a commodity's sellers with a sale; return what was credited.
 
@@ -3473,6 +3536,14 @@ class Economy:
             region.cash += amount
             return amount
         credited = 0.0
+        if self.posted_prices and units is not None:
+            # Each seller is paid what it posted, on its share of the
+            # units (docs/57); the buyer pays the sum.
+            for producer, share in sellers:
+                paid = units * share * producer.posted_price
+                producer.cash += paid
+                credited += paid
+            return credited
         for producer, share in sellers:
             paid = amount * share
             producer.cash += paid
@@ -3503,6 +3574,7 @@ class Economy:
                         runs * per_run * region.prices.get(name, 0.0),
                         shares,
                         buyer_is_fund=False,
+                        units=runs * per_run,
                     )
                     producer.cash -= credited
             bill = producer.process.capital_bill_per_capacity()
@@ -3523,15 +3595,10 @@ class Economy:
                 continue
             paid_fraction = min(1.0, max(producer.cash, 0.0) / cost)
             for name, quantity in bill.items():
-                amount = (
-                    per_capacity
-                    * quantity
-                    * ration.get(name, 1.0)
-                    * region.prices.get(name, 0.0)
-                    * paid_fraction
-                )
+                taken = per_capacity * quantity * ration.get(name, 1.0) * paid_fraction
+                amount = taken * region.prices.get(name, 0.0)
                 credited = self._pay_sellers(
-                    region, name, amount, shares, buyer_is_fund=False
+                    region, name, amount, shares, buyer_is_fund=False, units=taken
                 )
                 producer.cash -= credited
             if paid_fraction < 1.0:
@@ -3618,7 +3685,105 @@ class Economy:
         region.cash += producer.cash
         producer.cash = 0.0
 
+    # ------------------------------------------------------ posted prices
+
+    def _seed_posted_prices(self) -> None:
+        """Every producer starts by asking the going price and remembers
+        the cost it asked it at (docs/57)."""
+        for region in self.regions.values():
+            for producer in region.producers:
+                if not producer.active:
+                    continue
+                producer.posted_price = region.prices[producer.commodity]
+                producer.last_cost = producer.effective_unit_cost(region.prices)
+
+    def _pool_pressure(self, region: Region, commodity: Commodity) -> Optional[float]:
+        """The pool's signal: stock against target and orders unfilled --
+        the same expression the anchored rule pushes against.  None where
+        the commodity is not traded here."""
+        name = commodity.name
+        throughput = self._throughput[region.name][name]
+        if throughput <= EPSILON:
+            return None
+        target = throughput * commodity.target_inventory_days
+        coverage_gap = (target - region.inventory[name]) / max(target, EPSILON)
+        unmet_ratio = region.unmet_demand[name] / throughput
+        return (
+            commodity.inventory_price_sensitivity * coverage_gap
+            + self.unmet_demand_price_pressure * unmet_ratio
+        )
+
+    def _update_posted_prices(self) -> None:
+        """Each producer moves what it asks by its own cost and the pool's
+        pressure; the regional price is what was paid (docs/57).
+
+        Multiplicative, so that on a stationary day -- identical cost,
+        zero pressure -- the factor is exactly one and the price is the
+        same float.  Costs are read at the day's opening prices for every
+        producer before any price moves, so the order of commodities
+        cannot enter the answer.
+        """
+        for region in self.regions.values():
+            opening = dict(region.prices)
+            costs = {
+                id(p): p.effective_unit_cost(opening)
+                for p in region.producers
+                if p.active
+            }
+            for commodity in self.commodities.values():
+                name = commodity.name
+                pressure = self._pool_pressure(region, commodity)
+                if pressure is None:
+                    continue
+                producers = [
+                    p for p in region.producers if p.active and p.commodity == name
+                ]
+                if not producers:
+                    continue
+                # A producer's own signal beside the pool's: its order fill
+                # against its sector's average (docs/58).  Exactly zero for
+                # a lone producer, so a seeded sector stays stationary; in
+                # a contested sector the one losing custom cuts.
+                mean_fill = sum(p.order_fill for p in producers) / len(producers)
+                for producer in producers:
+                    cost = costs[id(producer)]
+                    posted = producer.posted_price
+                    if producer.last_cost > EPSILON and cost != producer.last_cost:
+                        posted *= cost / producer.last_cost
+                    own = pressure + self.posted_share_gain * (
+                        producer.order_fill - mean_fill
+                    )
+                    if own != 0.0:
+                        posted *= exp(self.posted_price_speed * own)
+                    low = cost * commodity.minimum_price_factor
+                    high = cost * commodity.maximum_price_factor
+                    if cost > EPSILON:
+                        posted = min(high, max(low, posted))
+                    producer.posted_price = posted
+                    producer.last_cost = cost
+                # What was paid: the supply-weighted mean of what was
+                # asked, by today's realized output, or by capacity where
+                # nobody ran.
+                weights = [
+                    p.last_runs * p.process.outputs.get(name, 0.0) for p in producers
+                ]
+                total = sum(weights)
+                if total <= EPSILON:
+                    weights = [p.capacity_per_day for p in producers]
+                    total = sum(weights)
+                if total <= EPSILON:
+                    continue
+                if len(producers) == 1:
+                    region.prices[name] = producers[0].posted_price
+                else:
+                    region.prices[name] = sum(
+                        w * p.posted_price for p, w in zip(producers, weights)
+                    ) / total
+
     def _update_prices(self) -> None:
+        if self.posted_prices:
+            self._update_posted_prices()
+            return
         for region in self.regions.values():
             for commodity in self.commodities.values():
                 name = commodity.name
@@ -3736,6 +3901,7 @@ class Economy:
                         payment,
                         self._supply_shares(source),
                         buyer_is_fund=False,
+                        units=quantity,
                     )
                     destination.cash -= payment + freight_payment
                 else:
@@ -3908,6 +4074,7 @@ class Economy:
                             take * region.prices.get(material, 0.0),
                             material_shares,
                             buyer_is_fund=True,
+                            units=take,
                         )
                 self.ledger.investment_spending += total_cost - credited
                 region.projects.append(

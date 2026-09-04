@@ -165,6 +165,19 @@ class ScenarioParameters:
     working_capital_days: float = 5.0
     bankruptcy_idle_days: int = 30
 
+    # --- firm-posted prices (docs/57) ---------------------------------------
+    #: Whether producers post their own prices, moved by their own cost
+    #: and the pool's pressure, with the authored price only where they
+    #: start.  Off by default and bit-identical off: the anchored rule of
+    #: docs/21 stands.
+    posted_prices: bool = False
+    #: The integral gain on the pool's pressure -- a fiftieth of the
+    #: anchored rule's proportional speed, for the reason docs/58 section
+    #: 2 records -- and the weight on a producer's own order fill against
+    #: its sector's.
+    posted_price_speed: float = 0.02
+    posted_share_gain: float = 1.0
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -1057,6 +1070,9 @@ def seeded_two_region_economy(
         producer_cash=parameters.producer_cash,
         working_capital_days=parameters.working_capital_days,
         bankruptcy_idle_days=parameters.bankruptcy_idle_days,
+        posted_prices=parameters.posted_prices,
+        posted_price_speed=parameters.posted_price_speed,
+        posted_share_gain=parameters.posted_share_gain,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1799,6 +1815,7 @@ def summary(economy: Economy) -> Dict[str, object]:
                     "capacity_per_day": round(region.capacity(key), 3),
                     "throughput_demand": round(region.throughput_demand(key), 3),
                     "unmet_demand": round(region.unmet_demand[key], 3),
+                    **_posted_report(economy, region, key),
                 }
                 for key in sorted(economy.commodities)
             },
@@ -1887,6 +1904,24 @@ def summary(economy: Economy) -> Dict[str, object]:
         # An observation beside the authored prices, never an input to them.
         "prices_of_production": _production_price_report(economy),
     }
+
+
+def _posted_report(economy: Economy, region: Region, commodity: str) -> Dict[str, object]:
+    """What each producer asks and its markup on its own cost (docs/57);
+    nothing while the anchored rule is in force."""
+    if not economy.posted_prices:
+        return {}
+    posted = {}
+    for producer in region.producers:
+        if producer.active and producer.commodity == commodity:
+            cost = producer.effective_unit_cost(region.prices)
+            posted[producer.name] = {
+                "posted_price": round(producer.posted_price, 4),
+                "markup_on_cost": (
+                    None if cost <= EPSILON else round(producer.posted_price / cost, 4)
+                ),
+            }
+    return {"posted": posted}
 
 
 def _production_price_report(economy: Economy) -> Dict[str, object] | None:
