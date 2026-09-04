@@ -7,6 +7,7 @@
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
 **Behavioral baseline:** `HEAD` (211 metrics; 22 of them the wage-deviation readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
+**Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
 **Sensitivity sweep, re-run:** `docs/45` (124 parameters, 0 refusals, ranked by reach)
 **Capital-goods design / results:** `docs/36`, `docs/37`
 **Capacity-exit design / results:** `docs/38`, `docs/39`
@@ -778,6 +779,9 @@ Locations:
   ledger mechanics;
 - `economy_lab/scenarios.py` — seeded scenarios;
 - `economy_lab/__main__.py` — JSON scenario runner;
+- `economy_lab/viewer/` — the browser viewer: `http.server` endpoints, one
+  JSON document per cached run, a standard-library Markdown renderer, and a
+  single page with hand-rolled SVG charts (docs/48, docs/49);
 - `tests/test_economy_lab.py` — behavioral and accounting tests;
 - `economy_lab/README.md` — current scope and commands;
 - `docs/06-stage0-economy-lab.md` — short design note;

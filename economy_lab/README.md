@@ -154,6 +154,17 @@ plain-text ranking; it is not part of per-commit testing:
 python -m economy_lab.sensitivity
 ```
 
+Open the laboratory in a browser (`docs/48`). The viewer runs any scenario
+with any parameter overridden, draws the history with the shock day
+marked, lays the five ledgers out apart, compares two runs as
+differences, browses the frozen metrics and the sweep's ranking, and
+renders every document in `docs/`. It reads; it cannot tune. Standard
+library on the server, plain HTML on the client, no dependency:
+
+```text
+python -m economy_lab.viewer
+```
+
 Run the acceptance tests:
 
 ```text
