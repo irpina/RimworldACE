@@ -199,6 +199,16 @@ class ScenarioParameters:
     entry_on_margin: bool = False
     entry_gain: float = 0.05
 
+    # --- exit on return (docs/64) ---------------------------------------------
+    #: Whether a producer whose return on its capacity -- margin times
+    #: utilization -- has been below the going one for the lead time
+    #: withdraws the capacity beyond ``capacity_reserve`` over the demand
+    #: it expects, ``exit_gain`` times how far below per interval.  Needs
+    #: procurement; off by default and bit-identical off.
+    exit_on_return: bool = False
+    capacity_reserve: float = 0.10
+    exit_gain: float = 1.0
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -1108,6 +1118,9 @@ def seeded_two_region_economy(
         idle_capacity_gain=parameters.idle_capacity_gain,
         entry_on_margin=parameters.entry_on_margin,
         entry_gain=parameters.entry_gain,
+        exit_on_return=parameters.exit_on_return,
+        capacity_reserve=parameters.capacity_reserve,
+        exit_gain=parameters.exit_gain,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1295,6 +1308,30 @@ def gravitation(
         going_margin=parameters.gravitation_margin,
     )
     return equilibrium(days, parameters=parameters)
+
+
+def complete_market(parameters: ScenarioParameters | None = None) -> ScenarioParameters:
+    """The market economy with entry and exit both on (docs/64): purses,
+    posted prices, procurement, entry on margin and exit on return, at
+    the default going margin."""
+    parameters = parameters or ScenarioParameters()
+    return replace(
+        parameters,
+        producer_cash=True,
+        posted_prices=True,
+        procurement=True,
+        entry_on_margin=True,
+        exit_on_return=True,
+    )
+
+
+def overshoot(
+    days_after_loss: int = 440, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The 60% capacity loss on the complete market, 500 days (docs/64
+    section 5): entry's pipeline overshoots the demand on its lead time,
+    and exit takes the surplus out."""
+    return producer_loss(days_after_loss, parameters=complete_market(parameters))
 
 
 def capacity_exit(

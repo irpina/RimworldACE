@@ -150,6 +150,7 @@ _DOCS: Dict[str, Tuple[int, ...]] = {
     "boom_reversal": (51, 52),
     "cash_circuit": (55, 56),
     "gravitation": (61, 62, 63),
+    "overshoot": (64,),
 }
 
 #: Shock days: an int, a parameter name, a callable, or None.
@@ -165,6 +166,7 @@ _SHOCKS: Dict[str, object] = {
     "demand_boom": 60,
     "wage_slump": 60,
     "boom_reversal": 60,
+    "overshoot": 60,
 }
 
 #: Measured once on the development machine; the page shows the tier, not
@@ -174,6 +176,7 @@ _SECONDS: Dict[str, float] = {
     "recreation_sweep": 0.5,
     "reserve_army_sweep": 0.6,
     "gravitation": 2.0,
+    "overshoot": 2.0,
 }
 
 _SWEEPS = ("recreation_sweep", "reserve_army_sweep")
@@ -200,6 +203,7 @@ _ORDER = (
     "boom_reversal",
     "cash_circuit",
     "gravitation",
+    "overshoot",
 )
 
 

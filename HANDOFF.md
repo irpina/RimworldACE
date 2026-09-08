@@ -1,6 +1,6 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-09-02  
+**Last updated:** 2026-09-08  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
@@ -12,6 +12,7 @@
 **Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
 **Procurement design / results / correction:** `docs/59`, `docs/60`, `docs/62` (built, off by default)
 **Entry on margin design / results:** `docs/61`, `docs/63` (built, off by default)
+**Exit on return design:** `docs/64` (rule built, off by default, NOT YET MEASURED — see "Handoff: exit in progress" below)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1915,11 +1916,80 @@ accruing to a project's worth. It brings the shortage's level below the
 market's own and then overshoots on its lead time, because nothing
 exits; with the going margin set inside the authored band
 (`gravitation`), every sector in both regions ends within 0.06 of it.
-**Exit is the next design.** The `docs/58` §5 oscillation
+**Exit is designed (`docs/64`) and its rule is built; measuring it is
+the open task — see the handoff section below.** The `docs/58` §5 oscillation
 turned out to be an entrant clamped to 18% of cost, corrected in
 `docs/58` §5a.
 
 ---
+
+## Handoff: exit in progress (2026-09-08)
+
+The session that built entry on margin ran out of context part-way
+through exit. State at the handoff commit:
+
+**Done and committed.**
+- `docs/64-exit-on-return-design.md`: the design, with predictions
+  6.1–6.9. Read it first; §1 records that the shortfall rule in
+  `_invest` reads the plan's throughput (input draws at *full* capacity)
+  and built 66 units of leaves capacity in the 500-day loss run, and §3
+  records that the seeded circuit cannot be stationary in *capacity*
+  under exit (tailors and herbalists hold 6.3× their demand) and says
+  which flows must stay bit-identical instead.
+- The rule in `economy_lab/model.py`, flag `exit_on_return` (needs
+  `procurement`), parameters `capacity_reserve` 0.10 and `exit_gain`
+  1.0: `Producer.below_going_days`, `Ledger.exits`,
+  `Economy._return_and_surplus`, `Economy._exit` (called before
+  `_invest` on the investment interval), the daily count beside the
+  expectation roll in `_update_posted_prices`, `_invest` reading the
+  sector's summed `expected_demand` under the flag, and `_retire`
+  factored out of `_bankrupt` (bit-identical: the baseline shows zero
+  deltas at 299 metrics and all 262 tests pass).
+- `economy_lab/scenarios.py`: `ScenarioParameters` fields
+  `exit_on_return`, `capacity_reserve`, `exit_gain`; `complete_market()`
+  (market + entry + exit at the default going margin); `overshoot()`
+  = `producer_loss(440, complete_market)`, 500 days.
+- CLI (`python -m economy_lab overshoot`), viewer catalog entry
+  `overshoot` (docs tuple `(64,)` — add 65 when the results document
+  exists), `tests/test_viewer.py` count 22.
+
+**Not done — the next session's task, in order.**
+1. Measure. A scratch script pattern: build with
+   `replace(ScenarioParameters(), producer_cash=True, posted_prices=True, procurement=True, entry_on_margin=True, exit_on_return=True)`
+   and read, per producer, capacity, `expected_demand`, posted margin and
+   `economy.ledger.exits`. Check each prediction of `docs/64` §6:
+   6.2 seed flows bit-identical to the entry run (price, inventory series
+   every commodity, both regions) with only tailors/herbalists/
+   provisioners capacity moving from day 45; 6.3/6.4 `overshoot()`;
+   6.5 `regional_glut(days_after_injection=240, ...)`; 6.6
+   `cost_competition`; 6.7 `gravitation(parameters=replace(..., exit_on_return=True))`;
+   6.8 `demand_boom`; 6.9 identities and `sum(exits) == capacity_lost`
+   gained.
+2. If a prediction fails, fix or record — `docs/64` §7 says which
+   finding each failure is. Do not tune to pass.
+3. Freeze `exit.*` metrics in `economy_lab/behavior.py` (`_exit_metrics`,
+   modelled on `_entry_metrics`, added to the `metrics.update` chain
+   before `_scale_metrics`), regenerate `behavior_baseline.json` (every
+   pre-existing metric must show zero delta; only new keys appear), and
+   fix the metric-count test if it reads the reference count.
+4. Tests: `ExitOnReturnTests` in `tests/test_economy_lab.py` after
+   `EntryOnMarginTests` (off-by-default and needs procurement; seed
+   flows bit-identical; overshoot capacity/producers; glut cycle;
+   gravitation with exit; identities).
+5. `docs/65-exit-on-return-results.md` in the form of `docs/63`
+   (headline, what shipped, held/wrong per prediction, what the rules
+   are now, carried forward, cost); catalog docs tuple to `(64, 65)`;
+   README run paragraph for `overshoot` and the "Intentionally absent"
+   bullet on competitive exit (`economy_lab/README.md` ~line 247) now
+   wrong; this file's header and paragraph.
+6. Small commits, each ending `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`;
+   push to `origin master`.
+
+**Standing rules that applied throughout:** no dependencies; no change
+to default model behaviour (`python -m economy_lab.baseline` zero
+deltas; `python -m unittest tests.test_economy_lab` green); design
+before build; runs above a few seconds launched deliberately; no
+decompiler.
 
 ## Working rules
 

@@ -19,6 +19,7 @@ from .scenarios import (
     regional_glut,
     reserve_depletion,
     gravitation,
+    overshoot,
     subsistence_shock,
     summary,
     technique_change,
@@ -41,6 +42,7 @@ SCENARIOS = {
     "capacity-exit": capacity_exit,
     "recreation-basket": recreation_basket,
     "gravitation": gravitation,
+    "overshoot": overshoot,
 }
 
 

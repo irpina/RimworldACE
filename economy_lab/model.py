@@ -331,6 +331,11 @@ class Producer:
         """What this producer sold yesterday plus what it was asked for
         after it ran out: the demand it saw (docs/62)."""
         return self.sales_yesterday + self.sellouts_yesterday
+    #: Consecutive days on which this producer's return on its capacity
+    #: has been below the going one with a surplus to withdraw (docs/64).
+    #: Exit begins when it reaches the investment lead time.  Zero and
+    #: unread while the rule is off.
+    below_going_days: int = 0
     #: Inputs bought and not yet used.  Production draws exactly what it
     #: uses from here, so a purchase a later input made surplus carries
     #: over rather than being booked as consumed (docs/60).
@@ -804,6 +809,10 @@ class Ledger:
     liquidity_curtailment: Dict[str, float] = field(default_factory=dict)
     fund_wage_support: Dict[str, float] = field(default_factory=dict)
     bankruptcies: List[Tuple[int, str, str]] = field(default_factory=list)
+    #: Exit (docs/64): capacity withdrawn because its return was below
+    #: the going one, as (day, region, producer, capacity).  Also booked
+    #: to ``capacity_lost``.  Empty unless the rule is on.
+    exits: List[Tuple[int, str, str, float]] = field(default_factory=list)
 
     def surplus_labor(self, region: str) -> float:
         """Living labor performed beyond the reproduction cost of labor-power."""
@@ -870,6 +879,9 @@ class Economy:
         idle_capacity_gain: float = 1.0,
         entry_on_margin: bool = False,
         entry_gain: float = 0.05,
+        exit_on_return: bool = False,
+        capacity_reserve: float = 0.10,
+        exit_gain: float = 1.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -973,6 +985,20 @@ class Economy:
             raise ValueError("entry_gain must be non-negative")
         self.entry_on_margin = entry_on_margin
         self.entry_gain = entry_gain
+        #: Whether a producer whose return on its capacity -- margin times
+        #: utilization, against the going margin -- has been below the
+        #: going one for the lead time withdraws the capacity beyond a
+        #: reserve over the demand it expects (docs/64).  Needs
+        #: procurement; off by default and bit-identical off.
+        if exit_on_return and not procurement:
+            raise ValueError("exit_on_return needs procurement switched on")
+        if capacity_reserve < 0.0:
+            raise ValueError("capacity_reserve must be non-negative")
+        if exit_gain < 0.0:
+            raise ValueError("exit_gain must be non-negative")
+        self.exit_on_return = exit_on_return
+        self.capacity_reserve = capacity_reserve
+        self.exit_gain = exit_gain
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -1109,6 +1135,8 @@ class Economy:
             self._settle_purses()
             self._update_expectations()
             if self.day % self.investment_interval_days == 0:
+                if self.exit_on_return:
+                    self._exit()
                 self._invest()
             self._record_history(final=index == days - 1)
 
@@ -3846,6 +3874,12 @@ class Economy:
             self.ledger.capacity_lost, producer.commodity, producer.capacity_per_day
         )
         self.ledger.bankruptcies.append((self.day, region.name, producer.name))
+        self._retire(region, producer)
+
+    def _retire(self, region: Region, producer: Producer) -> None:
+        """Take a producer out: no capacity, no purse, and what it held
+        is the fund's to sell.  Shared by bankruptcy (docs/55) and exit
+        (docs/64)."""
         producer.capacity_per_day = 0.0
         producer.active = False
         region.cash += producer.cash
@@ -3861,6 +3895,77 @@ class Economy:
                 if held > 0.0:
                     region.fund_stock[name] = region.fund_stock.get(name, 0.0) + held
                 producer.inputs_on_hand[name] = 0.0
+
+    # --------------------------------------------------------------- exit
+
+    def _return_and_surplus(
+        self, producer: Producer, cost: float
+    ) -> Tuple[float, float]:
+        """A producer's return on its capacity relative to the going one,
+        and the capacity it holds beyond a reserve over the demand it
+        expects (docs/64).
+
+        The return is the posted margin times the utilization the
+        producer's expected demand implies, over the going margin: a
+        producer earning the going margin on half its capacity earns half
+        the going return, because capital is advanced per unit of capacity
+        and the margin is earned per unit sold (docs/61 section 3).
+        """
+        process = producer.process
+        units = process.outputs.get(producer.commodity, 0.0)
+        full = process.runs_for(producer.capacity_per_day) * units
+        if full <= EPSILON or cost <= EPSILON or units <= EPSILON:
+            return 1.0, 0.0
+        utilization = min(1.0, producer.expected_demand / full)
+        margin = (producer.posted_price - cost) / cost
+        relative = utilization * margin / self.going_margin
+        wanted = (
+            producer.expected_demand
+            * (1.0 + self.capacity_reserve)
+            * process.capacity_per_run
+            / units
+        )
+        return relative, producer.capacity_per_day - wanted
+
+    def _exit(self) -> None:
+        """Capital leaves a sector that cannot earn the going return
+        (docs/64).
+
+        Every investment interval, a producer whose return has been below
+        the going one, with a surplus to withdraw, for the investment lead
+        time takes out ``exit_gain × (1 − r)`` of its surplus: proportional
+        to how far below, geometric toward the reserve, and nothing at the
+        going return.  A plant the withdrawal would leave smaller than the
+        smallest the fund would build is retired entirely, its purse and
+        stock returning to the fund as a bankrupt's do.  Nothing comes
+        back: construction was a sink and exit returns no silver.
+        """
+        for region in self.regions.values():
+            for producer in region.producers:
+                if not producer.active:
+                    continue
+                if producer.below_going_days < self.investment_lead_days:
+                    continue
+                relative, surplus = self._return_and_surplus(
+                    producer, producer.effective_unit_cost(region.prices)
+                )
+                if relative >= 1.0 or surplus <= EPSILON:
+                    continue
+                withdrawn = min(surplus, self.exit_gain * (1.0 - relative) * surplus)
+                if withdrawn <= 0.0:
+                    continue
+                remaining = producer.capacity_per_day - withdrawn
+                if remaining < self.min_investment_capacity:
+                    withdrawn = producer.capacity_per_day
+                    remaining = 0.0
+                Ledger.add(self.ledger.capacity_lost, producer.commodity, withdrawn)
+                self.ledger.exits.append(
+                    (self.day, region.name, producer.name, withdrawn)
+                )
+                if remaining <= 0.0:
+                    self._retire(region, producer)
+                else:
+                    producer.capacity_per_day = remaining
 
     # -------------------------------------------------------- procurement
 
@@ -4558,6 +4663,16 @@ class Economy:
                         p.sales_today = 0.0
                         p.sellouts_yesterday = p.sellouts_today
                         p.sellouts_today = 0.0
+                        if self.exit_on_return:
+                            # A day below the going return with a surplus
+                            # to withdraw counts toward exit (docs/64).
+                            below, surplus = self._return_and_surplus(
+                                p, costs[id(p)]
+                            )
+                            if below < 1.0 and surplus > EPSILON:
+                                p.below_going_days += 1
+                            else:
+                                p.below_going_days = 0
                     region.fund_sales_today[name] = 0.0
                     self._reprice_fund(region, commodity)
                 else:
@@ -4764,6 +4879,19 @@ class Economy:
                 # would never attract replacement capacity, because nobody
                 # eats it.
                 demand = self._throughput[region.name][name]
+                if self.exit_on_return:
+                    # The market's demand, not the plan's throughput: the
+                    # sum of what the sector's producers expect.  The
+                    # plan's number is every input draw at full capacity,
+                    # and it rebuilds whatever exit withdraws wherever the
+                    # price is above the reference (docs/64 section 1).
+                    seen = sum(
+                        p.expected_demand
+                        for p in region.producers
+                        if p.active and p.commodity == name
+                    )
+                    if seen > EPSILON:
+                        demand = seen
                 if demand <= 0 or name not in self.known_processes:
                     continue
                 existing = region.capacity(name)
