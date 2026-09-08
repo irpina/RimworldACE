@@ -190,6 +190,86 @@
       "unit": "silver",
       "value": 21.349351
     },
+    "entry.boom.employment_end": {
+      "unit": "worker-days",
+      "value": 0.482159
+    },
+    "entry.cost_competition.cheap_technique_share": {
+      "unit": "fraction",
+      "value": 0.628449
+    },
+    "entry.cost_competition.meals_price_end": {
+      "unit": "silver",
+      "value": 9.492127
+    },
+    "entry.cost_competition.sellers_end": {
+      "unit": "producers",
+      "value": 3.0
+    },
+    "entry.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "entry.glut.end_over_reference": {
+      "unit": "ratio",
+      "value": 0.997167
+    },
+    "entry.gravitation.chemfuel_margin_end": {
+      "unit": "ratio",
+      "value": 0.241729
+    },
+    "entry.gravitation.leaves_margin_end": {
+      "unit": "ratio",
+      "value": 0.296608
+    },
+    "entry.gravitation.meals_margin_end": {
+      "unit": "ratio",
+      "value": 0.289716
+    },
+    "entry.gravitation.meals_price_end": {
+      "unit": "silver",
+      "value": 13.515931
+    },
+    "entry.gravitation.yayo_last60_range_over_level": {
+      "unit": "ratio",
+      "value": 0.000126
+    },
+    "entry.gravitation.yayo_margin_end": {
+      "unit": "ratio",
+      "value": 0.297316
+    },
+    "entry.gravitation.yayo_price_end": {
+      "unit": "silver",
+      "value": 19.010693
+    },
+    "entry.gravitation.yayo_producers_end": {
+      "unit": "producers",
+      "value": 6.0
+    },
+    "entry.producer_loss.capacity_end": {
+      "unit": "units/day",
+      "value": 17.3101
+    },
+    "entry.producer_loss.end_over_reference": {
+      "unit": "ratio",
+      "value": 1.106886
+    },
+    "entry.producer_loss.peak_over_reference": {
+      "unit": "ratio",
+      "value": 1.450599
+    },
+    "entry.producer_loss.producers_end": {
+      "unit": "producers",
+      "value": 8.0
+    },
+    "entry.subsistence.meals_end_over_reference": {
+      "unit": "ratio",
+      "value": 1.206853
+    },
+    "entry.subsistence.meals_producers_end": {
+      "unit": "producers",
+      "value": 6.0
+    },
     "equilibrium.advance.commodity_share": {
       "unit": "fraction",
       "value": 0.96344

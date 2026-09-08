@@ -29,6 +29,7 @@ from economy_lab.scenarios import (
     capital_goods,
     circuit_processes,
     cost_competition,
+    gravitation,
     demand_boom,
     equilibrium,
     generous_basket,
@@ -3850,3 +3851,127 @@ class ProcurementTests(unittest.TestCase):
         for producer in economy.regions["Dust Basin"].producers:
             if producer.commodity == MEALS:
                 self.assertGreater(producer.posted_price, 10.0)
+
+
+class EntryOnMarginTests(unittest.TestCase):
+    """Capital enters a sector because it is profitable, not because it is
+    short (docs/61, docs/63), on the corrected market (docs/62).  Off by
+    default and bit-identical off; at the default going margin nothing
+    seeded fires it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.market = replace(
+            ScenarioParameters(), producer_cash=True, posted_prices=True, procurement=True
+        )
+        cls.entry = replace(cls.market, entry_on_margin=True)
+
+    def test_off_by_default_and_silent_where_no_margin_exceeds_the_going_one(self):
+        """docs/61 s6.1 and s6.2: the seeded circuit and the glut are the
+        market's own runs, to the bit."""
+        self.assertFalse(ScenarioParameters().entry_on_margin)
+        for fn in (equilibrium, regional_glut):
+            with self.subTest(scenario=fn.__name__):
+                market = fn(parameters=self.market)
+                entry = fn(parameters=self.entry)
+                for name in market.commodities:
+                    self.assertEqual(
+                        market.series("Dust Basin", name), entry.series("Dust Basin", name)
+                    )
+                self.assertFalse(any(entry.regions["Dust Basin"].entry_backlog.values()))
+
+    def test_a_shortage_draws_entry_that_brings_the_level_below_the_market(self):
+        """docs/61 s6.3 at the horizon it set; docs/63 s3 for what the
+        pipeline does beyond it."""
+        market = producer_loss(parameters=self.market)
+        entry = producer_loss(parameters=self.entry)
+        prices = entry.series("Dust Basin", YAYO)
+        self.assertGreater(
+            entry.regions["Dust Basin"].capacity(YAYO), market.regions["Dust Basin"].capacity(YAYO)
+        )
+        self.assertLess(prices[-1], market.series("Dust Basin", YAYO)[-1])
+        self.assertGreater(prices[-1], 21.0 * 1.05)
+        self.assertLess(prices[-1], 21.0 * 1.28)
+
+    def test_a_cost_advantage_draws_an_entrant_that_copies_it(self):
+        """docs/61 s6.5: the entrant uses the best technique in the sector."""
+        economy = cost_competition(parameters=self.entry)
+        region = economy.regions["Dust Basin"]
+        sellers = [p for p in region.producers if p.active and p.commodity == MEALS]
+        self.assertEqual(len(sellers), 3)
+        cheapest = min(sellers, key=lambda p: p.effective_unit_cost(region.prices))
+        entrant = next(p for p in sellers if p.name.startswith("entrant-"))
+        self.assertEqual(entrant.unit_cost, cheapest.unit_cost)
+        self.assertIs(entrant.process, cheapest.process)
+        cheap_cost = cheapest.effective_unit_cost(region.prices)
+        cheap_sales = sum(
+            p.sales_yesterday
+            for p in sellers
+            if abs(p.effective_unit_cost(region.prices) - cheap_cost) < 1e-6
+        )
+        self.assertGreater(cheap_sales / sum(p.sales_yesterday for p in sellers), 0.6)
+        self.assertLess(region.prices[MEALS], 11.0)
+        self.assertLess(
+            region.prices[MEALS], cost_competition(parameters=self.market).regions["Dust Basin"].prices[MEALS]
+        )
+
+    def test_entry_accrues_to_a_project_in_a_small_sector(self):
+        """docs/63 s1: a sector of two-thirds of a unit a day, with no
+        shortfall, is not barred by the minimum project size; one
+        interval's term is below it and the intention accrues."""
+        economy = cost_competition(parameters=self.entry)
+        region = economy.regions["Dust Basin"]
+        provisioners = [p for p in region.producers if p.active and p.commodity == MEALS]
+        entrants = [p for p in provisioners if p.name.startswith("entrant-")]
+        self.assertEqual(len(entrants), 1)
+        incumbents = [p for p in provisioners if p not in entrants]
+        self.assertGreaterEqual(
+            sum(p.capacity_per_day for p in incumbents), economy.throughput("Dust Basin", MEALS)
+        )
+        best = min(p.effective_unit_cost(region.prices) for p in incumbents)
+        margin = (region.expected_prices[MEALS] - best) / best
+        one_interval = (
+            economy.entry_gain
+            * economy.throughput("Dust Basin", MEALS)
+            * max(0.0, margin - economy.going_margin)
+            / economy.going_margin
+        )
+        self.assertLess(one_interval, economy.min_investment_capacity)
+        self.assertGreaterEqual(entrants[0].capacity_per_day, economy.min_investment_capacity)
+
+    def test_gravitation_to_the_going_margin(self):
+        """docs/61 s6.7: with the going margin inside the authored band,
+        every sector in both regions ends near it -- the full-capacity
+        sectors by entry, the idle ones by their own cut -- and the
+        prices are still."""
+        economy = gravitation()
+        going = economy.going_margin
+        for region in economy.regions.values():
+            for name in economy.commodities:
+                active = [p for p in region.producers if p.active and p.commodity == name]
+                best = min(p.effective_unit_cost(region.prices) for p in active)
+                with self.subTest(region=region.name, commodity=name):
+                    self.assertLess(abs((region.prices[name] - best) / best - going), 0.07)
+                    prices = economy.series(region.name, name)
+                    self.assertLess(
+                        (max(prices[-60:]) - min(prices[-60:])) / prices[-1], 0.01
+                    )
+        region = economy.regions["Dust Basin"]
+        self.assertGreater(sum(1 for p in region.producers if p.active and p.commodity == YAYO), 1)
+        self.assertEqual(sum(1 for p in region.producers if p.active and p.commodity == MEALS), 1)
+
+    def test_the_identities_close(self):
+        """docs/61 s6.8."""
+        runs = {
+            "loss": producer_loss(parameters=self.entry),
+            "competition": cost_competition(parameters=self.entry),
+            "gravitation": gravitation(),
+        }
+        for label, economy in runs.items():
+            with self.subTest(scenario=label):
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-5)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)
+

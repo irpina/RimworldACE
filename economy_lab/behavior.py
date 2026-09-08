@@ -17,6 +17,7 @@ from .scenarios import (
     CHEMFUEL,
     COMPONENTS,
     equilibrium,
+    gravitation,
     LEAVES,
     cost_competition,
     demand_boom,
@@ -221,6 +222,7 @@ def collect_behavioral_metrics(
     metrics.update(_producer_cash_metrics(parameters))
     metrics.update(_posted_price_metrics(parameters))
     metrics.update(_procurement_metrics(parameters))
+    metrics.update(_entry_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -1003,6 +1005,129 @@ def _procurement_metrics(
         ),
         "procurement.subsistence.basket_shortfall": _metric(
             shock.ledger.basket_shortfall.get(LOCAL_REGION, 0.0), "units"
+        ),
+    }
+
+
+def _entry_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Entry on margin (docs/61, docs/63), on the corrected market (docs/62).
+
+    Frozen: that the flag changes nothing where no margin exceeds the
+    going one; what capital entering a profitable sector does to the
+    shortage's level and to a cost advantage; and where the authored
+    price structure goes when the going margin is set inside it.  Beside
+    each reading is the market's own, because the difference is what
+    entry adds to a market that already gravitates from above.
+    """
+    market = replace(
+        parameters, producer_cash=True, posted_prices=True, procurement=True
+    )
+    entry = replace(market, entry_on_margin=True)
+    stationary = equilibrium(parameters=entry)
+    glut = regional_glut(parameters=entry)
+    loss = producer_loss(parameters=entry)
+    boom = demand_boom(parameters=entry)
+    competition = cost_competition(parameters=entry)
+    shock = subsistence_shock(parameters=entry)
+    gravity = gravitation(parameters=parameters)
+    reference = parameters.reference_price
+
+    def sellers(economy: Economy, commodity: str):
+        return [
+            p
+            for p in economy.regions[LOCAL_REGION].producers
+            if p.active and p.commodity == commodity
+        ]
+
+    def cheap_share(economy: Economy) -> float:
+        region = economy.regions[LOCAL_REGION]
+        provisioners = sellers(economy, MEALS)
+        cheapest = min(p.effective_unit_cost(region.prices) for p in provisioners)
+        total = sum(p.sales_yesterday for p in provisioners)
+        if total <= 1e-9:
+            return 0.0
+        return (
+            sum(
+                p.sales_yesterday
+                for p in provisioners
+                if abs(p.effective_unit_cost(region.prices) - cheapest) < 1e-6
+            )
+            / total
+        )
+
+    def margin(economy: Economy, commodity: str) -> float:
+        region = economy.regions[LOCAL_REGION]
+        best = min(p.effective_unit_cost(region.prices) for p in sellers(economy, commodity))
+        return (region.prices[commodity] - best) / best
+
+    stationary_prices = stationary.series(LOCAL_REGION, YAYO)
+    glut_prices = glut.series(LOCAL_REGION, YAYO)
+    loss_prices = loss.series(LOCAL_REGION, YAYO)
+    gravity_yayo = gravity.series(LOCAL_REGION, YAYO)
+    return {
+        "entry.equilibrium.price_range": _metric(
+            max(stationary_prices) - min(stationary_prices), "silver"
+        ),
+        # A glut never fires the rule: the same run as the market's.
+        "entry.glut.end_over_reference": _metric(glut_prices[-1] / reference, "ratio"),
+        # The shortage: capital enters at the margin, the level comes down
+        # below the market's, and the capacity built overshoots demand.
+        "entry.producer_loss.peak_over_reference": _metric(
+            max(loss_prices) / reference, "ratio"
+        ),
+        "entry.producer_loss.end_over_reference": _metric(
+            loss_prices[-1] / reference, "ratio"
+        ),
+        "entry.producer_loss.capacity_end": _metric(
+            loss.regions[LOCAL_REGION].capacity(YAYO), "units/day"
+        ),
+        "entry.producer_loss.producers_end": _metric(
+            float(len(sellers(loss, YAYO))), "producers"
+        ),
+        "entry.boom.employment_end": _metric(
+            boom.regions[LOCAL_REGION].worker_days_earned, "worker-days"
+        ),
+        # A cost advantage draws entry that copies it.
+        "entry.cost_competition.meals_price_end": _metric(
+            competition.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "entry.cost_competition.cheap_technique_share": _metric(
+            cheap_share(competition), "fraction"
+        ),
+        "entry.cost_competition.sellers_end": _metric(
+            float(len(sellers(competition, MEALS))), "producers"
+        ),
+        # A sector of two-thirds of a unit a day is reached by the backlog.
+        "entry.subsistence.meals_producers_end": _metric(
+            float(len(sellers(shock, MEALS))), "producers"
+        ),
+        "entry.subsistence.meals_end_over_reference": _metric(
+            shock.regions[LOCAL_REGION].prices[MEALS] / parameters.meal_reference_price,
+            "ratio",
+        ),
+        # Gravitation: the going margin set inside the authored band.
+        "entry.gravitation.yayo_margin_end": _metric(margin(gravity, YAYO), "ratio"),
+        "entry.gravitation.leaves_margin_end": _metric(
+            margin(gravity, LEAVES), "ratio"
+        ),
+        "entry.gravitation.chemfuel_margin_end": _metric(
+            margin(gravity, CHEMFUEL), "ratio"
+        ),
+        "entry.gravitation.meals_margin_end": _metric(margin(gravity, MEALS), "ratio"),
+        "entry.gravitation.yayo_producers_end": _metric(
+            float(len(sellers(gravity, YAYO))), "producers"
+        ),
+        "entry.gravitation.yayo_price_end": _metric(
+            gravity.regions[LOCAL_REGION].prices[YAYO], "silver"
+        ),
+        "entry.gravitation.meals_price_end": _metric(
+            gravity.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "entry.gravitation.yayo_last60_range_over_level": _metric(
+            (max(gravity_yayo[-60:]) - min(gravity_yayo[-60:])) / gravity_yayo[-1],
+            "ratio",
         ),
     }
 

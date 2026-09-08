@@ -5,13 +5,13 @@
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
-**Behavioral baseline:** `HEAD` (280 metrics; 22 wage-deviation, 20 habituation, 20 producer-cash, 12 posted-price and 17 procurement readings)
+**Behavioral baseline:** `HEAD` (299 metrics; 22 wage-deviation, 20 habituation, 20 producer-cash, 12 posted-price, 17 procurement and 19 entry-on-margin readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
 **Habituation design / results:** `docs/51`, `docs/52`
 **Producer-level cash design / results:** `docs/55`, `docs/56`
 **Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
 **Procurement design / results / correction:** `docs/59`, `docs/60`, `docs/62` (built, off by default)
-**Entry on margin design:** `docs/61`
+**Entry on margin design / results:** `docs/61`, `docs/63` (built, off by default)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1907,8 +1907,15 @@ seller can serve, sell-outs restart a dry sector, and idle capacity with
 a margin above a going one (`going_margin`, 0.50) cuts. The corrected
 market gravitates from above: the glut returns to the reference, the
 shortage settles within 2% of it, and a cost advantage is used down to
-cost plus the going margin. **Entry on margin (`docs/61`) is the capacity
-side of the same signal**, being built next. The `docs/58` §5 oscillation
+cost plus the going margin. Entry on margin (`docs/61`, `docs/63`) is the
+capacity side of the same signal, built and off by default: capital
+enters where the expected price clears the best technique's cost by more
+than the going margin, copying that technique, with the intention
+accruing to a project's worth. It brings the shortage's level below the
+market's own and then overshoots on its lead time, because nothing
+exits; with the going margin set inside the authored band
+(`gravitation`), every sector in both regions ends within 0.06 of it.
+**Exit is the next design.** The `docs/58` §5 oscillation
 turned out to be an entrant clamped to 18% of cost, corrected in
 `docs/58` §5a.
 

@@ -154,6 +154,15 @@ plain-text ranking; it is not part of per-commit testing:
 python -m economy_lab.sensitivity
 ```
 
+Run the gravitation scenario: the market economy with the going margin
+set inside the band the authored prices give, so capital enters every
+sector above it and idle capacity cuts, and the authored price structure
+goes where the going margin sends it (`docs/61`, `docs/63`):
+
+```text
+python -m economy_lab gravitation
+```
+
 Open the laboratory in a browser (`docs/48`). The viewer runs any scenario
 with any parameter overridden, draws the history with the shock day
 marked, lays the five ledgers out apart, compares two runs as
@@ -265,8 +274,10 @@ markup rather than a rate of profit.
   docs/60, corrected in docs/62, off by default). With every stock target
   the inventory life of its producer's own expected demand, and idle
   capacity cutting above a going margin, the market gravitates from
-  above; entry on margin (docs/61) is the capacity side of the same
-  signal;
+  above; entry on margin (docs/61, docs/63, off by default) is the
+  capacity side of the same signal, and with the going margin set inside
+  the authored band every sector ends at it. What is still absent is
+  exit, so entry overshoots on its lead time and the capacity stays;
 - more than six commodities or two regions;
 - RimWorld runtime integration.
 
