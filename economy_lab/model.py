@@ -301,6 +301,21 @@ class Producer:
     #: less when custom went elsewhere.  A producer below its sector's
     #: average fill cuts what it asks.
     order_fill: float = 1.0
+    #: Procurement (docs/59): the producer's own stock of its output, what
+    #: it sold today and yesterday, and sales taken in a market pass but
+    #: not yet applied to the stock, so a day's sales come off in one
+    #: subtraction the way the pool's did.
+    stock: float = 0.0
+    sales_today: float = 0.0
+    sales_yesterday: float = 0.0
+    pending_out: float = 0.0
+    #: Demand a buyer brought to this seller after its stock ran out
+    #: today: the sell-out that tells a producer to ask more (docs/60).
+    sellouts_today: float = 0.0
+    #: Inputs bought and not yet used.  Production draws exactly what it
+    #: uses from here, so a purchase a later input made surplus carries
+    #: over rather than being booked as consumed (docs/60).
+    inputs_on_hand: Dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.process is None:
@@ -476,6 +491,15 @@ class Region:
     #: wage is untouched by it.  One at seeding, and every place it enters
     #: is skipped rather than multiplied by one while it stays there.
     habitual_scale: float = 1.0
+    #: Procurement (docs/59): stock the owners' fund holds -- imports, and
+    #: what a scenario injects -- and sells on at the regional price.
+    fund_stock: Dict[str, float] = field(default_factory=dict)
+    fund_pending: Dict[str, float] = field(default_factory=dict)
+    #: What the fund asks for what it holds, and what it sold today.  The
+    #: fund wants to hold nothing, so its price falls while it has stock
+    #: and resets to the going price when it has none (docs/60).
+    fund_price: Dict[str, float] = field(default_factory=dict)
+    fund_sales_today: Dict[str, float] = field(default_factory=dict)
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -819,6 +843,7 @@ class Economy:
         posted_prices: bool = False,
         posted_price_speed: float = 0.02,
         posted_share_gain: float = 1.0,
+        procurement: bool = False,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -895,6 +920,14 @@ class Economy:
             raise ValueError("posted_price_speed must be non-negative")
         self.posted_price_speed = posted_price_speed
         self.posted_share_gain = posted_share_gain
+        #: Whether producers own their output and buy their inputs from
+        #: each other at posted prices (docs/59).  Needs purses to pay
+        #: from and prices to ask; off by default and bit-identical off.
+        if procurement and not (producer_cash and posted_prices):
+            raise ValueError(
+                "procurement needs producer_cash and posted_prices switched on"
+            )
+        self.procurement = procurement
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -994,6 +1027,8 @@ class Economy:
             self._seed_purses()
         if self.posted_prices:
             self._seed_posted_prices()
+        if self.procurement:
+            self._seed_stocks()
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -1013,8 +1048,13 @@ class Economy:
             # anchor below (docs/21).
             self._update_cost_ratios()
             self._track_differential_rent()
-            self._consume()
-            self._workers_consume()
+            if self.procurement:
+                # The fund and the workers buy from producers' own stocks
+                # (docs/59), in place of the pool's two consumption passes.
+                self._final_market()
+            else:
+                self._consume()
+                self._workers_consume()
             self._update_prices()
             self._dispatch_arbitrage()
             # Purses above their working capital hand the rest to the
@@ -1039,7 +1079,13 @@ class Economy:
     def inject(self, region: str, commodity: str, quantity: float) -> None:
         if quantity < 0:
             raise ValueError("injection quantity must be non-negative")
-        self.regions[region].inventory[commodity] += quantity
+        if self.procurement:
+            # What arrives from outside is the fund's to sell (docs/59).
+            target = self.regions[region]
+            target.fund_stock[commodity] = target.fund_stock.get(commodity, 0.0) + quantity
+            self._sync_inventory(target)
+        else:
+            self.regions[region].inventory[commodity] += quantity
         Ledger.add(self.ledger.external_injections, commodity, quantity)
 
     def destroy_capacity(
@@ -2168,7 +2214,16 @@ class Economy:
                 pending.append(shipment)
                 continue
             destination = self.regions[shipment.destination]
-            destination.inventory[shipment.commodity] += shipment.quantity
+            if self.procurement:
+                # An import is the fund's stock, sold on at the regional
+                # price (docs/59).
+                destination.fund_stock[shipment.commodity] = (
+                    destination.fund_stock.get(shipment.commodity, 0.0)
+                    + shipment.quantity
+                )
+                self._sync_inventory(destination)
+            else:
+                destination.inventory[shipment.commodity] += shipment.quantity
             destination.imported_total[shipment.commodity] += shipment.quantity
         self.shipments = pending
 
@@ -2221,45 +2276,14 @@ class Economy:
         # Read by _track_differential_rent after all regions have produced.
         self._daily_extraction: Dict[Tuple[str, str], float] = {}
 
+        if self.procurement:
+            for region in self.regions.values():
+                self._produce_procurement(region)
+            return
+
         for region in self.regions.values():
-            # Unmet demand is rebuilt from scratch each day. Production adds
-            # input shortfalls, consumption adds final shortfalls.
-            for name in self.commodities:
-                region.unmet_demand[name] = 0.0
-
-            # Update extraction unit costs from current marginal grade.
-            for name, reserve in region.reserves.items():
-                marginal = reserve.marginal_cost()
-                for producer in region.producers:
-                    if producer.active and producer.commodity == name:
-                        producer.unit_cost = marginal
-
-            # Refreshed daily for every producer, so a producer added by any
-            # path — seeding, an investment project, or a scenario reaching
-            # in directly — always carries the capital its technique implies.
-            for producer in region.producers:
-                if producer.active:
-                    self._set_capital_consumption(producer, region)
-
-            # Yesterday's employment moves today's wage premium, and only
-            # then is the day's labor priced (docs/46).  A sustained premium
-            # then moves the habitual standard, which prices nothing today
-            # but is what the value of labor-power reads (docs/51).
-            self._bargain(region)
-            self._habituate(region)
-            self._update_wage_costs(region)
-
+            active = self._open_region_day(region)
             opening = dict(region.inventory)
-            active = sorted(
-                (
-                p
-                for p in region.producers
-                if p.active
-                and p.capacity_per_day > 0
-                and p.commodity in self.commodities
-                ),
-                key=lambda p: (p.name, p.commodity),
-            )
             desired = {
                 id(p): p.desired_runs(region.prices[p.commodity], region.prices) for p in active
             }
@@ -2486,11 +2510,78 @@ class Economy:
                 if shortfall > EPSILON:
                     region.unmet_demand[name] += shortfall
 
-            # The wage relation (docs/17).  Employment is quantized to an
-            # exact binary grid so that the daily basket flow adds to and
-            # subtracts from inventory without rounding — the equilibrium
-            # must stay exact to the bit.  Wages are paid on labor actually
-            # performed, at the basket's cost at current prices.
+            self._settle_labor(region, active, labor_by_producer, labor_performed)
+
+    def _open_region_day(self, region: Region) -> List[Producer]:
+        """The steps every day opens with, whichever path produces.
+
+        Unmet demand is rebuilt from scratch each day; extraction costs read
+        the marginal grade; every producer's capital consumption is
+        refreshed; yesterday's employment moves the premium and the
+        standard; and the day's labor is priced.  Returns the active
+        producers in the order every pass over them uses.
+        """
+        for name in self.commodities:
+            region.unmet_demand[name] = 0.0
+
+        # Update extraction unit costs from current marginal grade.
+        for name, reserve in region.reserves.items():
+            marginal = reserve.marginal_cost()
+            for producer in region.producers:
+                if producer.active and producer.commodity == name:
+                    producer.unit_cost = marginal
+
+        # Refreshed daily for every producer, so a producer added by any
+        # path — seeding, an investment project, or a scenario reaching
+        # in directly — always carries the capital its technique implies.
+        for producer in region.producers:
+            if producer.active:
+                self._set_capital_consumption(producer, region)
+
+        # Yesterday's employment moves today's wage premium, and only
+        # then is the day's labor priced (docs/46).  A sustained premium
+        # then moves the habitual standard, which prices nothing today
+        # but is what the value of labor-power reads (docs/51).
+        self._bargain(region)
+        self._habituate(region)
+        self._update_wage_costs(region)
+
+        if self.posted_prices:
+            # A producer that arrived without a price -- an entrant, or one
+            # a scenario appended -- asks the going price from its first
+            # day.  Before this it was clamped to 18% of its cost, which is
+            # the defect docs/58 section 5 mistook for a finding.
+            for producer in region.producers:
+                if producer.active and producer.posted_price <= 0.0:
+                    producer.posted_price = region.prices[producer.commodity]
+                    producer.last_cost = producer.effective_unit_cost(region.prices)
+
+        return sorted(
+            (
+                p
+                for p in region.producers
+                if p.active
+                and p.capacity_per_day > 0
+                and p.commodity in self.commodities
+            ),
+            key=lambda p: (p.name, p.commodity),
+        )
+
+    def _settle_labor(
+        self,
+        region: Region,
+        active: List[Producer],
+        labor_by_producer: Dict[int, float],
+        labor_performed: float,
+    ) -> None:
+        """The wage relation (docs/17), after the day's labor is known.
+
+        Employment is quantized to an exact binary grid so that the daily
+        basket flow adds to and subtracts from inventory without rounding —
+        the equilibrium must stay exact to the bit.  Wages are paid on labor
+        actually performed, at the basket's cost at current prices.
+        """
+        if True:
             if self.employment_quantum > 0.0:
                 worker_days = (
                     floor(
@@ -3684,6 +3775,556 @@ class Economy:
         producer.active = False
         region.cash += producer.cash
         producer.cash = 0.0
+        if self.procurement:
+            # What it held is the fund's to sell.
+            if producer.stock > 0.0:
+                region.fund_stock[producer.commodity] = (
+                    region.fund_stock.get(producer.commodity, 0.0) + producer.stock
+                )
+                producer.stock = 0.0
+            for name, held in list(producer.inputs_on_hand.items()):
+                if held > 0.0:
+                    region.fund_stock[name] = region.fund_stock.get(name, 0.0) + held
+                producer.inputs_on_hand[name] = 0.0
+
+    # -------------------------------------------------------- procurement
+
+    class _WorkerPurse:
+        """The workers' silver, addressed like any other purse."""
+
+        def __init__(self, region: Region) -> None:
+            self.region = region
+
+        @property
+        def cash(self) -> float:
+            return self.region.worker_cash
+
+        @cash.setter
+        def cash(self, value: float) -> None:
+            self.region.worker_cash = value
+
+    def _seed_stocks(self) -> None:
+        """Place the seeded pool in producers' hands (docs/59 section 3).
+
+        Each commodity's stock goes to its producers by capacity share --
+        whole, to the one producer every seeded sector has -- and anything
+        nobody here makes is the fund's.  The region's inventory reads the
+        same total it did.
+        """
+        for region in self.regions.values():
+            for name in self.commodities:
+                held = region.inventory.get(name, 0.0)
+                producers = [
+                    p for p in region.producers if p.active and p.commodity == name
+                ]
+                total = sum(p.capacity_per_day for p in producers)
+                if not producers or total <= EPSILON:
+                    region.fund_stock[name] = held
+                    continue
+                if len(producers) == 1:
+                    producers[0].stock = held
+                else:
+                    for producer in producers:
+                        producer.stock = held * (producer.capacity_per_day / total)
+            self._sync_inventory(region)
+
+    def _sync_inventory(self, region: Region) -> None:
+        """The region's inventory is what its producers and its fund hold."""
+        for name in self.commodities:
+            total = 0.0
+            for producer in region.producers:
+                # A destroyed producer's stock is still stock, and so is
+                # an input bought and not yet used.
+                if producer.commodity == name and producer.stock != 0.0:
+                    total += producer.stock
+                held = producer.inputs_on_hand.get(name, 0.0)
+                if held != 0.0:
+                    total += held
+            fund = region.fund_stock.get(name, 0.0)
+            if fund != 0.0:
+                total += fund
+            region.inventory[name] = total
+
+    def _offers(self, region: Region, name: str) -> List[Tuple[float, int, str, object]]:
+        """Who is selling a commodity here, cheapest first.
+
+        Producers at what they ask, the fund at the regional price, ties
+        broken by name so the walk is the same walk every day.  A seller is
+        listed with what it still has after the sales already taken in this
+        pass.
+        """
+        offers: List[Tuple[float, int, str, object]] = []
+        for producer in region.producers:
+            if producer.commodity != name:
+                continue
+            # A producer that has stopped still sells what it holds.
+            if producer.stock - producer.pending_out > EPSILON:
+                offers.append((producer.posted_price, 0, producer.name, producer))
+        held = region.fund_stock.get(name, 0.0) - region.fund_pending.get(name, 0.0)
+        if held > EPSILON:
+            offers.append(
+                (region.fund_price.get(name, region.prices[name]), 1, "", None)
+            )
+        offers.sort(key=lambda offer: (offer[0], offer[1], offer[2]))
+        return offers
+
+    def _available(self, region: Region, name: str) -> float:
+        total = 0.0
+        for _, kind, _, seller in self._offers(region, name):
+            if kind == 0:
+                total += seller.stock - seller.pending_out
+            else:
+                total += region.fund_stock.get(name, 0.0) - region.fund_pending.get(name, 0.0)
+        return total
+
+    def _quote(self, region: Region, name: str, units: float) -> float:
+        """What buying this many units would cost, cheapest first, before
+        any purse is consulted."""
+        remaining = units
+        cost = 0.0
+        for price, kind, _, seller in self._offers(region, name):
+            if remaining <= EPSILON:
+                break
+            held = (
+                seller.stock - seller.pending_out
+                if kind == 0
+                else region.fund_stock.get(name, 0.0) - region.fund_pending.get(name, 0.0)
+            )
+            take = min(remaining, held)
+            cost += take * price
+            remaining -= take
+        return cost
+
+    def _buy(
+        self, region: Region, name: str, units: float, payer: object
+    ) -> Tuple[float, float]:
+        """Buy up to ``units`` from the cheapest sellers the payer can afford.
+
+        The sale is taken -- the seller's pending outflow and the silver
+        move now -- and applied to the seller's stock in one subtraction at
+        the end of the pass.  Returns what was bought and what was paid.
+        A fund buying its own stock moves no silver.
+        """
+        remaining = units
+        bought = 0.0
+        paid = 0.0
+        if units <= EPSILON:
+            return 0.0, 0.0
+        offers = self._offers(region, name)
+        if not offers:
+            return 0.0, 0.0
+        # Custom goes to the cheaper seller *continuously* (docs/21's rule,
+        # applied to what is asked rather than to cost): each seller's
+        # share is what it holds, weighted by its price against the
+        # cheapest to a constant elasticity, capped by what it holds, with
+        # what a capped seller cannot take redistributed among the rest.
+        # One seller takes everything; a seller asking a hair less does not.
+        cheapest = offers[0][0]
+        epsilon_share = self.competitive_share_elasticity
+        held: List[float] = []
+        weights: List[float] = []
+        for price, kind, _, seller in offers:
+            have = (
+                seller.stock - seller.pending_out
+                if kind == 0
+                else region.fund_stock.get(name, 0.0) - region.fund_pending.get(name, 0.0)
+            )
+            held.append(have)
+            if epsilon_share == 0.0 or cheapest <= EPSILON or price <= EPSILON:
+                weights.append(have)
+            else:
+                weights.append(have * (price / cheapest) ** (-epsilon_share))
+        takes = [0.0] * len(offers)
+        open_sellers = list(range(len(offers)))
+        left = min(remaining, sum(held))
+        for _ in range(len(offers)):
+            if left <= EPSILON or not open_sellers:
+                break
+            total_weight = sum(weights[i] for i in open_sellers)
+            if total_weight <= EPSILON:
+                break
+            capped: List[int] = []
+            placed = 0.0
+            for i in open_sellers:
+                share = left * weights[i] / total_weight if len(open_sellers) > 1 else left
+                room = held[i] - takes[i]
+                if share >= room:
+                    takes[i] += room
+                    placed += room
+                    capped.append(i)
+                else:
+                    takes[i] += share
+                    placed += share
+            left -= placed
+            if not capped:
+                break
+            open_sellers = [i for i in open_sellers if i not in capped]
+        for (price, kind, _, seller), take, have in zip(offers, takes, held):
+            if take <= EPSILON:
+                continue
+            take = min(take, have, remaining)
+            own_stock = kind == 1 and payer is region
+            if not own_stock and price > EPSILON:
+                affordable = max(payer.cash, 0.0) / price
+                if take > affordable:
+                    take = affordable
+            if take <= EPSILON:
+                continue
+            cost = take * price
+            if kind == 0:
+                seller.pending_out += take
+                seller.sales_today += take
+                if not own_stock:
+                    seller.cash += cost
+                if have - take <= EPSILON and units - bought - take > EPSILON:
+                    # Sold out with the buyer still wanting more.
+                    seller.sellouts_today += units - bought - take
+            else:
+                region.fund_pending[name] = region.fund_pending.get(name, 0.0) + take
+                region.fund_sales_today[name] = (
+                    region.fund_sales_today.get(name, 0.0) + take
+                )
+                if not own_stock:
+                    region.cash += cost
+            if not own_stock:
+                payer.cash -= cost
+                paid += cost
+            bought += take
+            remaining -= take
+        return bought, paid
+
+    def _note_sellouts(self, region: Region, name: str, unfilled: float) -> None:
+        """Demand that found every seller empty is a sell-out for each
+        seller that sold today and has nothing left -- the signal that
+        tells it to ask more.  A producer that never had stock is not
+        selling out; it is starting."""
+        if unfilled <= EPSILON:
+            return
+        for producer in region.producers:
+            if (
+                producer.commodity == name
+                and producer.sales_today > EPSILON
+                and producer.stock - producer.pending_out <= EPSILON
+            ):
+                producer.sellouts_today += unfilled
+
+    def _apply_pending(self, region: Region) -> None:
+        """Take the pass's sales off each seller's stock, once."""
+        for producer in region.producers:
+            if producer.pending_out != 0.0:
+                producer.stock -= producer.pending_out
+                producer.pending_out = 0.0
+        for name, pending in list(region.fund_pending.items()):
+            if pending != 0.0:
+                region.fund_stock[name] = region.fund_stock.get(name, 0.0) - pending
+                region.fund_pending[name] = 0.0
+
+    def _reprice_fund(self, region: Region, commodity: Commodity) -> None:
+        """The fund wants to hold nothing: its price falls while it has
+        stock, by the same gain producers cut on excess, and resets to the
+        going price when it has sold out (docs/60)."""
+        name = commodity.name
+        held = region.fund_stock.get(name, 0.0)
+        if held <= EPSILON:
+            region.fund_price[name] = region.prices[name]
+            return
+        pool = self._throughput[region.name][name] * commodity.target_inventory_days
+        excess = -held / pool if pool > EPSILON else -1.0
+        current = region.fund_price.get(name, region.prices[name])
+        region.fund_price[name] = current * exp(
+            self.posted_price_speed * commodity.inventory_price_sensitivity * excess
+        )
+
+    def _price_target(self, region: Region, producer: Producer) -> float:
+        """The stock a producer's *price* reads its own against: the
+        sector's target in proportion to its share of the sector's sales
+        (docs/60).  A producer selling nothing holds nothing but excess,
+        and cuts until it sells; a producer with all the sales is not made
+        to cut because a rival appeared.  The whole target for the one
+        producer a seeded sector has, so the seed is stationary."""
+        name = producer.commodity
+        commodity = self.commodities[name]
+        pool = self._throughput[region.name][name] * commodity.target_inventory_days
+        peers = [p for p in region.producers if p.active and p.commodity == name]
+        if len(peers) <= 1:
+            return pool
+        total = sum(p.sales_yesterday for p in peers)
+        if total <= EPSILON:
+            return self._own_target(region, producer)
+        return pool * (producer.sales_yesterday / total)
+
+    def _own_target(self, region: Region, producer: Producer) -> float:
+        """The stock a producer plans around: its capacity share of the
+        sector's demand at full utilization, for the commodity's inventory
+        life -- the same information the pool's target was built from, and
+        the pool's target itself for the one producer a seeded sector has."""
+        name = producer.commodity
+        commodity = self.commodities[name]
+        pool = self._throughput[region.name][name] * commodity.target_inventory_days
+        peers = [p for p in region.producers if p.active and p.commodity == name]
+        if len(peers) <= 1:
+            return pool
+        total = sum(p.capacity_per_day for p in peers)
+        if total <= EPSILON:
+            return 0.0
+        return pool * (producer.capacity_per_day / total)
+
+    def _produce_procurement(self, region: Region) -> None:
+        """One region's day when producers own their output (docs/59).
+
+        Each producer plans from its own sales and its own stock, buys the
+        inputs and plant matter for that plan from the cheapest sellers it
+        can afford, and makes what it bought inputs for.  Output goes into
+        its own stock.  No sector request and no fixed point; the reserve
+        and the labor pool still ration, because they are physical.
+        """
+        active = self._open_region_day(region)
+        life = max(self.capital_service_life_days, EPSILON)
+
+        # --- 1. each producer's plan -----------------------------------
+        planned: Dict[int, float] = {}
+        for producer in active:
+            units = producer.process.outputs[producer.commodity]
+            target = self._own_target(region, producer)
+            wanted_output = producer.sales_yesterday + self.replenishment_rate * (
+                target - producer.stock
+            )
+            wanted = max(0.0, wanted_output / units)
+            ceiling = producer.process.runs_for(
+                producer.capacity_per_day
+            ) * producer.utilization(producer.posted_price, region.prices)
+            planned[id(producer)] = min(wanted, ceiling)
+
+        # Reserve rationing, pro rata across producers sharing a reserve.
+        for rname, reserve in region.reserves.items():
+            if reserve.remaining <= EPSILON:
+                for p in active:
+                    if p.commodity == rname:
+                        planned[id(p)] = 0.0
+                continue
+            total_wanted = 0.0
+            for p in active:
+                if p.commodity == rname:
+                    total_wanted += planned[id(p)] * p.process.outputs.get(rname, 0.0)
+            if total_wanted > reserve.remaining:
+                reserve_ration = reserve.remaining / total_wanted
+                for p in active:
+                    if p.commodity == rname:
+                        planned[id(p)] *= reserve_ration
+
+        # Labor-pool rationing, the same proportional rule as the plan's.
+        if region.labor_pool != float("inf"):
+            available_ticks = region.labor_pool * region.ticks_per_worker_day
+            planned_ticks = sum(planned[id(p)] * p.process.direct_labor for p in active)
+            if planned_ticks > available_ticks:
+                labor_ration = available_ticks / planned_ticks
+                for p in active:
+                    planned[id(p)] *= labor_ration
+
+        # --- 2. the morning market: inputs and plant matter -------------
+        drawn: Dict[str, float] = {}
+        plant_rations: Dict[int, Dict[str, float]] = {}
+        for producer in active:
+            runs = planned[id(producer)]
+            inputs = producer.process.inputs
+            on_hand = producer.inputs_on_hand
+            if runs > EPSILON:
+                # What each input's sellers can supply, beyond what is
+                # already on hand, bounds the runs; what they cannot is
+                # unmet demand for that input alone.
+                for name, per_run in sorted(inputs.items()):
+                    have = on_hand.get(name, 0.0)
+                    need = runs * per_run - have
+                    if need <= EPSILON:
+                        continue
+                    can_buy = min(need, self._available(region, name))
+                    if can_buy < need:
+                        region.unmet_demand[name] += need - can_buy
+                        self._note_sellouts(region, name, need - can_buy)
+                        runs = (have + can_buy) / per_run
+            if runs > EPSILON:
+                # What the purse can pay for, at the prices actually asked,
+                # after the plant matter it owes on the calendar.
+                cost = 0.0
+                for name, per_run in sorted(inputs.items()):
+                    need = runs * per_run - on_hand.get(name, 0.0)
+                    if need > EPSILON:
+                        cost += self._quote(region, name, need)
+                spendable = max(0.0, producer.cash - self._plant_matter_cost(producer, region))
+                if cost > spendable and cost > EPSILON:
+                    scale = spendable / cost
+                    Ledger.add(
+                        self.ledger.liquidity_curtailment,
+                        producer.commodity,
+                        runs * (1.0 - scale),
+                    )
+                    runs *= scale
+                    producer.liquidity_idle_days = (
+                        producer.liquidity_idle_days + 1 if runs <= EPSILON else 0
+                    )
+                else:
+                    producer.liquidity_idle_days = 0
+            if runs > EPSILON:
+                for name, per_run in sorted(inputs.items()):
+                    need = runs * per_run - on_hand.get(name, 0.0)
+                    if need <= EPSILON:
+                        continue
+                    bought, _ = self._buy(region, name, need, producer)
+                    if bought > 0.0:
+                        on_hand[name] = on_hand.get(name, 0.0) + bought
+                # Liebig, on what is actually on hand.
+                for name, per_run in sorted(inputs.items()):
+                    runs = min(runs, on_hand.get(name, 0.0) / per_run)
+            planned[id(producer)] = max(0.0, runs)
+            # Plant matter, on the calendar whether or not the producer ran.
+            ration: Dict[str, float] = {}
+            bill = producer.process.capital_bill_per_capacity()
+            if bill and producer.capacity_per_day > EPSILON:
+                per_capacity = producer.capacity_per_day / life
+                for name, quantity in bill.items():
+                    need = per_capacity * quantity
+                    bought, _ = self._buy(region, name, need, producer)
+                    ration[name] = bought / need if need > EPSILON else 1.0
+            plant_rations[id(producer)] = ration
+        self._apply_pending(region)
+
+        # --- 3. production, into each producer's own stock --------------
+        produced: Dict[str, float] = {}
+        labor_by_producer: Dict[int, float] = {}
+        labor_performed = 0.0
+        for producer in region.producers:
+            producer.last_runs = 0.0
+        for producer in active:
+            runs = planned[id(producer)]
+            if runs <= EPSILON:
+                continue
+            producer.last_runs = runs
+            labor_performed += runs * producer.process.direct_labor
+            labor_by_producer[id(producer)] = runs * producer.process.direct_labor
+            # Exactly what these runs use comes off what is on hand and
+            # is what the ledger calls consumed.
+            for name, per_run in producer.process.inputs.items():
+                used = runs * per_run
+                producer.inputs_on_hand[name] = producer.inputs_on_hand.get(name, 0.0) - used
+                drawn[name] = drawn.get(name, 0.0) + used
+            own_output = runs * producer.process.outputs.get(producer.commodity, 0.0)
+            if own_output > EPSILON:
+                Ledger.add(
+                    self.ledger.fixed_capital_consumed,
+                    region.name,
+                    own_output * producer.capital_labor_per_unit,
+                )
+                Ledger.add(
+                    self.ledger.fixed_capital_money,
+                    region.name,
+                    own_output * producer.capital_cost_per_unit,
+                )
+                Ledger.add(
+                    self.ledger.unattributed_margin,
+                    region.name,
+                    own_output * producer.unattributed_margin,
+                )
+            for name, per_run in producer.process.outputs.items():
+                if name not in self.commodities:
+                    continue
+                produced[name] = produced.get(name, 0.0) + runs * per_run
+            producer.output_total += own_output
+            producer.stock += own_output
+        for producer in active:
+            construction = self._replace_plant(
+                region, producer, plant_rations.get(id(producer), {}), drawn
+            )
+            labor_performed += construction
+            if construction > 0.0:
+                labor_by_producer[id(producer)] = (
+                    labor_by_producer.get(id(producer), 0.0) + construction
+                )
+        self._shed_capacity(region, active)
+
+        for name, amount in drawn.items():
+            Ledger.add(self.ledger.intermediate_consumption, name, amount)
+            Ledger.add(
+                self.ledger.circulating_capital,
+                region.name,
+                amount * self.labor_values.get(name, 0.0),
+            )
+        for name, amount in produced.items():
+            Ledger.add(self.ledger.production, name, amount)
+            Ledger.add(
+                self.ledger.value_produced,
+                region.name,
+                amount * self.labor_values.get(name, 0.0),
+            )
+        for rname, reserve in region.reserves.items():
+            extracted = produced.get(rname, 0.0)
+            if extracted > EPSILON:
+                reserve.extract(extracted)
+                Ledger.add(self.ledger.reserve_depletion, rname, extracted)
+                self._daily_extraction[(region.name, rname)] = extracted
+
+        self._settle_labor(region, active, labor_by_producer, labor_performed)
+        self._sync_inventory(region)
+
+    def _final_market(self) -> None:
+        """The fund buys the final good and the workers buy the basket, from
+        producers' own stocks, cheapest first (docs/59)."""
+        for region in self.regions.values():
+            for commodity in self.commodities.values():
+                name = commodity.name
+                desired = region.daily_demand(commodity)
+                if desired <= 0.0:
+                    continue
+                wanted = min(desired, self._available(region, name))
+                bought, _ = self._buy(region, name, wanted, region)
+                region.unmet_demand[name] += desired - bought
+                self._note_sellouts(region, name, desired - bought)
+                region.consumed_total[name] += bought
+                Ledger.add(self.ledger.consumption, name, bought)
+            self._apply_pending(region)
+
+            if region.subsistence_basket:
+                worker_days = region.worker_days_due
+                purse = Economy._WorkerPurse(region)
+                purchases: List[Tuple[str, float]] = []
+                total_cost = 0.0
+                for name, quantity in sorted(region.subsistence_basket.items()):
+                    if name not in self.commodities:
+                        continue
+                    desired = quantity * worker_days
+                    if region.wage_premium_due != 0.0:
+                        desired *= 1.0 + region.wage_premium_due
+                    if desired <= 0.0:
+                        continue
+                    bought = min(desired, self._available(region, name))
+                    inventory_shortfall = desired - bought
+                    if inventory_shortfall > EPSILON:
+                        region.unmet_demand[name] += inventory_shortfall
+                        Ledger.add(self.ledger.basket_shortfall, region.name, inventory_shortfall)
+                        self._note_sellouts(region, name, inventory_shortfall)
+                    if bought <= 0.0:
+                        continue
+                    purchases.append((name, bought))
+                    total_cost += self._quote(region, name, bought)
+                cash_factor = 1.0
+                if total_cost > region.worker_cash:
+                    cash_factor = region.worker_cash / total_cost
+                for name, bought in purchases:
+                    if cash_factor < 1.0:
+                        affordable = bought * cash_factor
+                        denied = bought - affordable
+                        region.unmet_demand[name] += denied
+                        Ledger.add(self.ledger.basket_shortfall, region.name, denied)
+                        bought = affordable
+                    if bought <= 0.0:
+                        continue
+                    got, spend = self._buy(region, name, bought, purse)
+                    region.consumed_total[name] += got
+                    Ledger.add(self.ledger.consumption, name, got)
+                    Ledger.add(self.ledger.worker_spending, region.name, spend)
+                self._apply_pending(region)
+            region.worker_days_due = region.worker_days_earned
+            region.wage_premium_due = region.wage_premium
+            self._sync_inventory(region)
 
     # ------------------------------------------------------ posted prices
 
@@ -3743,41 +4384,92 @@ class Economy:
                 # A producer's own signal beside the pool's: its order fill
                 # against its sector's average (docs/58).  Exactly zero for
                 # a lone producer, so a seeded sector stays stationary; in
-                # a contested sector the one losing custom cuts.
+                # a contested sector the one losing custom cuts.  Under
+                # procurement the signal is the producer's *own* stock
+                # against its own target (docs/59), and the pool's stock
+                # term is not read at all.
                 mean_fill = sum(p.order_fill for p in producers) / len(producers)
+                unmet_term = (
+                    self.unmet_demand_price_pressure
+                    * region.unmet_demand[name]
+                    / max(self._throughput[region.name][name], EPSILON)
+                )
                 for producer in producers:
                     cost = costs[id(producer)]
                     posted = producer.posted_price
                     if producer.last_cost > EPSILON and cost != producer.last_cost:
                         posted *= cost / producer.last_cost
-                    own = pressure + self.posted_share_gain * (
-                        producer.order_fill - mean_fill
-                    )
+                    if self.procurement:
+                        # Excess stock cuts; a sell-out raises.  A stock
+                        # merely below target is not scarcity -- an entrant
+                        # filling its warehouse must not read it as one.
+                        target = self._price_target(region, producer)
+                        if target > EPSILON:
+                            excess = min(0.0, (target - producer.stock) / target)
+                        elif producer.stock > EPSILON:
+                            excess = -1.0
+                        else:
+                            excess = 0.0
+                        served = producer.sales_today + producer.sellouts_today
+                        sellout = (
+                            producer.sellouts_today / served if served > EPSILON else 0.0
+                        )
+                        own = (
+                            commodity.inventory_price_sensitivity * excess
+                            + self.unmet_demand_price_pressure * sellout
+                        )
+                    else:
+                        own = pressure + self.posted_share_gain * (
+                            producer.order_fill - mean_fill
+                        )
                     if own != 0.0:
                         posted *= exp(self.posted_price_speed * own)
-                    low = cost * commodity.minimum_price_factor
+                    # A producer does not ask less than the price at which
+                    # it would make nothing (docs/60): the floor is where
+                    # its own utilization curve reaches zero, not the
+                    # market's clamp.
+                    low = cost * max(
+                        commodity.minimum_price_factor,
+                        producer.zero_utilization_price_ratio if self.procurement else 0.0,
+                    )
                     high = cost * commodity.maximum_price_factor
                     if cost > EPSILON:
                         posted = min(high, max(low, posted))
                     producer.posted_price = posted
                     producer.last_cost = cost
                 # What was paid: the supply-weighted mean of what was
-                # asked, by today's realized output, or by capacity where
-                # nobody ran.
-                weights = [
-                    p.last_runs * p.process.outputs.get(name, 0.0) for p in producers
-                ]
+                # asked, by today's realized output -- by today's sales
+                # under procurement -- or by capacity where nobody ran.
+                if self.procurement:
+                    weights = [p.sales_today for p in producers]
+                    asked = [p.posted_price for p in producers]
+                    fund_sold = region.fund_sales_today.get(name, 0.0)
+                    if fund_sold > EPSILON:
+                        weights.append(fund_sold)
+                        asked.append(region.fund_price.get(name, region.prices[name]))
+                    for p in producers:
+                        p.sales_yesterday = p.sales_today
+                        p.sales_today = 0.0
+                        p.sellouts_today = 0.0
+                    region.fund_sales_today[name] = 0.0
+                    self._reprice_fund(region, commodity)
+                else:
+                    weights = [
+                        p.last_runs * p.process.outputs.get(name, 0.0) for p in producers
+                    ]
+                    asked = [p.posted_price for p in producers]
                 total = sum(weights)
                 if total <= EPSILON:
                     weights = [p.capacity_per_day for p in producers]
+                    asked = [p.posted_price for p in producers]
                     total = sum(weights)
                 if total <= EPSILON:
                     continue
-                if len(producers) == 1:
-                    region.prices[name] = producers[0].posted_price
+                if len(weights) == 1:
+                    region.prices[name] = asked[0]
                 else:
                     region.prices[name] = sum(
-                        w * p.posted_price for p, w in zip(producers, weights)
+                        w * a for a, w in zip(asked, weights)
                     ) / total
 
     def _update_prices(self) -> None:
@@ -3886,6 +4578,33 @@ class Economy:
                 affordable = destination.cash / max(unit_payment, EPSILON)
                 quantity = min(quantity, affordable)
                 if quantity <= EPSILON:
+                    continue
+
+                if self.procurement:
+                    # Bought from the source's cheapest sellers, by the
+                    # destination's fund (docs/59).
+                    quantity, payment = self._buy(source, name, quantity, destination)
+                    self._apply_pending(source)
+                    self._sync_inventory(source)
+                    if quantity <= EPSILON:
+                        continue
+                    source.exported_total[name] += quantity
+                    freight_payment = freight * quantity
+                    destination.cash -= freight_payment
+                    self.ledger.transport_cash += freight_payment
+                    self.shipments.append(
+                        Shipment(
+                            name,
+                            quantity,
+                            source.name,
+                            destination.name,
+                            self.day,
+                            self.day + route.travel_days,
+                            payment / quantity,
+                            freight,
+                        )
+                    )
+                    remaining_capacity -= quantity
                     continue
 
                 source.inventory[name] -= quantity
@@ -4044,7 +4763,8 @@ class Economy:
                 if amount < self.min_investment_capacity:
                     continue
                 total_cost = amount * construction_unit
-                region.cash -= total_cost
+                if not self.procurement:
+                    region.cash -= total_cost
                 # The matter, out of stock.  Booked as a declared sink so
                 # the material identity closes, and deliberately *not* as
                 # circulating capital: the value it becomes is plant, and
@@ -4058,14 +4778,24 @@ class Economy:
                     take = amount * quantity
                     if take <= 0.0:
                         continue
-                    region.inventory[material] = (
-                        region.inventory.get(material, 0.0) - take
-                    )
+                    if self.procurement:
+                        # Bought from whoever holds it (docs/59): the fund
+                        # pays the sellers here and the construction sink
+                        # below, and the two sum to the bill.
+                        got, paid = self._buy(region, material, take, region)
+                        take = got
+                        credited += paid
+                        self._apply_pending(region)
+                        self._sync_inventory(region)
+                    else:
+                        region.inventory[material] = (
+                            region.inventory.get(material, 0.0) - take
+                        )
                     Ledger.add(
                         self.ledger.intermediate_consumption, material, take
                     )
                     Ledger.add(self.ledger.capital_construction, material, take)
-                    if self.producer_cash:
+                    if self.producer_cash and not self.procurement:
                         # The fund buys the matter from whoever made it
                         # (docs/55); the rest of the bill is construction.
                         credited += self._pay_sellers(
@@ -4077,6 +4807,10 @@ class Economy:
                             units=take,
                         )
                 self.ledger.investment_spending += total_cost - credited
+                if self.procurement:
+                    # The construction part of the bill, out of the fund;
+                    # the matter was paid to its sellers above.
+                    region.cash -= total_cost - credited
                 region.projects.append(
                     CapacityProject(
                         name,

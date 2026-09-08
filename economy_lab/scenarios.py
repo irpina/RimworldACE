@@ -178,6 +178,13 @@ class ScenarioParameters:
     posted_price_speed: float = 0.02
     posted_share_gain: float = 1.0
 
+    # --- procurement (docs/59) ----------------------------------------------
+    #: Whether producers own their output and buy their inputs from each
+    #: other at posted prices, with no sector plan and no fixed point.
+    #: Needs producer cash and posted prices; off by default and
+    #: bit-identical off.
+    procurement: bool = False
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -836,6 +843,15 @@ def _region(
     # The employment rate the wage rule measures against (docs/46), taken
     # with the same expression the rule uses so the two agree to the bit.
     region.reference_employment_rate = region.employment_rate()
+    if parameters.procurement:
+        # Each producer plans from yesterday's sales (docs/59); seeded at
+        # the stationary outflow so the first day repeats the seed.
+        ordered = sorted(region.producers, key=lambda p: (p.name, p.commodity))
+        runs = _stationary_runs(region, ordered, equilibrium_days)
+        for producer in ordered:
+            producer.sales_yesterday = (
+                runs[id(producer)] * producer.process.outputs[producer.commodity]
+            )
     # Seed every stock at its own target, so the circuit opens stationary
     # rather than working off an arbitrary initial imbalance.  The target is
     # the *commodity's* inventory life, not the global default: they were
@@ -1073,6 +1089,7 @@ def seeded_two_region_economy(
         posted_prices=parameters.posted_prices,
         posted_price_speed=parameters.posted_price_speed,
         posted_share_gain=parameters.posted_share_gain,
+        procurement=parameters.procurement,
     )
     _assert_reference_full_utilization(economy)
     return economy
