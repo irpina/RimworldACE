@@ -220,6 +220,7 @@ def collect_behavioral_metrics(
     metrics.update(_habituation_metrics(parameters))
     metrics.update(_producer_cash_metrics(parameters))
     metrics.update(_posted_price_metrics(parameters))
+    metrics.update(_procurement_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -892,6 +893,116 @@ def _posted_price_metrics(
         ),
         "posted.cost_competition.meals_price_end": _metric(
             competition.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+    }
+
+
+def _procurement_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Producers own their output and buy their inputs (docs/59, docs/60).
+
+    The dynamically complete economy, off by default.  Frozen: that it is
+    exactly stationary from the reseeded state; what a glut, a shortage, a
+    boom and a contested sector do when every price is a producer's own
+    answer to its own stock; and that a day costs what the fixed point
+    cost.  Every shock reading is beside the planned model's, because the
+    difference is the finding.
+    """
+    market = replace(
+        parameters, producer_cash=True, posted_prices=True, procurement=True
+    )
+    stationary = equilibrium(parameters=market)
+    glut = regional_glut(parameters=market)
+    loss = producer_loss(parameters=market)
+    boom = demand_boom(parameters=market)
+    technique = technique_change(parameters=market)
+    competition = cost_competition(parameters=market)
+    shock = subsistence_shock(parameters=market)
+    reference = parameters.reference_price
+
+    def provisioners(economy: Economy):
+        return [
+            p
+            for p in economy.regions[LOCAL_REGION].producers
+            if p.active and p.commodity == MEALS
+        ]
+
+    def spread(economy: Economy) -> float:
+        asked = [p.posted_price for p in provisioners(economy)]
+        return max(asked) / min(asked) - 1.0
+
+    def cheaper_share(economy: Economy) -> float:
+        sellers = provisioners(economy)
+        region = economy.regions[LOCAL_REGION]
+        cheapest = min(sellers, key=lambda p: p.effective_unit_cost(region.prices))
+        total = sum(p.sales_yesterday for p in sellers)
+        return cheapest.sales_yesterday / total if total > 1e-9 else 0.0
+
+    stationary_prices = stationary.series(LOCAL_REGION, YAYO)
+    glut_prices = glut.series(LOCAL_REGION, YAYO)
+    loss_prices = loss.series(LOCAL_REGION, YAYO)
+    return {
+        "procurement.equilibrium.price_range": _metric(
+            max(stationary_prices) - min(stationary_prices), "silver"
+        ),
+        "procurement.equilibrium.stock_range": _metric(
+            max(stationary.series(LOCAL_REGION, YAYO, field="inventory"))
+            - min(stationary.series(LOCAL_REGION, YAYO, field="inventory")),
+            "units",
+        ),
+        # The glut: shallower, and it rests below the reference without
+        # overshooting, because the fund undercuts on its own excess and
+        # the producer cuts on its own.
+        "procurement.glut.trough_over_reference": _metric(
+            min(glut_prices) / reference, "ratio"
+        ),
+        "procurement.glut.trough_day": _metric(
+            glut_prices.index(min(glut_prices)), "day"
+        ),
+        "procurement.glut.end_over_reference": _metric(
+            glut_prices[-1] / reference, "ratio"
+        ),
+        # The shortage: a sell-out raises, and the level stays.
+        "procurement.producer_loss.peak_over_reference": _metric(
+            max(loss_prices) / reference, "ratio"
+        ),
+        "procurement.producer_loss.end_over_reference": _metric(
+            loss_prices[-1] / reference, "ratio"
+        ),
+        "procurement.producer_loss.capacity_end": _metric(
+            loss.regions[LOCAL_REGION].capacity(YAYO), "units/day"
+        ),
+        # The boom: absorbed by price rather than by employment.
+        "procurement.boom.employment_end": _metric(
+            boom.regions[LOCAL_REGION].worker_days_earned, "worker-days"
+        ),
+        "procurement.boom.yayo_price_end_over_reference": _metric(
+            boom.regions[LOCAL_REGION].prices[YAYO] / reference, "ratio"
+        ),
+        # Contested sectors: two producers with stocks of their own
+        # converge, and the cheaper holds the larger share.
+        "procurement.technique_change.meals_posted_spread": _metric(
+            spread(technique), "ratio"
+        ),
+        "procurement.technique_change.cheaper_share": _metric(
+            cheaper_share(technique), "fraction"
+        ),
+        "procurement.technique_change.meals_price_end": _metric(
+            technique.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "procurement.cost_competition.meals_posted_spread": _metric(
+            spread(competition), "ratio"
+        ),
+        "procurement.cost_competition.meals_price_end": _metric(
+            competition.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "procurement.subsistence.meals_peak_over_reference": _metric(
+            max(shock.series(LOCAL_REGION, MEALS)) / parameters.meal_reference_price,
+            "ratio",
+        ),
+        "procurement.subsistence.basket_shortfall": _metric(
+            shock.ledger.basket_shortfall.get(LOCAL_REGION, 0.0), "units"
         ),
     }
 

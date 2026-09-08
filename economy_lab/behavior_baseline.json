@@ -692,11 +692,11 @@
     },
     "posted.cost_competition.meals_posted_spread": {
       "unit": "ratio",
-      "value": 4.261606
+      "value": 2.6e-05
     },
     "posted.cost_competition.meals_price_end": {
       "unit": "silver",
-      "value": 8.687902
+      "value": 15.109755
     },
     "posted.equilibrium.price_range": {
       "unit": "silver",
@@ -736,7 +736,75 @@
     },
     "posted.technique_change.meals_posted_spread": {
       "unit": "ratio",
-      "value": 1.308647
+      "value": 1.1e-05
+    },
+    "procurement.boom.employment_end": {
+      "unit": "worker-days",
+      "value": 0.28886
+    },
+    "procurement.boom.yayo_price_end_over_reference": {
+      "unit": "ratio",
+      "value": 1.265325
+    },
+    "procurement.cost_competition.meals_posted_spread": {
+      "unit": "ratio",
+      "value": 0.001433
+    },
+    "procurement.cost_competition.meals_price_end": {
+      "unit": "silver",
+      "value": 14.212042
+    },
+    "procurement.equilibrium.price_range": {
+      "unit": "silver",
+      "value": 0.0
+    },
+    "procurement.equilibrium.stock_range": {
+      "unit": "units",
+      "value": 0.0
+    },
+    "procurement.glut.end_over_reference": {
+      "unit": "ratio",
+      "value": 0.993313
+    },
+    "procurement.glut.trough_day": {
+      "unit": "day",
+      "value": 81
+    },
+    "procurement.glut.trough_over_reference": {
+      "unit": "ratio",
+      "value": 0.92971
+    },
+    "procurement.producer_loss.capacity_end": {
+      "unit": "units/day",
+      "value": 13.193928
+    },
+    "procurement.producer_loss.end_over_reference": {
+      "unit": "ratio",
+      "value": 1.788184
+    },
+    "procurement.producer_loss.peak_over_reference": {
+      "unit": "ratio",
+      "value": 1.793869
+    },
+    "procurement.subsistence.basket_shortfall": {
+      "unit": "units",
+      "value": 7.630305
+    },
+    "procurement.subsistence.meals_peak_over_reference": {
+      "unit": "ratio",
+      "value": 1.213581
+    },
+    "procurement.technique_change.cheaper_share": {
+      "unit": "fraction",
+      "value": 0.500714
+    },
+    "procurement.technique_change.meals_posted_spread": {
+      "unit": "ratio",
+      "value": 0.001318
+    },
+    "procurement.technique_change.meals_price_end": {
+      "unit": "silver",
+      "value": 14.211135
     },
     "producer_cash.boom.employment_gap": {
       "unit": "worker-days",
