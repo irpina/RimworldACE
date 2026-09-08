@@ -5,12 +5,12 @@
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
 **Latest Stage 0 model commit:** `HEAD` (wages off the value of labor-power)
-**Behavioral baseline:** `HEAD` (263 metrics; 22 wage-deviation, 20 habituation, 20 producer-cash and 12 posted-price readings)
+**Behavioral baseline:** `HEAD` (280 metrics; 22 wage-deviation, 20 habituation, 20 producer-cash, 12 posted-price and 17 procurement readings)
 **Wage-deviation design / results:** `docs/46`, `docs/47`
 **Habituation design / results:** `docs/51`, `docs/52`
 **Producer-level cash design / results:** `docs/55`, `docs/56`
 **Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
-**Procurement design (not yet built):** `docs/59`
+**Procurement design / results:** `docs/59`, `docs/60` (built, off by default)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1895,8 +1895,15 @@ stationary, cost passes through in full with every markup preserved — and
 unusable as a default, because a posted price needs a stock its poster owns
 to respond to, and a shared pool gives a contested sector the wrong signal;
 shocks also leave their price level behind, because entry responds only to
-shortfall and not to margin. Both point at the same next step: procurement
-(`docs/59`, designed, not built), with entry-on-margin after it.
+shortfall and not to margin. Procurement is built too (`docs/60`): no production fixed point and no
+pool, every producer planning from its own sales and stock and buying from
+the sellers it can afford, exactly stationary from the reseeded state, all
+three identities closing. Off by default. What it shows is that with no
+anchor and no entry on margin every shock's price level is permanent — a
+glut is a slow sale, a shortage a permanent rise, a boom absorbed by price
+rather than employment. **Entry on margin is the next design.** The
+`docs/58` §5 oscillation turned out to be an entrant clamped to 18% of
+cost, corrected in `docs/58` §5a.
 
 ---
 

@@ -116,6 +116,28 @@ imposition — is not the step after this one; it is the step this one
 needed first. `docs/59` is written accordingly, and 6.6's question about
 profit-rate equalization is deferred to it.
 
+## 5a. Correction (2026-09-08): §5 was a defect, not a finding
+
+Building `docs/59` found the cause of §5, and it was not the pool. A
+producer added after seeding — the entrants of `technique_change` and
+`cost_competition`, and every producer `_invest` completes — started with
+a posted price of **zero**, which the clamp raised to 18% of its cost on
+its first day. An entrant asking a fifth of the going price wins the
+whole order book, cannot cover its cost at that price, curtails to
+nothing, leaves the pool short, and the oscillation §5 describes
+follows. With an entrant asking the going price from its first day, the
+same rule on the same pool converges: the two provisioners' posted
+prices end within **1e-5** of each other in both scenarios, and the
+`cost_competition` meal price ends at 15.11 rather than 8.69. The three
+frozen readings moved accordingly and `docs/60` §2 records the refresh.
+
+Prediction 6.7 therefore *held*, and §5's diagnosis of the shared pool
+as the cause was wrong. What §5 got right survives: a producer with a
+stock of its own has a better signal than the pool's, and `docs/59`
+builds it. But it was not a prerequisite for posted prices to converge;
+it was a prerequisite for the model to be dynamically complete, which is
+a different reason and the right one.
+
 ## 6. What is kept
 
 The rule stays, off by default, because two of its properties are

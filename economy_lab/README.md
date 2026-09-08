@@ -260,8 +260,10 @@ markup rather than a rate of profit.
 - transfer pricing and producer-level inventory: producers hold cash
   (docs/55, docs/56, off by default) but the regional pool is still a
   consignment paid out by supply share; firm-posted prices exist
-  (docs/57, docs/58, experimental, off by default) and docs/58 shows why
-  they need producer-level inventory first (docs/59, designed);
+  (docs/57, docs/58, off by default) and so does procurement -- producers
+  owning their output and buying their inputs, no fixed point (docs/59,
+  docs/60, off by default). What is still absent is entry on margin, so a
+  shock's price level is permanent in the market model;
 - more than six commodities or two regions;
 - RimWorld runtime integration.
 
