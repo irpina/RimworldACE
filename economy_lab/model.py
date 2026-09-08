@@ -519,6 +519,9 @@ class Region:
     #: and resets to the going price when it has none (docs/60).
     fund_price: Dict[str, float] = field(default_factory=dict)
     fund_sales_today: Dict[str, float] = field(default_factory=dict)
+    #: Entry on margin accrued and not yet placed, per commodity
+    #: (docs/61, docs/63).  Empty unless the rule is on.
+    entry_backlog: Dict[str, float] = field(default_factory=dict)
 
     def capacity(self, commodity: str) -> float:
         return sum(
@@ -865,6 +868,8 @@ class Economy:
         procurement: bool = False,
         going_margin: float = 0.50,
         idle_capacity_gain: float = 1.0,
+        entry_on_margin: bool = False,
+        entry_gain: float = 0.05,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -959,6 +964,15 @@ class Economy:
             raise ValueError("idle_capacity_gain must be non-negative")
         self.going_margin = going_margin
         self.idle_capacity_gain = idle_capacity_gain
+        #: Whether capital enters a sector because its expected price
+        #: clears the best technique's cost by more than the same going
+        #: margin, with no shortfall asked for (docs/61).  Off by default
+        #: and bit-identical off: the shortfall term is left exactly as
+        #: it is and the entry term is not computed.
+        if entry_gain < 0.0:
+            raise ValueError("entry_gain must be non-negative")
+        self.entry_on_margin = entry_on_margin
+        self.entry_gain = entry_gain
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -4779,21 +4793,16 @@ class Economy:
                     buffer_need = 0.0
 
                 shortfall = flow_shortfall + buffer_need
-                if shortfall <= EPSILON:
+                if shortfall <= EPSILON and not self.entry_on_margin:
                     continue
 
                 # Use effective cost (overhead + inputs) for the margin test,
                 # but store only the operating overhead on the new producer.
-                active_effective = [
-                    p.effective_unit_cost(region.prices)
-                    for p in region.producers
-                    if p.active and p.commodity == name
+                active = [
+                    p for p in region.producers if p.active and p.commodity == name
                 ]
-                active_overhead = [
-                    p.unit_cost
-                    for p in region.producers
-                    if p.active and p.commodity == name
-                ]
+                active_effective = [p.effective_unit_cost(region.prices) for p in active]
+                active_overhead = [p.unit_cost for p in active]
                 assumed_effective = (
                     sum(active_effective) / len(active_effective)
                     if active_effective
@@ -4807,22 +4816,55 @@ class Economy:
                 expected = region.expected_prices[name]
                 margin = (expected - assumed_effective) / max(assumed_effective, EPSILON)
                 inventory_days = region.inventory[name] / max(demand, EPSILON)
-                if (
-                    margin < self.investment_margin_threshold
-                    or inventory_days >= commodity.target_inventory_days
-                ):
-                    continue
-                amount = shortfall * self.investment_fraction_of_shortfall
                 # Which technique the new capacity would use decides what it
                 # is made of, so it has to be settled before the size is.
+                # The first active producer's, as it always was; with entry
+                # on margin, the cheapest active producer's and its overhead
+                # (docs/61 section 2).
                 existing_process = next(
-                    (
-                        p.process
-                        for p in region.producers
-                        if p.active and p.commodity == name
-                    ),
-                    self.known_processes[name],
+                    (p.process for p in active), self.known_processes[name]
                 )
+                amount = 0.0
+                if (
+                    shortfall > EPSILON
+                    and margin >= self.investment_margin_threshold
+                    and inventory_days < commodity.target_inventory_days
+                ):
+                    amount = shortfall * self.investment_fraction_of_shortfall
+                if self.entry_on_margin:
+                    if active:
+                        best = min(
+                            range(len(active)), key=lambda i: active_effective[i]
+                        )
+                        best_effective = active_effective[best]
+                        assumed_overhead = active_overhead[best]
+                        existing_process = active[best].process
+                    else:
+                        best_effective = assumed_effective
+                    entry_margin = (expected - best_effective) / max(
+                        best_effective, EPSILON
+                    )
+                    if entry_margin > self.going_margin:
+                        # Capital goes where the price clears cost, in
+                        # proportion to how far it clears it, and asks
+                        # for no shortfall (docs/61).  It accrues until
+                        # it is a project's worth: a sector of half a
+                        # unit a day is not barred from entry by the
+                        # minimum project size (docs/63).
+                        region.entry_backlog[name] = region.entry_backlog.get(
+                            name, 0.0
+                        ) + (
+                            self.entry_gain
+                            * demand
+                            * (entry_margin - self.going_margin)
+                            / self.going_margin
+                        )
+                        amount += region.entry_backlog[name]
+                    else:
+                        # The intention lapses with the margin.
+                        region.entry_backlog[name] = 0.0
+                if amount <= 0.0:
+                    continue
                 bill = existing_process.capital_bill_per_capacity()
                 if bill:
                     # Department I (docs/36 3.4): what a unit of capacity
@@ -4914,6 +4956,8 @@ class Economy:
                         process=existing_process,
                     )
                 )
+                if self.entry_on_margin:
+                    region.entry_backlog[name] = 0.0
 
     # --------------------------------------------------------------- snapshots
 

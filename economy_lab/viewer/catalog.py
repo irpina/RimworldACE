@@ -149,6 +149,7 @@ _DOCS: Dict[str, Tuple[int, ...]] = {
     "reserve_army_sweep": (46, 47),
     "boom_reversal": (51, 52),
     "cash_circuit": (55, 56),
+    "gravitation": (61, 62, 63),
 }
 
 #: Shock days: an int, a parameter name, a callable, or None.
@@ -172,6 +173,7 @@ _SECONDS: Dict[str, float] = {
     "capacity_exit": 3.2,
     "recreation_sweep": 0.5,
     "reserve_army_sweep": 0.6,
+    "gravitation": 2.0,
 }
 
 _SWEEPS = ("recreation_sweep", "reserve_army_sweep")
@@ -197,6 +199,7 @@ _ORDER = (
     "reserve_army_sweep",
     "boom_reversal",
     "cash_circuit",
+    "gravitation",
 )
 
 

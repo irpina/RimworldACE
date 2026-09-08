@@ -192,6 +192,13 @@ class ScenarioParameters:
     idle_capacity_gain: float = 1.0
     gravitation_margin: float = 0.30
 
+    # --- entry on margin (docs/61) --------------------------------------------
+    #: Whether capital enters a sector because its expected price clears
+    #: the best technique's cost by more than ``going_margin``, with no
+    #: shortfall asked for.  Off by default and bit-identical off.
+    entry_on_margin: bool = False
+    entry_gain: float = 0.05
+
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
     labor_value_max_iterations: int = 1000
@@ -1099,6 +1106,8 @@ def seeded_two_region_economy(
         procurement=parameters.procurement,
         going_margin=parameters.going_margin,
         idle_capacity_gain=parameters.idle_capacity_gain,
+        entry_on_margin=parameters.entry_on_margin,
+        entry_gain=parameters.entry_gain,
     )
     _assert_reference_full_utilization(economy)
     return economy
@@ -1260,6 +1269,30 @@ def cash_circuit(
         parameters or ScenarioParameters(),
         capital_goods=True,
         producer_cash=True,
+    )
+    return equilibrium(days, parameters=parameters)
+
+
+def gravitation(
+    days: int = 720, *, parameters: ScenarioParameters | None = None
+) -> Economy:
+    """The market economy with entry on margin and the going margin set
+    inside the band the authored prices give (docs/61 section 5).
+
+    No shock.  At the seed every sector's margin over its best cost lies
+    between 0.29 (yayo) and 0.46 (chemfuel); with the threshold at
+    ``gravitation_margin`` capital enters every sector above it, prices
+    fall toward cost times one plus the margin, and the scenario asks
+    where the authored price structure goes when it is not a rest point.
+    """
+    parameters = parameters or ScenarioParameters()
+    parameters = replace(
+        parameters,
+        producer_cash=True,
+        posted_prices=True,
+        procurement=True,
+        entry_on_margin=True,
+        going_margin=parameters.gravitation_margin,
     )
     return equilibrium(days, parameters=parameters)
 

@@ -18,6 +18,7 @@ from .scenarios import (
     recreation_basket,
     regional_glut,
     reserve_depletion,
+    gravitation,
     subsistence_shock,
     summary,
     technique_change,
@@ -39,6 +40,7 @@ SCENARIOS = {
     "capital-goods": capital_goods,
     "capacity-exit": capacity_exit,
     "recreation-basket": recreation_basket,
+    "gravitation": gravitation,
 }
 
 
