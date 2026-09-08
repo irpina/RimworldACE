@@ -4,6 +4,12 @@
 design had not foreseen, and one was wrong. Along the way the build found
 the defect behind `docs/58` §5, and that document carries a correction.
 
+**Corrected by `docs/62`.** The stock target described in §1 was built
+on the sector's throughput at full capacity — the plan's pool — and it
+is what §6 read as "every level permanent". Every reading below other
+than the two equilibrium ranges has been refreshed there, and §9 says
+what the correction was.
+
 **The headline: the laboratory now runs with no production fixed point
 and no pool. Every producer plans from its own sales and stock, buys from
 the sellers it can afford with custom split continuously by price, and
@@ -170,3 +176,21 @@ ticks wants.
 
 Seven runs of 240 to 360 days, about 1.5 seconds of the metric
 collection.
+
+## 9. Correction (`docs/62`)
+
+The target a producer's price and plan read its stock against was its
+share of `_throughput × target_inventory_days`, and `_throughput` is
+the plan's own sizing of the pool: final demand at the reference plus
+every input draw at full capacity. It does not move when a price does,
+so a sector selling four units a day at a doubled price held twenty
+days of the ten it used to sell, saw no excess, and never cut. That is
+what §6 measured, and §7's "entry on margin is the one mechanism" was
+half right: entry adds capacity, but the level was pinned by the target
+and would not have moved for any amount of it. `docs/62` replaces the
+target with the inventory life of each producer's own expected demand,
+adds the idle-capacity cut above a going margin, and re-reads every
+scenario. The glut returns to the reference, the shortage's level comes
+back within 2%, and the cost advantage in `cost_competition` is used.
+§3's "slow sale", §4's convergence within 0.13%, and §6 as a whole
+describe the hidden plan, not the market.

@@ -740,19 +740,19 @@
     },
     "procurement.boom.employment_end": {
       "unit": "worker-days",
-      "value": 0.28886
+      "value": 0.487902
     },
     "procurement.boom.yayo_price_end_over_reference": {
       "unit": "ratio",
-      "value": 1.265325
+      "value": 0.881524
     },
     "procurement.cost_competition.meals_posted_spread": {
       "unit": "ratio",
-      "value": 0.001433
+      "value": 0.091361
     },
     "procurement.cost_competition.meals_price_end": {
       "unit": "silver",
-      "value": 14.212042
+      "value": 9.984966
     },
     "procurement.equilibrium.price_range": {
       "unit": "silver",
@@ -764,47 +764,47 @@
     },
     "procurement.glut.end_over_reference": {
       "unit": "ratio",
-      "value": 0.993313
+      "value": 0.997167
     },
     "procurement.glut.trough_day": {
       "unit": "day",
-      "value": 81
+      "value": 108
     },
     "procurement.glut.trough_over_reference": {
       "unit": "ratio",
-      "value": 0.92971
+      "value": 0.671981
     },
     "procurement.producer_loss.capacity_end": {
       "unit": "units/day",
-      "value": 13.193928
+      "value": 14.57503
     },
     "procurement.producer_loss.end_over_reference": {
       "unit": "ratio",
-      "value": 1.788184
+      "value": 1.160752
     },
     "procurement.producer_loss.peak_over_reference": {
       "unit": "ratio",
-      "value": 1.793869
+      "value": 1.450134
     },
     "procurement.subsistence.basket_shortfall": {
       "unit": "units",
-      "value": 7.630305
+      "value": 8.452287
     },
     "procurement.subsistence.meals_peak_over_reference": {
       "unit": "ratio",
-      "value": 1.213581
+      "value": 1.243735
     },
     "procurement.technique_change.cheaper_share": {
       "unit": "fraction",
-      "value": 0.500714
+      "value": 0.410885
     },
     "procurement.technique_change.meals_posted_spread": {
       "unit": "ratio",
-      "value": 0.001318
+      "value": 0.197401
     },
     "procurement.technique_change.meals_price_end": {
       "unit": "silver",
-      "value": 14.211135
+      "value": 12.753084
     },
     "producer_cash.boom.employment_gap": {
       "unit": "worker-days",

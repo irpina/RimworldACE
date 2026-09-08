@@ -3743,14 +3743,19 @@ class ProcurementTests(unittest.TestCase):
             equilibrium(days=1, parameters=replace(ScenarioParameters(), procurement=True))
 
     def test_exactly_stationary_from_the_reseeded_state(self):
-        """docs/59 s3 and s6.2."""
-        prices = self.stationary.series("Dust Basin", YAYO)
-        self.assertEqual(max(prices) - min(prices), 0.0)
-        stock = self.stationary.series("Dust Basin", YAYO, field="inventory")
-        self.assertEqual(max(stock) - min(stock), 0.0)
+        """docs/59 s3 and s6.2; every commodity, not only yayo, since
+        docs/62 seeded each producer at its own target."""
         region = self.stationary.regions["Dust Basin"]
+        for name, commodity in self.stationary.commodities.items():
+            with self.subTest(commodity=name):
+                prices = self.stationary.series("Dust Basin", name)
+                self.assertEqual(max(prices) - min(prices), 0.0)
+                stock = self.stationary.series("Dust Basin", name, field="inventory")
+                self.assertEqual(max(stock) - min(stock), 0.0)
         for producer in region.producers:
             self.assertEqual(producer.stock, region.inventory[producer.commodity])
+            days = self.stationary.commodities[producer.commodity].target_inventory_days
+            self.assertEqual(producer.stock, days * producer.expected_demand)
             for name, held in producer.inputs_on_hand.items():
                 self.assertEqual(held, 0.0, name)
 
@@ -3779,34 +3784,65 @@ class ProcurementTests(unittest.TestCase):
         planned = technique_change().value_balance()
         market = technique_change(parameters=self.market).value_balance()
         self.assertGreater(abs(planned), 10.0)
-        self.assertLess(abs(market - planned) / abs(planned), 0.1)
+        # The same sign and the same order: the market's mix moves on a
+        # different path (docs/62), so the residual is not the same number.
+        self.assertGreater(market / planned, 0.5)
+        self.assertLess(market / planned, 3.0)
 
-    def test_the_glut_rests_below_the_reference_without_overshooting(self):
-        """docs/59 s6.3."""
+    def test_the_glut_is_a_trough_the_chain_feels_and_the_level_returns(self):
+        """docs/62 s4: with every stock target the inventory life of its
+        producer's own expected demand, a glut is a trough every stage
+        upstream feels, and the sell-outs after it bring the price back
+        to within five percent of the reference."""
         prices = regional_glut(parameters=self.market).series("Dust Basin", YAYO)
-        self.assertLess(min(prices), 21.0 * 0.97)
-        self.assertGreater(prices[-1], 21.0 * 0.85)
-        self.assertLessEqual(prices[-1], 21.0)
+        self.assertLess(min(prices), 21.0 * 0.8)
+        self.assertLess(abs(prices[-1] - 21.0), 21.0 * 0.05)
 
-    def test_two_producers_with_stocks_of_their_own_converge(self):
-        """docs/59 s6.4."""
-        for economy in (technique_change(parameters=self.market), cost_competition(parameters=self.market)):
-            region = economy.regions["Dust Basin"]
-            sellers = [p for p in region.producers if p.active and p.commodity == MEALS]
-            asked = [p.posted_price for p in sellers]
-            with self.subTest(day=economy.day, sellers=len(sellers)):
-                self.assertEqual(len(sellers), 2)
-                self.assertLess(max(asked) / min(asked) - 1.0, 0.05)
-                cheapest = min(sellers, key=lambda p: p.effective_unit_cost(region.prices))
-                other = next(p for p in sellers if p is not cheapest)
-                self.assertGreater(cheapest.sales_yesterday, other.sales_yesterday)
+    def test_a_sector_that_ran_dry_restarts(self):
+        """docs/62 s2: a sell-out is noted for every seller with nothing
+        left, so a sector every buyer found empty sees the demand that
+        restarts it.  Under docs/60 the producer-loss run ended with every
+        yayo producer idle, its stock and its sales both zero."""
+        economy = producer_loss(parameters=self.market)
+        region = economy.regions["Dust Basin"]
+        sellers = [p for p in region.producers if p.active and p.commodity == YAYO]
+        self.assertGreater(len(sellers), 1)
+        for producer in sellers:
+            with self.subTest(producer=producer.name):
+                self.assertGreater(producer.last_runs, 0.0)
+                self.assertGreater(producer.sales_yesterday, 0.0)
 
-    def test_a_sell_out_raises_and_the_level_stays(self):
-        """docs/60: a shortage is priced by the sellers who ran out, and
-        nothing brings the level back once the entrants sell at it."""
+    def test_a_cost_advantage_above_the_going_margin_is_used(self):
+        """docs/62 s4: the provisioner whose cost leaves it a margin above
+        the going one cuts on its idle capacity, asks less than its rival,
+        holds the larger share, and the meal price ends at its cost plus
+        the going margin.  A two-percent cost advantage (technique_change)
+        leaves both below the going margin, and the spread between them
+        persists: custom split by a constant elasticity rewards it."""
+        economy = cost_competition(parameters=self.market)
+        region = economy.regions["Dust Basin"]
+        sellers = [p for p in region.producers if p.active and p.commodity == MEALS]
+        self.assertEqual(len(sellers), 2)
+        cheapest = min(sellers, key=lambda p: p.effective_unit_cost(region.prices))
+        other = next(p for p in sellers if p is not cheapest)
+        self.assertLess(cheapest.posted_price, other.posted_price)
+        self.assertGreater(cheapest.sales_yesterday, other.sales_yesterday)
+        floor = cheapest.effective_unit_cost(region.prices) * (1.0 + economy.going_margin)
+        self.assertLess(abs(cheapest.posted_price - floor) / floor, 0.02)
+        economy = technique_change(parameters=self.market)
+        region = economy.regions["Dust Basin"]
+        sellers = [p for p in region.producers if p.active and p.commodity == MEALS]
+        for producer in sellers:
+            self.assertGreater(producer.sales_yesterday, 0.0)
+
+    def test_a_sell_out_raises_and_idle_capacity_brings_the_level_back(self):
+        """docs/62 s4: a shortage is priced by the sellers who ran out;
+        once capacity is rebuilt and idle, a margin above the going one
+        is cut, and the level comes back toward cost plus that margin."""
         prices = producer_loss(parameters=self.market).series("Dust Basin", YAYO)
-        self.assertGreater(max(prices), 21.0 * 1.5)
-        self.assertGreater(prices[-1], 21.0 * 1.5)
+        self.assertGreater(max(prices), 21.0 * 1.3)
+        self.assertLess(prices[-1], max(prices) * 0.85)
+        self.assertLess(prices[-1], 21.0 * 1.25)
 
     def test_an_appended_producer_asks_the_going_price(self):
         """docs/58 s5a: no producer starts at a price of zero."""

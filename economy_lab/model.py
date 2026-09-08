@@ -311,7 +311,26 @@ class Producer:
     pending_out: float = 0.0
     #: Demand a buyer brought to this seller after its stock ran out
     #: today: the sell-out that tells a producer to ask more (docs/60).
+    #: Yesterday's is kept because it is demand the producer saw and
+    #: could not serve, which its plan and its target read (docs/62).
     sellouts_today: float = 0.0
+    sellouts_yesterday: float = 0.0
+    #: The most this producer was willing to run today at the price it
+    #: asked: capacity times the utilization curve.  A sell-out at the
+    #: ceiling is scarcity; one below it is a plan that was too small.
+    last_ceiling: float = 0.0
+
+    #: The producer's expectation of its demand: an exponential average
+    #: of what it saw, formed the way the region forms its expectation
+    #: of price (docs/62).  Its plan and its stock target read this, not
+    #: one day's sales, so a day a rival took its custom is a day and not
+    #: a layoff.
+    expected_demand: float = 0.0
+
+    def demand_seen(self) -> float:
+        """What this producer sold yesterday plus what it was asked for
+        after it ran out: the demand it saw (docs/62)."""
+        return self.sales_yesterday + self.sellouts_yesterday
     #: Inputs bought and not yet used.  Production draws exactly what it
     #: uses from here, so a purchase a later input made surplus carries
     #: over rather than being booked as consumed (docs/60).
@@ -844,6 +863,8 @@ class Economy:
         posted_price_speed: float = 0.02,
         posted_share_gain: float = 1.0,
         procurement: bool = False,
+        going_margin: float = 0.50,
+        idle_capacity_gain: float = 1.0,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -928,6 +949,16 @@ class Economy:
                 "procurement needs producer_cash and posted_prices switched on"
             )
         self.procurement = procurement
+        #: The going margin over cost (docs/62): a producer with capacity
+        #: idle and a margin above it cuts to sell more, in proportion to
+        #: both.  Above every seeded margin by default, so the seeded
+        #: circuit is stationary and the rule speaks only after a shock.
+        if going_margin <= 0.0:
+            raise ValueError("going_margin must be positive")
+        if idle_capacity_gain < 0.0:
+            raise ValueError("idle_capacity_gain must be non-negative")
+        self.going_margin = going_margin
+        self.idle_capacity_gain = idle_capacity_gain
         # Mirrored onto every region so the full-capacity replacement
         # draw can be sized inside `throughput_demand` without the
         # region reaching back out to the economy (docs/36).
@@ -1020,15 +1051,17 @@ class Economy:
         #: than read back out of `history[0]`, which was a dependency on an
         #: *output* — and the one docs/34 section 3.3 wrongly asserted did
         #: not exist.
-        self.opening_inventory = {
-            name: self.system_inventory(name) for name in self.commodities
-        }
         if self.producer_cash:
             self._seed_purses()
         if self.posted_prices:
             self._seed_posted_prices()
         if self.procurement:
+            # Reseeds each producer's stock at its own target (docs/62),
+            # so the opening inventory is read after it.
             self._seed_stocks()
+        self.opening_inventory = {
+            name: self.system_inventory(name) for name in self.commodities
+        }
         self._record_history()
 
     # ------------------------------------------------------------- public API
@@ -2556,6 +2589,34 @@ class Economy:
                     producer.posted_price = region.prices[producer.commodity]
                     producer.last_cost = producer.effective_unit_cost(region.prices)
 
+        if self.procurement:
+            # A producer that arrived without a history expects its
+            # capacity share of what its sector expects (docs/62): the
+            # plan it makes before it has sold anything.  Its price target
+            # is that expectation's inventory life, so what it makes is
+            # not excess until it fails to sell, and it raises on nothing
+            # until it is making all it would.
+            for producer in region.producers:
+                if (
+                    producer.active
+                    and producer.expected_demand == 0.0
+                    and producer.stock == 0.0
+                    and producer.last_runs == 0.0
+                    and producer.sales_yesterday == 0.0
+                ):
+                    name = producer.commodity
+                    peers = [
+                        p for p in region.producers if p.active and p.commodity == name
+                    ]
+                    total = sum(p.capacity_per_day for p in peers)
+                    sector = sum(p.expected_demand for p in peers)
+                    if sector <= EPSILON:
+                        sector = self._throughput[region.name].get(name, 0.0)
+                    if total > EPSILON:
+                        producer.expected_demand = sector * (
+                            producer.capacity_per_day / total
+                        )
+
         return sorted(
             (
                 p
@@ -3804,12 +3865,14 @@ class Economy:
             self.region.worker_cash = value
 
     def _seed_stocks(self) -> None:
-        """Place the seeded pool in producers' hands (docs/59 section 3).
+        """Place the seeded stock in producers' hands (docs/59 section 3).
 
-        Each commodity's stock goes to its producers by capacity share --
-        whole, to the one producer every seeded sector has -- and anything
-        nobody here makes is the fund's.  The region's inventory reads the
-        same total it did.
+        Each producer opens with its own target: the inventory life of
+        the sales it was seeded with (docs/62).  The plan's pool was the
+        inventory life of the sector's *throughput*, which is larger
+        wherever capacity exceeds the seeded draw; a producer opening
+        with that would hold an excess and cut.  Anything nobody here
+        makes is the fund's, and the region's inventory reads the sum.
         """
         for region in self.regions.values():
             for name in self.commodities:
@@ -3817,15 +3880,13 @@ class Economy:
                 producers = [
                     p for p in region.producers if p.active and p.commodity == name
                 ]
-                total = sum(p.capacity_per_day for p in producers)
-                if not producers or total <= EPSILON:
+                if not producers:
                     region.fund_stock[name] = held
                     continue
-                if len(producers) == 1:
-                    producers[0].stock = held
-                else:
-                    for producer in producers:
-                        producer.stock = held * (producer.capacity_per_day / total)
+                days = self.commodities[name].target_inventory_days
+                for producer in producers:
+                    producer.expected_demand = producer.demand_seen()
+                    producer.stock = days * producer.expected_demand
             self._sync_inventory(region)
 
     def _sync_inventory(self, region: Region) -> None:
@@ -3930,10 +3991,15 @@ class Economy:
                 else region.fund_stock.get(name, 0.0) - region.fund_pending.get(name, 0.0)
             )
             held.append(have)
+            # By what a seller can put toward *this* order, not by the
+            # size of its warehouse (docs/62): two sellers who can each
+            # fill it split it by price alone, and one that cannot gets
+            # only what it can serve.
+            serve = min(have, units)
             if epsilon_share == 0.0 or cheapest <= EPSILON or price <= EPSILON:
-                weights.append(have)
+                weights.append(serve)
             else:
-                weights.append(have * (price / cheapest) ** (-epsilon_share))
+                weights.append(serve * (price / cheapest) ** (-epsilon_share))
         takes = [0.0] * len(offers)
         open_sellers = list(range(len(offers)))
         left = min(remaining, sum(held))
@@ -3995,15 +4061,17 @@ class Economy:
 
     def _note_sellouts(self, region: Region, name: str, unfilled: float) -> None:
         """Demand that found every seller empty is a sell-out for each
-        seller that sold today and has nothing left -- the signal that
-        tells it to ask more.  A producer that never had stock is not
-        selling out; it is starting."""
+        active seller with nothing left: demand it saw and could not
+        serve, which its plan reads tomorrow and its price answers as far
+        as it was already making all it would (docs/62).  docs/60 noted
+        it only for sellers that had sold today, so a sector that ran dry
+        could never see the demand that would restart it."""
         if unfilled <= EPSILON:
             return
         for producer in region.producers:
             if (
-                producer.commodity == name
-                and producer.sales_today > EPSILON
+                producer.active
+                and producer.commodity == name
                 and producer.stock - producer.pending_out <= EPSILON
             ):
                 producer.sellouts_today += unfilled
@@ -4037,37 +4105,24 @@ class Economy:
 
     def _price_target(self, region: Region, producer: Producer) -> float:
         """The stock a producer's *price* reads its own against: the
-        sector's target in proportion to its share of the sector's sales
-        (docs/60).  A producer selling nothing holds nothing but excess,
-        and cuts until it sells; a producer with all the sales is not made
-        to cut because a rival appeared.  The whole target for the one
-        producer a seeded sector has, so the seed is stationary."""
-        name = producer.commodity
-        commodity = self.commodities[name]
-        pool = self._throughput[region.name][name] * commodity.target_inventory_days
-        peers = [p for p in region.producers if p.active and p.commodity == name]
-        if len(peers) <= 1:
-            return pool
-        total = sum(p.sales_yesterday for p in peers)
-        if total <= EPSILON:
-            return self._own_target(region, producer)
-        return pool * (producer.sales_yesterday / total)
+        commodity's inventory life of the demand it saw (docs/62).  A
+        producer selling nothing holds nothing but excess, and cuts until
+        it sells; one whose custom has gone elsewhere sees its stock in
+        excess of what it now sells, and cuts; and one at the seed sees
+        exactly the pool, because the pool was that many days of its
+        sales.  Nothing in it reads the sector's capacity, which is what
+        docs/60's target did, and what let a sector hold twenty days of
+        a demand it no longer had."""
+        commodity = self.commodities[producer.commodity]
+        return commodity.target_inventory_days * producer.expected_demand
 
     def _own_target(self, region: Region, producer: Producer) -> float:
-        """The stock a producer plans around: its capacity share of the
-        sector's demand at full utilization, for the commodity's inventory
-        life -- the same information the pool's target was built from, and
-        the pool's target itself for the one producer a seeded sector has."""
-        name = producer.commodity
-        commodity = self.commodities[name]
-        pool = self._throughput[region.name][name] * commodity.target_inventory_days
-        peers = [p for p in region.producers if p.active and p.commodity == name]
-        if len(peers) <= 1:
-            return pool
-        total = sum(p.capacity_per_day for p in peers)
-        if total <= EPSILON:
-            return 0.0
-        return pool * (producer.capacity_per_day / total)
+        """The stock a producer plans around: the inventory life of the
+        demand it expects (docs/62).  The same number its price reads its
+        stock against; an entrant's expectation is seeded on its first
+        morning (`_open_region_day`), which is what lets it make anything
+        before it has sold anything."""
+        return self._price_target(region, producer)
 
     def _produce_procurement(self, region: Region) -> None:
         """One region's day when producers own their output (docs/59).
@@ -4086,13 +4141,14 @@ class Economy:
         for producer in active:
             units = producer.process.outputs[producer.commodity]
             target = self._own_target(region, producer)
-            wanted_output = producer.sales_yesterday + self.replenishment_rate * (
+            wanted_output = producer.expected_demand + self.replenishment_rate * (
                 target - producer.stock
             )
             wanted = max(0.0, wanted_output / units)
             ceiling = producer.process.runs_for(
                 producer.capacity_per_day
             ) * producer.utilization(producer.posted_price, region.prices)
+            producer.last_ceiling = ceiling
             planned[id(producer)] = min(wanted, ceiling)
 
         # Reserve rationing, pro rata across producers sharing a reserve.
@@ -4401,8 +4457,12 @@ class Economy:
                         posted *= cost / producer.last_cost
                     if self.procurement:
                         # Excess stock cuts; a sell-out raises.  A stock
-                        # merely below target is not scarcity -- an entrant
-                        # filling its warehouse must not read it as one.
+                        # merely below target is not scarcity: a producer
+                        # filling its warehouse toward the demand it
+                        # expects must not read the gap as one (docs/60,
+                        # kept in docs/62 with the target now the
+                        # inventory life of the producer's own expected
+                        # demand rather than its share of the plan's pool).
                         target = self._price_target(region, producer)
                         if target > EPSILON:
                             excess = min(0.0, (target - producer.stock) / target)
@@ -4414,10 +4474,37 @@ class Economy:
                         sellout = (
                             producer.sellouts_today / served if served > EPSILON else 0.0
                         )
+                        # A producer that made all it was willing to at
+                        # its price answers a sell-out with its price; one
+                        # that planned less than that answers it with its
+                        # plan, and raises only in proportion (docs/62).
+                        # At a price where it would make nothing, a
+                        # sell-out is scarcity and raises in full.
+                        if sellout > 0.0 and producer.last_ceiling > EPSILON:
+                            sellout *= min(
+                                1.0, producer.last_runs / producer.last_ceiling
+                            )
                         own = (
                             commodity.inventory_price_sensitivity * excess
                             + self.unmet_demand_price_pressure * sellout
                         )
+                        # Capacity idle and a margin above the going one:
+                        # each unit more would pay, so the producer cuts
+                        # to sell more (docs/62).  This is the supply
+                        # response of the producers already there; entry
+                        # on margin (docs/61) is the same signal read by
+                        # capital that is not there yet.
+                        full = producer.process.runs_for(producer.capacity_per_day)
+                        if full > EPSILON and cost > EPSILON:
+                            idle = max(0.0, 1.0 - producer.last_runs / full)
+                            above = (posted - cost) / cost - self.going_margin
+                            if idle > 0.0 and above > 0.0:
+                                own -= (
+                                    self.idle_capacity_gain
+                                    * idle
+                                    * above
+                                    / self.going_margin
+                                )
                     else:
                         own = pressure + self.posted_share_gain * (
                             producer.order_fill - mean_fill
@@ -4448,8 +4535,14 @@ class Economy:
                         weights.append(fund_sold)
                         asked.append(region.fund_price.get(name, region.prices[name]))
                     for p in producers:
+                        # In the form that is exact when nothing moved:
+                        # a stationary day adds alpha times zero.
+                        p.expected_demand += self.expectation_alpha * (
+                            p.sales_today + p.sellouts_today - p.expected_demand
+                        )
                         p.sales_yesterday = p.sales_today
                         p.sales_today = 0.0
+                        p.sellouts_yesterday = p.sellouts_today
                         p.sellouts_today = 0.0
                     region.fund_sales_today[name] = 0.0
                     self._reprice_fund(region, commodity)

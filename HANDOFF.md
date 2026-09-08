@@ -10,7 +10,8 @@
 **Habituation design / results:** `docs/51`, `docs/52`
 **Producer-level cash design / results:** `docs/55`, `docs/56`
 **Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
-**Procurement design / results:** `docs/59`, `docs/60` (built, off by default)
+**Procurement design / results / correction:** `docs/59`, `docs/60`, `docs/62` (built, off by default)
+**Entry on margin design:** `docs/61`
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1898,12 +1899,18 @@ shocks also leave their price level behind, because entry responds only to
 shortfall and not to margin. Procurement is built too (`docs/60`): no production fixed point and no
 pool, every producer planning from its own sales and stock and buying from
 the sellers it can afford, exactly stationary from the reseeded state, all
-three identities closing. Off by default. What it shows is that with no
-anchor and no entry on margin every shock's price level is permanent — a
-glut is a slow sale, a shortage a permanent rise, a boom absorbed by price
-rather than employment. **Entry on margin is the next design.** The
-`docs/58` §5 oscillation turned out to be an entrant clamped to 18% of
-cost, corrected in `docs/58` §5a.
+three identities closing. Off by default. `docs/60` read every shock's
+price level as permanent; `docs/62` found the stock target was the plan's
+pool in disguise and corrected it — each producer now targets the
+inventory life of its own expected demand, custom is split by what a
+seller can serve, sell-outs restart a dry sector, and idle capacity with
+a margin above a going one (`going_margin`, 0.50) cuts. The corrected
+market gravitates from above: the glut returns to the reference, the
+shortage settles within 2% of it, and a cost advantage is used down to
+cost plus the going margin. **Entry on margin (`docs/61`) is the capacity
+side of the same signal**, being built next. The `docs/58` §5 oscillation
+turned out to be an entrant clamped to 18% of cost, corrected in
+`docs/58` §5a.
 
 ---
 

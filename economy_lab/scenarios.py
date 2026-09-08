@@ -184,6 +184,13 @@ class ScenarioParameters:
     #: Needs producer cash and posted prices; off by default and
     #: bit-identical off.
     procurement: bool = False
+    #: The going margin over cost (docs/62), and how hard idle capacity
+    #: with a margin above it cuts.  The default sits above every seeded
+    #: margin, so the seeded circuit is stationary; the gravitation
+    #: scenario lowers it to ``gravitation_margin``.
+    going_margin: float = 0.50
+    idle_capacity_gain: float = 1.0
+    gravitation_margin: float = 0.30
 
     # --- endogenous labor values (docs/19) -----------------------------------
     labor_value_tolerance: float = 1e-12
@@ -1090,6 +1097,8 @@ def seeded_two_region_economy(
         posted_price_speed=parameters.posted_price_speed,
         posted_share_gain=parameters.posted_share_gain,
         procurement=parameters.procurement,
+        going_margin=parameters.going_margin,
+        idle_capacity_gain=parameters.idle_capacity_gain,
     )
     _assert_reference_full_utilization(economy)
     return economy
