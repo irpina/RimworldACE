@@ -1990,6 +1990,26 @@ case it left is ordinary scarcity, and exit turns a silent signal into a
 contracting sector: the glut's basket shortfall rests at 63.1 units with
 the workers holding 2089 silver against a basket costing 2.75 a day.
 
+**Which call sites are broken.** `_note_sellouts` has three callers and
+they are not equally wrong — checked, and worth not re-deriving:
+
+- `_final_market` fund pass (`model.py:4475`) is **correct**: it calls
+  `_buy` first, so `pending_out` is already set and an emptied seller
+  tests as empty.
+- `_final_market` basket pass (`model.py:4498`) is **wrong**: it notes
+  the shortfall in the first loop and buys in a second loop after the
+  cash factor is known, so the note always precedes the draw. This is the
+  one the glut measures.
+- `_produce_procurement` input market (`model.py:4338`) is **partly
+  wrong**: the note precedes that producer's own `_buy`, so the producer
+  that empties a seller does not see it, though later producers in the
+  same pass do, because `pending_out` accumulates.
+
+Note also that the cash-denied part of the basket shortfall
+(`model.py:4511`) must **not** become a sell-out: the seller is not empty,
+the workers simply cannot pay, and demand that cannot pay is not demand
+the seller saw.
+
 **Not done — the next session's task, in order.**
 1. Design `docs/68` before building. The shape is in `docs/67` §8: note
    the sell-out after the stock is drawn down, or net the order against
