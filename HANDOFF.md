@@ -1,6 +1,6 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-09-08  
+**Last updated:** 2026-09-09  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
@@ -12,8 +12,9 @@
 **Firm-posted prices design / results:** `docs/57`, `docs/58` (experimental, off by default)
 **Procurement design / results / correction:** `docs/59`, `docs/60`, `docs/62` (built, off by default)
 **Entry on margin design / results:** `docs/61`, `docs/63` (built, off by default)
-**Exit on return design / results:** `docs/64`, `docs/65` (built and measured, off by default, **not usable** — the retirement clause deletes the basket sectors)
-**Exit floor design:** `docs/66` (the fix, designed and NOT YET BUILT — see "Handoff: the exit floor" below)
+**Exit on return design / results:** `docs/64`, `docs/65` (built and measured, off by default)
+**Exit floor design / results:** `docs/66`, `docs/67` (built; the floor works, and it uncovered a second defect)
+**Sell-out a seller is emptied by:** the open defect and the next design — see "Handoff: the sell-out signal" below
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1927,80 +1928,86 @@ whose whole demand is below the minimum plant, and the seeded circuit
 has two of them in each region: clothing and medicine leave the
 subsistence basket on day 45 and no rule can rebuild them, because the
 same constant is a build-side floor. The basket shortfall goes from 0.08
-to 94.4 in the glut. `docs/66` designs the fix and is not yet built. A
-second finding survives it: entry and exit alternate in one region and
-converge in the other under identical rules (`docs/65` §5), which is
-`docs/64` §7's fourth mode. The `docs/58` §5 oscillation
+to 94.4 in the glut. `docs/66` designed the fix, `docs/67` measured it:
+the floor works — the basket sectors rest at exactly 0.1 and the
+gravitation shortfall goes to zero — and it uncovered a deeper defect it
+had been hiding. A seller emptied by the very order it is answering
+records no sell-out, because `_note_sellouts` counts only sellers already
+empty when the order arrives and `_final_market` calls it before the
+stock is drawn down. So a provisioner serving half the basket expects
+only what it sold, exit shrinks the sector to fit its own supply, and the
+workers go short every day at a price that never rises (`docs/67` §5).
+`docs/68` is that fix and is not yet designed. Two further findings
+stand: nothing in this economy is outside the basket, so `docs/65` §2's
+"clean readings" were not clean (`docs/67` §4); and entry and exit still
+alternate in one region and converge in the other under identical rules
+(`docs/65` §5), which is `docs/64` §7's fourth mode. The `docs/58` §5 oscillation
 turned out to be an entrant clamped to 18% of cost, corrected in
 `docs/58` §5a.
 
 ---
 
-## Handoff: the exit floor (2026-09-08)
+## Handoff: the sell-out signal (2026-09-09)
 
-Exit on return is **built, measured and recorded** (`docs/64`,
-`docs/65`); the rule as built is not usable and the fix is designed but
-not built (`docs/66`). State at the handoff commit:
+Exit on return is **built, measured, corrected once and measured again**
+(`docs/64` to `docs/67`). The floor fix landed and works. The flag is
+still not usable, for a different and deeper reason. State at the handoff
+commit:
 
 **Done and committed.**
-- The rule itself, unchanged from `ed9c6a7`: flag `exit_on_return`
-  (needs `procurement`), `capacity_reserve` 0.10, `exit_gain` 1.0,
-  `Producer.below_going_days`, `Ledger.exits`,
-  `Economy._return_and_surplus`, `Economy._exit`, `_retire` factored out
-  of `_bankrupt`, and `_invest` reading the sector's summed
-  `expected_demand` under the flag.
-- `docs/65-exit-on-return-results.md`: 25 of 39 checks held across the
-  nine predictions. Four held cleanly (6.4, 6.6, 6.9 and the half of 6.3
-  the slice existed for); the rest failed through one clause.
-- `docs/66-exit-floor-design.md`: the fix, with predictions 4.1–4.9.
-  **Read this before touching `_exit`.**
-- Twenty-two `exit.*` metrics in `economy_lab/behavior.py`
-  (`_exit_metrics`), reference regenerated at **322** with every
-  pre-existing metric at zero delta. Four of the twenty-two freeze the
-  *defect* on purpose, so the fix cannot land quietly.
-- `ExitOnReturnTests` in `tests/test_economy_lab.py`, 7 tests (236 in the
-  laboratory suite, 271 with the viewer and the port).
-- Viewer catalog docs tuple for `overshoot` now `(64, 65)`; the
-  `economy_lab/README.md` "Intentionally absent" bullet on competitive
-  exit rewritten; a run paragraph for `overshoot`.
+- The floor (`docs/66` §2) in `_exit`: the withdrawal is capped at
+  `capacity − max(min_investment_capacity, capacity − surplus)`, and
+  retirement fires on `expected_demand <= EPSILON` instead of on the
+  plant's size, with the retirement branch taken first.
+- `docs/67-exit-floor-results.md`: four predictions held, one in half,
+  five wrong — and `docs/66` §5 had written down what each failure would
+  mean, so every one of them is a finding rather than a surprise. **Read
+  §4 and §5 before touching anything.**
+- Twenty-two `exit.*` readings re-frozen, reference still **322** with
+  every other metric at zero delta. `garments_capacity_end` and
+  `medicine_capacity_end` are 0 → 0.1 exactly;
+  `gravitation.basket_shortfall` 115.78 → 0.
+- Tests: the defect test replaced by its opposite
+  (`test_a_sector_smaller_than_the_minimum_plant_rests_on_the_floor`) and
+  one added that asserts the *new* defect as current behaviour
+  (`test_a_seller_emptied_by_an_order_does_not_see_the_demand_it_missed`)
+  — that one is written to fail when `docs/68` lands. 237 in the
+  laboratory suite, 270 with the viewer and the port.
+- README bullet, viewer catalog docs tuple for `overshoot` now
+  `(64, 65, 66, 67)`.
 
-**The defect, in one paragraph.** `min_investment_capacity` (0.1) is a
-build-side floor — `_invest` will not place a project below it
-(`economy_lab/model.py:5026`) — used in `_exit` as a retire-side trigger.
-The seed's tailors and herbalists expect 0.0397 units of demand, so their
-reserve target is 0.0437, *below* the minimum plant: the withdrawal lands
-at 0.0718, the retirement clause fires, and the plant goes for good.
-Clothing and medicine leave the subsistence basket on day 45 in both
-regions; the basket shortfall goes 0.08 → 94.4 in the glut, 0 → 115.8 in
-gravitation, and employment in `demand_boom` falls 57%. Every reading
-that runs through the basket is measuring that, not exit.
+**The open defect, in one paragraph.** `_note_sellouts` records a
+sell-out only for a seller whose stock is already at zero when the order
+arrives (`stock - pending_out <= EPSILON`), and `_final_market` calls it
+*before* `_buy` draws the stock down. Instrumented on day 201 of the
+glut: unfilled demand 0.307, the provisioner's stock at the moment of the
+call 0.289, sellers counted as empty `[]`. A seller emptied *by* the
+order it is answering is invisible. Two rules read that signal and both
+go silent — the plan, so output never grows to meet the demand, and the
+posted price, so the scarcity is never priced. `docs/62` wrote this rule
+for the opposite case (a sector already at zero) and fixed that one. The
+case it left is ordinary scarcity, and exit turns a silent signal into a
+contracting sector: the glut's basket shortfall rests at 63.1 units with
+the workers holding 2089 silver against a basket costing 2.75 a day.
 
 **Not done — the next session's task, in order.**
-1. Build `docs/66` §2: floor the withdrawal at
-   `max(min_investment_capacity, (1 + reserve) × expected_demand)`, and
-   retire only when `expected_demand <= EPSILON`. Two lines in `_exit`.
-2. Measure `docs/66` §4's predictions 4.1–4.10. Run 4.10 first — it is
-   one command: `python -m economy_lab overshoot` currently raises
-   `cannot price 'chemfuel'`, because deleting the basket sectors leaves
-   the classical price system with no solution, and it running again is
-   the cheapest check that the fix worked. 4.4 (both basket shortfalls
-   under 1.0) is the one that says it worked properly; 4.7 and 4.8
-   predict the churn *survives*, and §5 says what it means if they come
-   out better than predicted.
-3. Re-freeze the twenty-two `exit.*` metrics, and say in the commit
-   message why each moved. `garments_capacity_end` and
-   `medicine_capacity_end` should go 0 → 0.1 exactly.
-4. Replace
-   `test_the_retirement_clause_deletes_a_sector_smaller_than_the_minimum_plant`
-   with its opposite — the sectors survive at exactly the minimum plant.
-   It is written to fail when the fix lands; that is deliberate.
-5. `docs/67-exit-floor-results.md` in the form of `docs/63`; catalog
-   docs tuple to `(64, 65, 66, 67)`; the README bullet and this file
-   again.
-6. Then the second finding: `docs/65` §5's churn — 73 entrants placed
-   and 22 active in Dust Basin while Green River converges under
-   identical rules. `docs/64` §7 calls it the reserve being the wrong
-   size. It needs its own design document, not a parameter nudge.
+1. Design `docs/68` before building. The shape is in `docs/67` §8: note
+   the sell-out after the stock is drawn down, or net the order against
+   the stock at the point of the call. Say which and why, and predict
+   what moves. It is a correction to `docs/62`'s rule, so `docs/62`
+   should get a pointer the way `docs/60` did.
+2. Expect it to move readings outside the exit slice. The sell-out drives
+   the plan and the posted price under `procurement`, so `procurement.*`
+   and `entry.*` metrics are in scope — the seeded circuit is not (nothing
+   sells out there), and that is the one thing that must stay
+   bit-identical.
+3. Re-read `docs/67` §4's four readings and §5's 4.4/4.5 after the fix,
+   then §6's 4.7/4.8: the glut is exactly the scenario where a sector is
+   emptied daily, so the churn may or may not survive. `docs/67` §6 says
+   to check that only after this fix, not before.
+4. Then the churn (`docs/65` §5), if it survives: 73 entrants placed and
+   22 active in Dust Basin while Green River converges under identical
+   rules. It needs its own design document, not a parameter nudge.
 
 **Standing rules that applied throughout:** no dependencies; no change
 to default model behaviour (`python -m economy_lab.baseline` zero

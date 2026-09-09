@@ -262,19 +262,23 @@ markup rather than a rate of profit.
 
 ## Intentionally absent from this slice
 
-- competitive *exit*: built and measured (docs/64, docs/65), off by
-  default and **not yet usable**. A producer whose return on its capacity
-  — its posted margin times its utilization, against the going margin —
-  has been below the going one for the investment lead time withdraws the
-  capacity it holds beyond a 10% reserve over the demand it expects. The
+- competitive *exit*: built, measured and corrected once (docs/64 to
+  docs/67), off by default and **still not usable**. A producer whose
+  return on its capacity — its posted margin times its utilization,
+  against the going margin — has been below the going one for the
+  investment lead time withdraws the capacity it holds beyond a 10%
+  reserve over the demand it expects, never below the larger of that
+  reserve and the smallest plant the fund would build (docs/66). The
   signal works: a cost advantage draws the incumbent down to its custom
-  plus the reserve exactly, and the investment rule reading the market's
-  demand instead of the plan's throughput kills the 66-unit entrant a
-  shortage used to place. But the retirement clause deletes any sector
-  whose whole demand is below the minimum plant, and the seeded circuit
-  has two — tailors and herbalists — so clothing and medicine leave the
-  basket on day 45 and nothing can rebuild them. `docs/66` is the fix;
-  until it lands the flag is for reading, not for running;
+  plus the reserve, and the investment rule reading the market's demand
+  instead of the plan's throughput kills the 66-unit entrant a shortage
+  used to place. What is not usable is its input. A seller emptied by the
+  very order it is answering records no sell-out, because the rule counts
+  only sellers already empty when the order arrives; so a provisioner
+  serving half the basket expects only what it sold, exit shrinks it to
+  fit its own supply, and the workers go short every day at a price that
+  never rises (docs/67 §5). `docs/68` is that fix; until it lands the
+  flag is for reading, not for running;
 - a price system of its own: two-thirds of every upstream price is a wedge
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices
