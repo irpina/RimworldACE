@@ -163,6 +163,24 @@ goes where the going margin sends it (`docs/61`, `docs/63`):
 python -m economy_lab gravitation
 ```
 
+Run the overshoot scenario: the 60% capacity loss on the market with both
+entry and exit on, 500 days, where entry's pipeline overshoots the demand
+on its lead time and exit takes the surplus back out (`docs/64`,
+`docs/65`):
+
+```text
+python -m economy_lab overshoot
+```
+
+**This currently raises** `cannot price 'chemfuel': its technique
+requires ['garments', 'herbal_medicine'], which nothing produced`, and is
+left failing on purpose. Exit's retirement clause deletes the two basket
+sectors on day 45 (`docs/65` §3), and `docs/29` made the tailors' powered
+bench the link that turns chemfuel into a basic commodity — so the
+classical price system `summary()` solves has no solution. The traceback
+is the correct report of an economy that cannot reproduce its workers.
+`docs/66` fixes the rule; the command running again is its first check.
+
 Open the laboratory in a browser (`docs/48`). The viewer runs any scenario
 with any parameter overridden, draws the history with the shock day
 marked, lays the five ledgers out apart, compares two runs as
@@ -244,8 +262,19 @@ markup rather than a rate of profit.
 
 ## Intentionally absent from this slice
 
-- competitive *exit*: a producer that loses the order book keeps its
-  capacity indefinitely, so competition is for orders, not survival;
+- competitive *exit*: built and measured (docs/64, docs/65), off by
+  default and **not yet usable**. A producer whose return on its capacity
+  — its posted margin times its utilization, against the going margin —
+  has been below the going one for the investment lead time withdraws the
+  capacity it holds beyond a 10% reserve over the demand it expects. The
+  signal works: a cost advantage draws the incumbent down to its custom
+  plus the reserve exactly, and the investment rule reading the market's
+  demand instead of the plan's throughput kills the 66-unit entrant a
+  shortage used to place. But the retirement clause deletes any sector
+  whose whole demand is below the minimum plant, and the seeded circuit
+  has two — tailors and herbalists — so clothing and medicine leave the
+  basket on day 45 and nothing can rebuild them. `docs/66` is the fix;
+  until it lands the flag is for reading, not for running;
 - a price system of its own: two-thirds of every upstream price is a wedge
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices

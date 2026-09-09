@@ -150,7 +150,7 @@ _DOCS: Dict[str, Tuple[int, ...]] = {
     "boom_reversal": (51, 52),
     "cash_circuit": (55, 56),
     "gravitation": (61, 62, 63),
-    "overshoot": (64,),
+    "overshoot": (64, 65),
 }
 
 #: Shock days: an int, a parameter name, a callable, or None.
