@@ -3980,11 +3980,12 @@ class ExitOnReturnTests(unittest.TestCase):
     """Capital leaves a sector that cannot earn the going return (docs/64,
     docs/65), on the market with entry.
 
-    The rule carries a **known defect** and these tests assert it as
-    current behaviour rather than as intent: the retirement clause deletes
-    the seed's tailors and herbalists, and `docs/66` is the fix.  When it
-    lands, `test_the_retirement_clause_deletes_a_sector_smaller_than_the_
-    minimum_plant` is the test that must fail.
+    The retirement clause that deleted the seed's tailors and herbalists
+    is fixed (`docs/66`): the withdrawal is floored at the larger of the
+    reserve target and the smallest plant the fund would build.  One
+    defect remains and one test asserts it as current behaviour rather
+    than as intent -- a seller emptied by the order it is answering sees
+    no sell-out (`docs/67` s5), and `docs/68` is that fix.
     """
 
     @classmethod
@@ -4029,23 +4030,31 @@ class ExitOnReturnTests(unittest.TestCase):
             economy.investment_lead_days,
         )
 
-    def test_the_retirement_clause_deletes_a_sector_smaller_than_the_minimum_plant(
-        self,
-    ):
-        """docs/65 s3, the defect.  The tailors want 0.0437 units of plant
-        against a `min_investment_capacity` of 0.1, so the withdrawal lands
-        below the minimum and the whole plant goes -- and `_invest` will
-        not rebuild below that floor either, so the sector is gone for
-        good.  docs/66 fixes this; when it does, this test fails, which is
-        the point of writing it down.
+    def test_a_sector_smaller_than_the_minimum_plant_rests_on_the_floor(self):
+        """docs/66 s2 and s4.2, replacing the defect this test asserted.
+
+        The tailors want 0.0437 units of plant against a
+        `min_investment_capacity` of 0.1, so their reserve target is below
+        the smallest plant the fund would build.  The withdrawal stops at
+        that floor and the sector survives; before docs/66 the whole plant
+        went and nothing could rebuild it.
         """
         economy = equilibrium(parameters=self.leaving)
         for region in economy.regions.values():
             for commodity in (GARMENTS, MEDICINE):
                 with self.subTest(region=region.name, commodity=commodity):
-                    self.assertEqual(region.capacity(commodity), 0.0)
-        # The arithmetic that produces it, so a future change cannot make
-        # the deletion go away for an unrelated reason and look fixed.
+                    self.assertEqual(
+                        region.capacity(commodity), economy.min_investment_capacity
+                    )
+                    seller = next(
+                        p
+                        for p in region.producers
+                        if p.active and p.commodity == commodity
+                    )
+                    # Alive and working, not a husk left on the books.
+                    self.assertGreater(seller.last_runs, 0.0)
+        # The arithmetic the floor exists for: the reserve target is below
+        # the minimum plant, so only the floor keeps the sector alive.
         seed = seeded_two_region_economy(parameters=self.leaving)
         tailors = next(
             p for p in seed.regions["Dust Basin"].producers if p.commodity == GARMENTS
@@ -4054,6 +4063,38 @@ class ExitOnReturnTests(unittest.TestCase):
             (1.0 + seed.capacity_reserve) * 0.0397, seed.min_investment_capacity
         )
         self.assertEqual(tailors.capacity_per_day, 0.25)
+
+    def test_a_seller_emptied_by_an_order_does_not_see_the_demand_it_missed(self):
+        """docs/67 s5, the second defect, asserted as current behaviour.
+
+        `_note_sellouts` counts only sellers already empty when the order
+        arrives, and the final market calls it before `_buy` draws the
+        stock down.  A provisioner that serves half the basket and is
+        emptied by that very order therefore records no sell-out, expects
+        only what it sold, and withdraws capacity to match -- while the
+        workers' shortfall accrues every day.  docs/68 is the fix; when it
+        lands this test must fail.
+        """
+        economy = regional_glut(240, parameters=self.leaving)
+        region = economy.regions["Dust Basin"]
+        provisioner = next(
+            p for p in region.producers if p.active and p.commodity == MEALS
+        )
+        # Empty at the close, having sold every unit it made.
+        self.assertEqual(provisioner.stock, 0.0)
+        self.assertGreater(provisioner.sales_yesterday, 0.0)
+        # And yet it saw no unserved demand at all.
+        self.assertEqual(provisioner.sellouts_yesterday, 0.0)
+        # The workers did: the basket went short by many times a day's sales.
+        shortfall = sum(economy.ledger.basket_shortfall.values())
+        self.assertGreater(shortfall, 10.0 * provisioner.sales_yesterday)
+        # So the sector shrank to the supply it managed, not the demand it faced.
+        self.assertLess(
+            provisioner.capacity_per_day,
+            0.5 * equilibrium(parameters=self.leaving)
+            .regions["Dust Basin"]
+            .capacity(MEALS),
+        )
 
     def test_the_investment_rule_reads_the_markets_demand(self):
         """docs/64 s1 and docs/65 s2: with the sector's expected demand in
@@ -4083,8 +4124,11 @@ class ExitOnReturnTests(unittest.TestCase):
                 )
                 self.assertLess(biggest(loss, commodity), biggest(entry, commodity))
                 self.assertLessEqual(biggest(loss, commodity), expected)
+        # An order of magnitude, which is the claim; the exact size moved
+        # 21% when docs/66 kept the basket sectors alive and the wage with
+        # them (docs/67 s4), so the bound is on the order and not the value.
         self.assertGreater(biggest(entry, LEAVES), 60.0)
-        self.assertLess(biggest(loss, LEAVES), 10.0)
+        self.assertLess(biggest(loss, LEAVES), 20.0)
 
     def test_a_cost_advantage_draws_the_incumbent_down_to_the_reserve(self):
         """docs/64 s6.6: the incumbent at a third of the custom and a
@@ -4095,13 +4139,19 @@ class ExitOnReturnTests(unittest.TestCase):
         incumbent = next(p for p in region.producers if p.name == "Dust provisioners")
         self.assertTrue(incumbent.active)
         self.assertLess(incumbent.capacity_per_day, 0.5)
-        self.assertAlmostEqual(
-            incumbent.capacity_per_day / incumbent.expected_demand,
-            1.0 + economy.capacity_reserve,
-            places=6,
-        )
+        # Down to the reserve and never through it: the floor is the one
+        # thing that must hold exactly (docs/66 s2).  Where it lands
+        # within the reserve moved 1.5% when the basket sectors survived
+        # and the wage changed with them (docs/67 s4), so the bound above
+        # is on the neighbourhood and the bound below is on the invariant.
+        ratio = incumbent.capacity_per_day / incumbent.expected_demand
+        self.assertGreaterEqual(ratio, 1.0 + economy.capacity_reserve)
+        self.assertLess(ratio, 1.0 + economy.capacity_reserve + 0.05)
         entry_price = cost_competition(parameters=self.entry).regions["Dust Basin"].prices[MEALS]
-        self.assertLess(abs(region.prices[MEALS] / entry_price - 1.0), 0.02)
+        # The same neighbourhood, which is the claim: withdrawing idle
+        # plant does not move a price the split settles.  The gap widened
+        # from 1.6% to 2.3% for the wage reason in docs/67 s4.
+        self.assertLess(abs(region.prices[MEALS] / entry_price - 1.0), 0.03)
 
     def test_what_left_equals_what_capacity_lost_gained(self):
         """docs/64 s6.9: the `exits` ledger reconciles to `capacity_lost`,

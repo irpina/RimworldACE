@@ -3935,8 +3935,15 @@ class Economy:
         the going one, with a surplus to withdraw, for the investment lead
         time takes out ``exit_gain × (1 − r)`` of its surplus: proportional
         to how far below, geometric toward the reserve, and nothing at the
-        going return.  A plant the withdrawal would leave smaller than the
-        smallest the fund would build is retired entirely, its purse and
+        going return.
+
+        The withdrawal is floored at the larger of the reserve over the
+        demand the producer expects and the smallest plant the fund would
+        build (docs/66): capital must not withdraw below what no rule
+        could rebuild, which is the invariant the first version broke by
+        reading ``min_investment_capacity`` as a retirement trigger and
+        deleting two seeded sectors of 0.04 units a day.  A producer is
+        retired only when its custom has gone entirely, its purse and
         stock returning to the fund as a bankrupt's do.  Nothing comes
         back: construction was a sink and exit returns no silver.
         """
@@ -3954,10 +3961,23 @@ class Economy:
                 withdrawn = min(surplus, self.exit_gain * (1.0 - relative) * surplus)
                 if withdrawn <= 0.0:
                     continue
-                remaining = producer.capacity_per_day - withdrawn
-                if remaining < self.min_investment_capacity:
+                if producer.expected_demand <= EPSILON:
+                    # Its custom has gone, which is the case retirement
+                    # was written for (docs/66 section 2).
                     withdrawn = producer.capacity_per_day
                     remaining = 0.0
+                else:
+                    # `capacity - surplus` is the reserve over the demand
+                    # expected; the plant floor is the smallest the fund
+                    # would build.  Neither may be crossed.
+                    floor = max(
+                        self.min_investment_capacity,
+                        producer.capacity_per_day - surplus,
+                    )
+                    withdrawn = min(withdrawn, producer.capacity_per_day - floor)
+                    if withdrawn <= EPSILON:
+                        continue
+                    remaining = producer.capacity_per_day - withdrawn
                 Ledger.add(self.ledger.capacity_lost, producer.commodity, withdrawn)
                 self.ledger.exits.append(
                     (self.day, region.name, producer.name, withdrawn)
