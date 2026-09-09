@@ -3975,3 +3975,157 @@ class EntryOnMarginTests(unittest.TestCase):
                 for name, residual in economy.commodity_balances().items():
                     self.assertLess(abs(residual), 1e-6, name)
 
+
+class ExitOnReturnTests(unittest.TestCase):
+    """Capital leaves a sector that cannot earn the going return (docs/64,
+    docs/65), on the market with entry.
+
+    The rule carries a **known defect** and these tests assert it as
+    current behaviour rather than as intent: the retirement clause deletes
+    the seed's tailors and herbalists, and `docs/66` is the fix.  When it
+    lands, `test_the_retirement_clause_deletes_a_sector_smaller_than_the_
+    minimum_plant` is the test that must fail.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.market = replace(
+            ScenarioParameters(),
+            producer_cash=True,
+            posted_prices=True,
+            procurement=True,
+        )
+        cls.entry = replace(cls.market, entry_on_margin=True)
+        cls.leaving = replace(cls.entry, exit_on_return=True)
+
+    def test_off_by_default_and_needs_procurement(self):
+        """docs/64 s2 and s6.1: the flag refuses without procurement, as
+        procurement refuses without purses."""
+        self.assertFalse(ScenarioParameters().exit_on_return)
+        with self.assertRaises(ValueError):
+            seeded_two_region_economy(
+                parameters=replace(
+                    ScenarioParameters(), exit_on_return=True, procurement=False
+                )
+            )
+
+    def test_a_sector_at_full_utilization_has_no_surplus_to_withdraw(self):
+        """docs/64 s3: the cooperative, the fields and the refinery expect
+        their whole output, so nothing leaves them and their capacity is
+        unchanged to the bit."""
+        economy = equilibrium(parameters=self.leaving)
+        region = economy.regions["Dust Basin"]
+        self.assertEqual(region.capacity(YAYO), 10.0)
+        self.assertEqual(region.capacity(LEAVES), 80.0)
+        self.assertEqual(economy.regions["Green River"].capacity(YAYO), 10.0)
+
+    def test_the_first_withdrawal_is_on_the_lead_time(self):
+        """docs/64 s2: capital leaves on the horizon on which it arrives,
+        so no producer withdraws before `investment_lead_days`."""
+        economy = equilibrium(parameters=self.leaving)
+        self.assertTrue(economy.ledger.exits)
+        self.assertEqual(
+            min(day for day, _, _, _ in economy.ledger.exits),
+            economy.investment_lead_days,
+        )
+
+    def test_the_retirement_clause_deletes_a_sector_smaller_than_the_minimum_plant(
+        self,
+    ):
+        """docs/65 s3, the defect.  The tailors want 0.0437 units of plant
+        against a `min_investment_capacity` of 0.1, so the withdrawal lands
+        below the minimum and the whole plant goes -- and `_invest` will
+        not rebuild below that floor either, so the sector is gone for
+        good.  docs/66 fixes this; when it does, this test fails, which is
+        the point of writing it down.
+        """
+        economy = equilibrium(parameters=self.leaving)
+        for region in economy.regions.values():
+            for commodity in (GARMENTS, MEDICINE):
+                with self.subTest(region=region.name, commodity=commodity):
+                    self.assertEqual(region.capacity(commodity), 0.0)
+        # The arithmetic that produces it, so a future change cannot make
+        # the deletion go away for an unrelated reason and look fixed.
+        seed = seeded_two_region_economy(parameters=self.leaving)
+        tailors = next(
+            p for p in seed.regions["Dust Basin"].producers if p.commodity == GARMENTS
+        )
+        self.assertLess(
+            (1.0 + seed.capacity_reserve) * 0.0397, seed.min_investment_capacity
+        )
+        self.assertEqual(tailors.capacity_per_day, 0.25)
+
+    def test_the_investment_rule_reads_the_markets_demand(self):
+        """docs/64 s1 and docs/65 s2: with the sector's expected demand in
+        place of the plan's full-capacity throughput, the 66-unit leaves
+        entrant of the entry run does not appear."""
+        loss = producer_loss(440, parameters=self.leaving)
+        entry = producer_loss(440, parameters=self.entry)
+
+        def biggest(economy, commodity):
+            return max(
+                (
+                    p.capacity_per_day
+                    for p in economy.regions["Dust Basin"].producers
+                    if p.active
+                    and p.commodity == commodity
+                    and p.name.startswith("entrant-")
+                ),
+                default=0.0,
+            )
+
+        for commodity in (LEAVES, CHEMFUEL):
+            with self.subTest(commodity=commodity):
+                expected = sum(
+                    p.expected_demand
+                    for p in loss.regions["Dust Basin"].producers
+                    if p.active and p.commodity == commodity
+                )
+                self.assertLess(biggest(loss, commodity), biggest(entry, commodity))
+                self.assertLessEqual(biggest(loss, commodity), expected)
+        self.assertGreater(biggest(entry, LEAVES), 60.0)
+        self.assertLess(biggest(loss, LEAVES), 10.0)
+
+    def test_a_cost_advantage_draws_the_incumbent_down_to_the_reserve(self):
+        """docs/64 s6.6: the incumbent at a third of the custom and a
+        return below the going one withdraws to its custom plus the
+        reserve, and the split is by price so its price does not move."""
+        economy = cost_competition(parameters=self.leaving)
+        region = economy.regions["Dust Basin"]
+        incumbent = next(p for p in region.producers if p.name == "Dust provisioners")
+        self.assertTrue(incumbent.active)
+        self.assertLess(incumbent.capacity_per_day, 0.5)
+        self.assertAlmostEqual(
+            incumbent.capacity_per_day / incumbent.expected_demand,
+            1.0 + economy.capacity_reserve,
+            places=6,
+        )
+        entry_price = cost_competition(parameters=self.entry).regions["Dust Basin"].prices[MEALS]
+        self.assertLess(abs(region.prices[MEALS] / entry_price - 1.0), 0.02)
+
+    def test_what_left_equals_what_capacity_lost_gained(self):
+        """docs/64 s6.9: the `exits` ledger reconciles to `capacity_lost`,
+        and the three identities close at procurement's tolerances."""
+        runs = {
+            "equilibrium": equilibrium(parameters=self.leaving),
+            "loss": producer_loss(440, parameters=self.leaving),
+            "glut": regional_glut(240, parameters=self.leaving),
+        }
+        for label, economy in runs.items():
+            with self.subTest(scenario=label):
+                base = {
+                    "equilibrium": equilibrium,
+                    "loss": lambda **k: producer_loss(440, **k),
+                    "glut": lambda **k: regional_glut(240, **k),
+                }[label](parameters=self.entry)
+                withdrawn = sum(a for _, _, _, a in economy.ledger.exits)
+                gained = sum(economy.ledger.capacity_lost.values()) - sum(
+                    base.ledger.capacity_lost.values()
+                )
+                self.assertGreater(withdrawn, 0.0)
+                self.assertAlmostEqual(withdrawn, gained, places=9)
+                self.assertLess(abs(economy.cash_balance()), 1e-6)
+                self.assertLess(abs(economy.value_balance()), 1e-5)
+                for name, residual in economy.commodity_balances().items():
+                    self.assertLess(abs(residual), 1e-6, name)
+

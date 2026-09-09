@@ -223,6 +223,7 @@ def collect_behavioral_metrics(
     metrics.update(_posted_price_metrics(parameters))
     metrics.update(_procurement_metrics(parameters))
     metrics.update(_entry_metrics(parameters))
+    metrics.update(_exit_metrics(parameters))
     metrics.update(_scale_metrics())
     return metrics
 
@@ -1129,6 +1130,169 @@ def _entry_metrics(
             (max(gravity_yayo[-60:]) - min(gravity_yayo[-60:])) / gravity_yayo[-1],
             "ratio",
         ),
+    }
+
+
+def _exit_metrics(
+    parameters: ScenarioParameters,
+) -> Dict[str, Dict[str, object]]:
+    """Exit on return (docs/64, docs/65), on the market with entry.
+
+    These freeze a rule with a **known defect**, deliberately.  The
+    retirement clause takes a producer whose withdrawal would leave it
+    below `min_investment_capacity` out entirely, and the seed's tailors
+    and herbalists want 0.0437 units of plant against a minimum of 0.1 —
+    so clothing and medicine are deleted from the basket on day 45, in
+    both regions, and no rule can rebuild them.  `docs/66` is the fix.
+
+    `garments_capacity_end` and the two `basket_shortfall` readings are
+    the defect itself, frozen so that the correction has to move them and
+    say why.  The readings that do *not* run through the basket are the
+    slice's real results: the entrant sizes, which are the docs/64 s1
+    correction working, and `cost_competition`, which is the withdrawal
+    landing on the reserve exactly.  `local_yayo_last60_range_over_level`
+    against the distant region's is the second finding — entry and exit
+    alternating in one region and converging in the other under identical
+    rules (docs/65 s5), which the docs/66 floor does not address.
+    """
+    market = replace(
+        parameters, producer_cash=True, posted_prices=True, procurement=True
+    )
+    entry = replace(market, entry_on_margin=True)
+    leaving = replace(entry, exit_on_return=True)
+
+    stationary = equilibrium(parameters=leaving)
+    loss = producer_loss(440, parameters=leaving)
+    glut = regional_glut(240, parameters=leaving)
+    competition = cost_competition(parameters=leaving)
+    gravity = gravitation(
+        parameters=replace(parameters, exit_on_return=True)
+    )
+    boom = demand_boom(parameters=leaving)
+    reference = parameters.reference_price
+
+    def sellers(economy: Economy, commodity: str, region: str = LOCAL_REGION):
+        return [
+            p
+            for p in economy.regions[region].producers
+            if p.active and p.commodity == commodity
+        ]
+
+    def biggest_entrant(economy: Economy, commodity: str) -> float:
+        return max(
+            (
+                p.capacity_per_day
+                for p in sellers(economy, commodity)
+                if p.name.startswith("entrant-")
+            ),
+            default=0.0,
+        )
+
+    def last60_range(economy: Economy, region: str, commodity: str) -> float:
+        series = economy.series(region, commodity)
+        return (max(series[-60:]) - min(series[-60:])) / series[-1]
+
+    def shortfall(economy: Economy) -> float:
+        return sum(economy.ledger.basket_shortfall.values())
+
+    incumbent = next(
+        p
+        for p in competition.regions[LOCAL_REGION].producers
+        if p.name == "Dust provisioners"
+    )
+    provisioner = next(
+        p
+        for p in stationary.regions[LOCAL_REGION].producers
+        if p.name == "Dust provisioners"
+    )
+    cheapest_cost = min(
+        p.effective_unit_cost(competition.regions[LOCAL_REGION].prices)
+        for p in sellers(competition, MEALS)
+    )
+    cheap_sales = sum(
+        p.sales_yesterday
+        for p in sellers(competition, MEALS)
+        if abs(
+            p.effective_unit_cost(competition.regions[LOCAL_REGION].prices)
+            - cheapest_cost
+        )
+        < 1e-6
+    )
+    all_sales = sum(p.sales_yesterday for p in sellers(competition, MEALS))
+    yayo_seen = sum(p.demand_seen() for p in sellers(loss, YAYO))
+    exits_booked = sum(amount for _, _, _, amount in loss.ledger.exits)
+
+    return {
+        # --- the defect (docs/65 s3), frozen so docs/66 must move it ---
+        "exit.equilibrium.garments_capacity_end": _metric(
+            stationary.regions[LOCAL_REGION].capacity(GARMENTS), "units/day"
+        ),
+        "exit.equilibrium.medicine_capacity_end": _metric(
+            stationary.regions[LOCAL_REGION].capacity(MEDICINE), "units/day"
+        ),
+        "exit.glut.basket_shortfall": _metric(shortfall(glut), "units"),
+        "exit.gravitation.basket_shortfall": _metric(shortfall(gravity), "units"),
+        # --- the seed's capacity: what docs/64 s3 allowed to move ---
+        "exit.equilibrium.first_exit_day": _metric(
+            float(min(d for d, _, _, _ in stationary.ledger.exits)), "days"
+        ),
+        "exit.equilibrium.provisioners_over_reserve_target": _metric(
+            provisioner.capacity_per_day
+            / ((1.0 + stationary.capacity_reserve) * provisioner.expected_demand),
+            "ratio",
+        ),
+        # Unchanged to the bit: a sector at full utilization has no surplus.
+        "exit.equilibrium.yayo_capacity_end": _metric(
+            stationary.regions[LOCAL_REGION].capacity(YAYO), "units/day"
+        ),
+        # --- the docs/64 s1 correction: the plan's throughput is out ---
+        "exit.producer_loss.leaves_biggest_entrant": _metric(
+            biggest_entrant(loss, LEAVES), "units/day"
+        ),
+        "exit.producer_loss.chemfuel_biggest_entrant": _metric(
+            biggest_entrant(loss, CHEMFUEL), "units/day"
+        ),
+        "exit.producer_loss.yayo_price_end_over_reference": _metric(
+            loss.series(LOCAL_REGION, YAYO)[-1] / reference, "ratio"
+        ),
+        "exit.producer_loss.yayo_capacity_over_demand_seen": _metric(
+            loss.regions[LOCAL_REGION].capacity(YAYO) / yayo_seen, "ratio"
+        ),
+        "exit.producer_loss.producers_end": _metric(
+            float(len(sellers(loss, YAYO))), "producers"
+        ),
+        # --- the glut: exit fires, and the level does not come back ---
+        "exit.glut.end_over_reference": _metric(
+            glut.series(LOCAL_REGION, YAYO)[-1] / reference, "ratio"
+        ),
+        "exit.glut.withdrawals": _metric(
+            float(len(glut.ledger.exits)), "withdrawals"
+        ),
+        # --- cost_competition: the withdrawal lands on the reserve ---
+        "exit.cost_competition.incumbent_over_expected": _metric(
+            incumbent.capacity_per_day / incumbent.expected_demand, "ratio"
+        ),
+        "exit.cost_competition.meals_price_end": _metric(
+            competition.regions[LOCAL_REGION].prices[MEALS], "silver"
+        ),
+        "exit.cost_competition.cheap_technique_share": _metric(
+            cheap_sales / all_sales if all_sales > 1e-9 else 0.0, "fraction"
+        ),
+        # --- the churn (docs/65 s5): one region settles and one does not ---
+        "exit.gravitation.local_yayo_last60_range_over_level": _metric(
+            last60_range(gravity, LOCAL_REGION, YAYO), "ratio"
+        ),
+        "exit.gravitation.distant_yayo_last60_range_over_level": _metric(
+            last60_range(gravity, DISTANT_REGION, YAYO), "ratio"
+        ),
+        "exit.gravitation.local_chemfuel_producers_end": _metric(
+            float(len(sellers(gravity, CHEMFUEL))), "producers"
+        ),
+        "exit.boom.employment_end": _metric(
+            boom.regions[LOCAL_REGION].worker_days_earned, "worker-days"
+        ),
+        # The ledger identity: what left equals what capacity_lost gained.
+        "exit.producer_loss.exits_booked": _metric(exits_booked, "units/day"),
     }
 
 

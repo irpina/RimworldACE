@@ -518,6 +518,94 @@
       "unit": "fraction",
       "value": -0.000515
     },
+    "exit.boom.employment_end": {
+      "unit": "worker-days",
+      "value": 0.206258
+    },
+    "exit.cost_competition.cheap_technique_share": {
+      "unit": "fraction",
+      "value": 0.621169
+    },
+    "exit.cost_competition.incumbent_over_expected": {
+      "unit": "ratio",
+      "value": 1.1
+    },
+    "exit.cost_competition.meals_price_end": {
+      "unit": "silver",
+      "value": 9.640674
+    },
+    "exit.equilibrium.first_exit_day": {
+      "unit": "days",
+      "value": 45.0
+    },
+    "exit.equilibrium.garments_capacity_end": {
+      "unit": "units/day",
+      "value": 0
+    },
+    "exit.equilibrium.medicine_capacity_end": {
+      "unit": "units/day",
+      "value": 0
+    },
+    "exit.equilibrium.provisioners_over_reserve_target": {
+      "unit": "ratio",
+      "value": 1.003612
+    },
+    "exit.equilibrium.yayo_capacity_end": {
+      "unit": "units/day",
+      "value": 10.0
+    },
+    "exit.glut.basket_shortfall": {
+      "unit": "units",
+      "value": 94.388018
+    },
+    "exit.glut.end_over_reference": {
+      "unit": "ratio",
+      "value": 1.32987
+    },
+    "exit.glut.withdrawals": {
+      "unit": "withdrawals",
+      "value": 48.0
+    },
+    "exit.gravitation.basket_shortfall": {
+      "unit": "units",
+      "value": 115.783519
+    },
+    "exit.gravitation.distant_yayo_last60_range_over_level": {
+      "unit": "ratio",
+      "value": 4.7e-05
+    },
+    "exit.gravitation.local_chemfuel_producers_end": {
+      "unit": "producers",
+      "value": 17.0
+    },
+    "exit.gravitation.local_yayo_last60_range_over_level": {
+      "unit": "ratio",
+      "value": 0.01688
+    },
+    "exit.producer_loss.chemfuel_biggest_entrant": {
+      "unit": "units/day",
+      "value": 0.83828
+    },
+    "exit.producer_loss.exits_booked": {
+      "unit": "units/day",
+      "value": 161.093411
+    },
+    "exit.producer_loss.leaves_biggest_entrant": {
+      "unit": "units/day",
+      "value": 9.687243
+    },
+    "exit.producer_loss.producers_end": {
+      "unit": "producers",
+      "value": 23.0
+    },
+    "exit.producer_loss.yayo_capacity_over_demand_seen": {
+      "unit": "ratio",
+      "value": 1.288908
+    },
+    "exit.producer_loss.yayo_price_end_over_reference": {
+      "unit": "ratio",
+      "value": 1.154535
+    },
     "generous_basket.basket.share_of_working_day": {
       "unit": "fraction",
       "value": 0.080745
