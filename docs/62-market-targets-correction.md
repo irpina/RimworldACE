@@ -6,6 +6,13 @@ is design and results in one, since what it describes is a correction
 to `docs/59`'s rule and not a new mechanism; `docs/60` carries a pointer
 to it.
 
+**Corrected in turn by `docs/68`.** The sell-out rule written here in §1
+and §2 counts a seller as having seen unserved demand only if it was
+*already* empty when the order arrived, which fixes the sector at zero
+and misses the ordinary case: a seller emptied by the order it is
+answering. `docs/67` §5 found it and `docs/68` moves the note to after
+the draw-down.
+
 **The headline: `docs/60`'s market had a plan hidden in it. Every
 producer's stock target was its share of a pool sized by the sector's
 *throughput at full capacity*, so a sector selling four units a day at
@@ -43,7 +50,10 @@ exposed three more things, each of which had been masked:
   floor. The glut deflated the whole chain in six days.
 - **A sector that ran dry could not restart.** A sell-out was noted only
   for a seller that had sold today, so a sector every buyer found empty
-  saw no demand, planned nothing, and stayed empty at the floor.
+  saw no demand, planned nothing, and stayed empty at the floor. (The
+  rule this became still ran *before* the order drew the stock down, so
+  it caught only the sector already at zero; `docs/68` is that
+  correction.)
 - **Custom split by warehouse size was an incumbency premium.** A
   seller's weight in a buyer's order was what it *held*, so the
   producer with the larger stock sold more, held more, and sold more.
