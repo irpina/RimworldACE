@@ -165,21 +165,12 @@ python -m economy_lab gravitation
 
 Run the overshoot scenario: the 60% capacity loss on the market with both
 entry and exit on, 500 days, where entry's pipeline overshoots the demand
-on its lead time and exit takes the surplus back out (`docs/64`,
-`docs/65`):
+on its lead time and exit takes the surplus back out (`docs/64` to
+`docs/69`):
 
 ```text
 python -m economy_lab overshoot
 ```
-
-**This currently raises** `cannot price 'chemfuel': its technique
-requires ['garments', 'herbal_medicine'], which nothing produced`, and is
-left failing on purpose. Exit's retirement clause deletes the two basket
-sectors on day 45 (`docs/65` §3), and `docs/29` made the tailors' powered
-bench the link that turns chemfuel into a basic commodity — so the
-classical price system `summary()` solves has no solution. The traceback
-is the correct report of an economy that cannot reproduce its workers.
-`docs/66` fixes the rule; the command running again is its first check.
 
 Open the laboratory in a browser (`docs/48`). The viewer runs any scenario
 with any parameter overridden, draws the history with the shock day
@@ -262,23 +253,25 @@ markup rather than a rate of profit.
 
 ## Intentionally absent from this slice
 
-- competitive *exit*: built, measured and corrected once (docs/64 to
-  docs/67), off by default and **still not usable**. A producer whose
-  return on its capacity — its posted margin times its utilization,
+- competitive *exit*: built, measured and corrected twice (docs/64 to
+  docs/69), off by default and held back for one reason only. A producer
+  whose return on its capacity — its posted margin times its utilization,
   against the going margin — has been below the going one for the
   investment lead time withdraws the capacity it holds beyond a 10%
   reserve over the demand it expects, never below the larger of that
   reserve and the smallest plant the fund would build (docs/66). The
   signal works: a cost advantage draws the incumbent down to its custom
   plus the reserve, and the investment rule reading the market's demand
-  instead of the plan's throughput kills the 66-unit entrant a shortage
-  used to place. What is not usable is its input. A seller emptied by the
-  very order it is answering records no sell-out, because the rule counts
-  only sellers already empty when the order arrives; so a provisioner
-  serving half the basket expects only what it sold, exit shrinks it to
-  fit its own supply, and the workers go short every day at a price that
-  never rises (docs/67 §5). `docs/68` is that fix; until it lands the
-  flag is for reading, not for running;
+  instead of the plan's throughput kills the oversized entrant a shortage
+  used to place. Its input works too, since docs/68: the sell-out is
+  noted after the order has drawn the stock down, so a seller emptied by
+  the very order it is answering sees the demand it missed, and the
+  glut's basket — which used to go short every day at a price that never
+  rose — is served from day 181 on (docs/69 §2). What holds the flag back
+  is the churn: entry and exit alternate in one region while the other
+  converges under identical rules, and the demand boom's plant moves into
+  yayo and out of meals for the same reason (docs/65 §5, docs/69 §4). It
+  has survived three corrections untouched and needs a design of its own;
 - a price system of its own: two-thirds of every upstream price is a wedge
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices
@@ -309,8 +302,8 @@ markup rather than a rate of profit.
   capacity cutting above a going margin, the market gravitates from
   above; entry on margin (docs/61, docs/63, off by default) is the
   capacity side of the same signal, and with the going margin set inside
-  the authored band every sector ends at it. What is still absent is
-  exit, so entry overshoots on its lead time and the capacity stays;
+  the authored band every sector ends at it. Exit is the bullet above;
+  with it off, entry overshoots on its lead time and the capacity stays;
 - more than six commodities or two regions;
 - RimWorld runtime integration.
 

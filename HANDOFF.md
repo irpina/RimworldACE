@@ -1,6 +1,6 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-09-09  
+**Last updated:** 2026-09-11  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
@@ -14,7 +14,8 @@
 **Entry on margin design / results:** `docs/61`, `docs/63` (built, off by default)
 **Exit on return design / results:** `docs/64`, `docs/65` (built and measured, off by default)
 **Exit floor design / results:** `docs/66`, `docs/67` (built; the floor works, and it uncovered a second defect)
-**Sell-out a seller is emptied by:** the open defect and the next design — see "Handoff: the sell-out signal" below
+**Sell-out after the draw design / results:** `docs/68`, `docs/69` (built; the second defect is fixed and the scarcity signal works)
+**The churn:** the slice's one open finding, with no design against it — see "Handoff: the churn" below
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1932,102 +1933,104 @@ to 94.4 in the glut. `docs/66` designed the fix, `docs/67` measured it:
 the floor works — the basket sectors rest at exactly 0.1 and the
 gravitation shortfall goes to zero — and it uncovered a deeper defect it
 had been hiding. A seller emptied by the very order it is answering
-records no sell-out, because `_note_sellouts` counts only sellers already
-empty when the order arrives and `_final_market` calls it before the
-stock is drawn down. So a provisioner serving half the basket expects
-only what it sold, exit shrinks the sector to fit its own supply, and the
-workers go short every day at a price that never rises (`docs/67` §5).
-`docs/68` is that fix and is not yet designed. Two further findings
+recorded no sell-out, because `_note_sellouts` counts only sellers
+already empty when the order arrives and `_final_market` called it before
+the stock was drawn down. So a provisioner serving half the basket
+expected only what it sold, exit shrank the sector to fit its own supply,
+and the workers went short every day at a price that never rose
+(`docs/67` §5). `docs/68` moved every such call to after its pass's buy
+and `docs/69` measured it: the glut's shortfall stops accruing around day
+181, its level comes home to 1.0384× the reference, and meals in a
+shortage are priced at 19.80 rather than 10.21. Two further findings
 stand: nothing in this economy is outside the basket, so `docs/65` §2's
 "clean readings" were not clean (`docs/67` §4); and entry and exit still
 alternate in one region and converge in the other under identical rules
-(`docs/65` §5), which is `docs/64` §7's fourth mode. The `docs/58` §5 oscillation
+(`docs/65` §5, `docs/69` §4), which is `docs/64` §7's fourth mode and the
+slice's one open finding. The `docs/58` §5 oscillation
 turned out to be an entrant clamped to 18% of cost, corrected in
 `docs/58` §5a.
 
 ---
 
-## Handoff: the sell-out signal (2026-09-09)
+## Handoff: the churn (2026-09-11)
 
-Exit on return is **built, measured, corrected once and measured again**
-(`docs/64` to `docs/67`). The floor fix landed and works. The flag is
-still not usable, for a different and deeper reason. State at the handoff
-commit:
+Exit on return is **built, measured, and corrected twice** (`docs/64` to
+`docs/69`). Both defects the slice turned up are fixed and the rule's
+signal is right. One finding is open, it is the only one, and it has no
+design against it.
 
 **Done and committed.**
-- The floor (`docs/66` §2) in `_exit`: the withdrawal is capped at
-  `capacity − max(min_investment_capacity, capacity − surplus)`, and
-  retirement fires on `expected_demand <= EPSILON` instead of on the
-  plant's size, with the retirement branch taken first.
-- `docs/67-exit-floor-results.md`: four predictions held, one in half,
-  five wrong — and `docs/66` §5 had written down what each failure would
-  mean, so every one of them is a finding rather than a surprise. **Read
-  §4 and §5 before touching anything.**
-- Twenty-two `exit.*` readings re-frozen, reference still **322** with
-  every other metric at zero delta. `garments_capacity_end` and
-  `medicine_capacity_end` are 0 → 0.1 exactly;
-  `gravitation.basket_shortfall` 115.78 → 0.
+- The floor (`docs/66`, `docs/67`): capital never withdraws below the
+  larger of its reserve and the smallest plant the fund would build, and
+  retirement fires on `expected_demand <= EPSILON` rather than on the
+  plant's size.
+- The sell-out after the draw (`docs/68`, `docs/69`): every
+  `_note_sellouts` call now runs *after* its pass's `_buy` and before
+  `_apply_pending`, so the note reads the stock the order leaves behind.
+  A seller emptied by the order it is answering sees the demand it
+  missed. `_note_sellouts` itself is unchanged and its docstring carries
+  the call discipline; the cash-denied shortfall stays out of the signal
+  with no special case, because a seller the workers could not pay still
+  holds its stock.
+- Results: six predictions held, one in half, three wrong, each one
+  pre-registered in `docs/68` §5. The glut's basket shortfall 63.10 →
+  21.59 and, more to the point, **stops accruing** around day 181; the
+  glut's level 1.3553× → 1.0384×; meals in the glut priced at 19.80
+  against an authored 15 where they used to rest at 10.21 in the middle
+  of a shortage; `yayo_capacity_over_demand_seen` 1.9620 → 0.9693.
+- Twenty-four readings re-frozen, reference still **322**. The seeded
+  circuit, all of `cost_competition` and the whole `gravitation` run are
+  bit-identical with every flag on; the default model is bit-identical.
 - Tests: the defect test replaced by its opposite
-  (`test_a_sector_smaller_than_the_minimum_plant_rests_on_the_floor`) and
-  one added that asserts the *new* defect as current behaviour
-  (`test_a_seller_emptied_by_an_order_does_not_see_the_demand_it_missed`)
-  — that one is written to fail when `docs/68` lands. 237 in the
-  laboratory suite, 270 with the viewer and the port.
-- README bullet, viewer catalog docs tuple for `overshoot` now
-  `(64, 65, 66, 67)`.
+  (`test_a_seller_emptied_by_an_order_sees_the_demand_it_missed`), and
+  two bounds tuned to figures the correction moved are now bounds on the
+  claims. 237 in the laboratory suite, 272 with the viewer and the port.
+- README, viewer catalog (`overshoot` → `(64, 65, 66, 67, 68, 69)`) and
+  the `_exit_metrics` docstring brought up to date. `python -m
+  economy_lab overshoot` runs.
 
-**The open defect, in one paragraph.** `_note_sellouts` records a
-sell-out only for a seller whose stock is already at zero when the order
-arrives (`stock - pending_out <= EPSILON`), and `_final_market` calls it
-*before* `_buy` draws the stock down. Instrumented on day 201 of the
-glut: unfilled demand 0.307, the provisioner's stock at the moment of the
-call 0.289, sellers counted as empty `[]`. A seller emptied *by* the
-order it is answering is invisible. Two rules read that signal and both
-go silent — the plan, so output never grows to meet the demand, and the
-posted price, so the scarcity is never priced. `docs/62` wrote this rule
-for the opposite case (a sector already at zero) and fixed that one. The
-case it left is ordinary scarcity, and exit turns a silent signal into a
-contracting sector: the glut's basket shortfall rests at 63.1 units with
-the workers holding 2089 silver against a basket costing 2.75 a day.
+**The open finding, in one paragraph.** Entry and exit alternate. In
+`gravitation`, Dust Basin's yayo price has a last-60-day range of 1.68%
+of its level while Green River's is 0.02% under identical rules, and Dust
+Basin ends with 17 chemfuel producers against entry's 13. In
+`demand_boom` with exit on, employment ends at 0.2051 against 0.4831
+without it — not because the boom goes short (its basket shortfall is
+exactly zero) but because capital moves: yayo capacity 17.30 → 35.40 and
+meals 1.66 → 0.39. These are one phenomenon in two scenarios. `docs/64`
+§7 named the likely causes — the reserve's size, and the fact that entry
+and exit read the same investment lead time as their horizon — and
+nothing since has tested them.
 
-**Which call sites are broken.** `_note_sellouts` has three callers and
-they are not equally wrong — checked, and worth not re-deriving:
-
-- `_final_market` fund pass (`model.py:4475`) is **correct**: it calls
-  `_buy` first, so `pending_out` is already set and an emptied seller
-  tests as empty.
-- `_final_market` basket pass (`model.py:4498`) is **wrong**: it notes
-  the shortfall in the first loop and buys in a second loop after the
-  cash factor is known, so the note always precedes the draw. This is the
-  one the glut measures.
-- `_produce_procurement` input market (`model.py:4338`) is **partly
-  wrong**: the note precedes that producer's own `_buy`, so the producer
-  that empties a seller does not see it, though later producers in the
-  same pass do, because `pending_out` accumulates.
-
-Note also that the cash-denied part of the basket shortfall
-(`model.py:4511`) must **not** become a sell-out: the seller is not empty,
-the workers simply cannot pay, and demand that cannot pay is not demand
-the seller saw.
+**What it has already survived.** `docs/62`'s stock targets, `docs/66`'s
+floor and `docs/68`'s signal, the last two of which were each predicted
+to possibly dissolve it. After `docs/68` the gravitation readings are
+**bit-identical**, before and after. It is not a symptom of any of them,
+and `docs/65` §5 stands as written.
 
 **Not done — the next session's task, in order.**
-1. Design `docs/68` before building. The shape is in `docs/67` §8: note
-   the sell-out after the stock is drawn down, or net the order against
-   the stock at the point of the call. Say which and why, and predict
-   what moves. It is a correction to `docs/62`'s rule, so `docs/62`
-   should get a pointer the way `docs/60` did.
-2. Expect it to move readings outside the exit slice. The sell-out drives
-   the plan and the posted price under `procurement`, so `procurement.*`
-   and `entry.*` metrics are in scope — the seeded circuit is not (nothing
-   sells out there), and that is the one thing that must stay
-   bit-identical.
-3. Re-read `docs/67` §4's four readings and §5's 4.4/4.5 after the fix,
-   then §6's 4.7/4.8: the glut is exactly the scenario where a sector is
-   emptied daily, so the churn may or may not survive. `docs/67` §6 says
-   to check that only after this fix, not before.
-4. Then the churn (`docs/65` §5), if it survives: 73 entrants placed and
-   22 active in Dust Basin while Green River converges under identical
-   rules. It needs its own design document, not a parameter nudge.
+1. Design the churn's document before building. It is not a parameter
+   nudge: say what the alternation *is* — a lead-time oscillation, a
+   reserve too small to absorb the pipeline, or two rules answering one
+   signal in opposite directions — and predict what each candidate moves.
+   `docs/69` §4's boom table and `docs/65` §5's Dust Basin trace are the
+   two exhibits.
+2. Expect `exit.*` and `entry.*` to move and the seeded circuit not to.
+   The gravitation readings are the ones the design has to name in
+   advance, since they are the churn's own measure.
+3. The flag's default is the question after that, and only after that. A
+   rule that places and withdraws plant in alternation is not a rule to
+   make default, however correct the demand it now reads.
+4. `docs/69` §5 is a smaller loose end and not a defect: the corrected
+   signal makes incumbents better at shortages, so entry on margin's
+   price crossing in `producer_loss` moved from day 150 to day 200. If
+   the churn's design changes entry's horizon, re-read it.
+
+**One known failure that is not ours.** `tests/test_port_fixtures.py`
+`test_the_committed_fixtures_are_current` fails on `scale_647_day3` with
+a last-digit float difference. It predates this work, it fails with the
+change stashed, and it is a machine difference rather than a model one —
+the fixture was frozen elsewhere. Regenerate it deliberately, on the
+machine that will keep it, or leave it.
 
 **Standing rules that applied throughout:** no dependencies; no change
 to default model behaviour (`python -m economy_lab.baseline` zero
