@@ -1136,24 +1136,27 @@ def _entry_metrics(
 def _exit_metrics(
     parameters: ScenarioParameters,
 ) -> Dict[str, Dict[str, object]]:
-    """Exit on return (docs/64, docs/65), on the market with entry.
+    """Exit on return (docs/64, docs/65), on the market with entry,
+    corrected twice: by the floor (docs/66, docs/67) and by the sell-out
+    a seller is emptied by (docs/68, docs/69).
 
-    These freeze a rule with a **known defect**, deliberately.  The
-    retirement clause takes a producer whose withdrawal would leave it
-    below `min_investment_capacity` out entirely, and the seed's tailors
-    and herbalists want 0.0437 units of plant against a minimum of 0.1 —
-    so clothing and medicine are deleted from the basket on day 45, in
-    both regions, and no rule can rebuild them.  `docs/66` is the fix.
+    Two defects were found here and both are fixed.  The retirement
+    clause deleted the basket sectors — the seed's tailors and herbalists
+    want 0.0437 units of plant against a minimum plant of 0.1 — and the
+    floor keeps them at 0.1, which is what `garments_capacity_end` and
+    `medicine_capacity_end` read.  Then `_note_sellouts`, called before
+    the order drew the stock down, missed every seller the order itself
+    emptied, so the glut's provisioner shrank to fit its own supply while
+    the workers went short; the note now runs after the draw-down, and
+    `glut.basket_shortfall` stops accruing once the sector catches up.
 
-    `garments_capacity_end` and the two `basket_shortfall` readings are
-    the defect itself, frozen so that the correction has to move them and
-    say why.  The readings that do *not* run through the basket are the
-    slice's real results: the entrant sizes, which are the docs/64 s1
-    correction working, and `cost_competition`, which is the withdrawal
-    landing on the reserve exactly.  `local_yayo_last60_range_over_level`
-    against the distant region's is the second finding — entry and exit
+    What is left is the slice's real results and its one open finding.
+    `cost_competition` is the withdrawal landing inside the reserve and
+    never through it, and it has never moved.  `local_yayo_last60_range_over_level`
+    against the distant region's is the churn — entry and exit
     alternating in one region and converging in the other under identical
-    rules (docs/65 s5), which the docs/66 floor does not address.
+    rules (docs/65 s5) — which neither correction addresses and which
+    both left bit-identical.
     """
     market = replace(
         parameters, producer_cash=True, posted_prices=True, procurement=True

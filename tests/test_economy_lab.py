@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from economy_lab.model import (
     ALL_OR_NOTHING,
+    EPSILON,
     Commodity,
     Process,
     Producer,
@@ -3883,16 +3884,29 @@ class EntryOnMarginTests(unittest.TestCase):
 
     def test_a_shortage_draws_entry_that_brings_the_level_below_the_market(self):
         """docs/61 s6.3 at the horizon it set; docs/63 s3 for what the
-        pipeline does beyond it."""
+        pipeline does beyond it.
+
+        The crossing moved out past that horizon when docs/68 let a seller
+        emptied by an order see the demand it missed: the market *without*
+        entry now answers the shortage through its own producers' plans,
+        so at 150 days it is briefly the cheaper of the two and entry has
+        only the capacity to show for itself.  By 200 days the claim holds
+        again, and the capacity was there the whole time.
+        """
         market = producer_loss(parameters=self.market)
         entry = producer_loss(parameters=self.entry)
         prices = entry.series("Dust Basin", YAYO)
         self.assertGreater(
             entry.regions["Dust Basin"].capacity(YAYO), market.regions["Dust Basin"].capacity(YAYO)
         )
-        self.assertLess(prices[-1], market.series("Dust Basin", YAYO)[-1])
         self.assertGreater(prices[-1], 21.0 * 1.05)
         self.assertLess(prices[-1], 21.0 * 1.28)
+        later_market = producer_loss(200, parameters=self.market)
+        later_entry = producer_loss(200, parameters=self.entry)
+        self.assertLess(
+            later_entry.series("Dust Basin", YAYO)[-1],
+            later_market.series("Dust Basin", YAYO)[-1],
+        )
 
     def test_a_cost_advantage_draws_an_entrant_that_copies_it(self):
         """docs/61 s6.5: the entrant uses the best technique in the sector."""
@@ -4064,36 +4078,44 @@ class ExitOnReturnTests(unittest.TestCase):
         )
         self.assertEqual(tailors.capacity_per_day, 0.25)
 
-    def test_a_seller_emptied_by_an_order_does_not_see_the_demand_it_missed(self):
-        """docs/67 s5, the second defect, asserted as current behaviour.
+    def test_a_seller_emptied_by_an_order_sees_the_demand_it_missed(self):
+        """docs/68 s2: the note reads the stock the order leaves behind.
 
-        `_note_sellouts` counts only sellers already empty when the order
-        arrives, and the final market calls it before `_buy` draws the
-        stock down.  A provisioner that serves half the basket and is
-        emptied by that very order therefore records no sell-out, expects
-        only what it sold, and withdraws capacity to match -- while the
-        workers' shortfall accrues every day.  docs/68 is the fix; when it
-        lands this test must fail.
+        The opposite of the test this replaces.  While the glut's
+        provisioner is empty at the close of the day it now records the
+        demand it could not serve, so its expectation runs ahead of its
+        own supply, the sector grows instead of shrinking, and the
+        workers' shortfall stops accruing (docs/68 s4.4).
         """
-        economy = regional_glut(240, parameters=self.leaving)
-        region = economy.regions["Dust Basin"]
-        provisioner = next(
-            p for p in region.producers if p.active and p.commodity == MEALS
+        # Day 136 of the glut: the sector is still short, and the seller
+        # emptied by the basket's own order is the one that must see it.
+        early = regional_glut(136, parameters=self.leaving)
+        sellers = [
+            p
+            for p in early.regions["Dust Basin"].producers
+            if p.active and p.commodity == MEALS
+        ]
+        emptied = [p for p in sellers if p.stock <= EPSILON and p.sales_yesterday > 0.0]
+        self.assertTrue(emptied)
+        # Sold out and counted as such, which is the whole correction.
+        self.assertGreater(sum(p.sellouts_yesterday for p in emptied), 0.0)
+        # And the expectation that reads it is above what the sector managed.
+        self.assertGreater(
+            sum(p.expected_demand for p in sellers),
+            sum(p.sales_yesterday for p in sellers),
         )
-        # Empty at the close, having sold every unit it made.
-        self.assertEqual(provisioner.stock, 0.0)
-        self.assertGreater(provisioner.sales_yesterday, 0.0)
-        # And yet it saw no unserved demand at all.
-        self.assertEqual(provisioner.sellouts_yesterday, 0.0)
-        # The workers did: the basket went short by many times a day's sales.
-        shortfall = sum(economy.ledger.basket_shortfall.values())
-        self.assertGreater(shortfall, 10.0 * provisioner.sales_yesterday)
-        # So the sector shrank to the supply it managed, not the demand it faced.
-        self.assertLess(
-            provisioner.capacity_per_day,
-            0.5 * equilibrium(parameters=self.leaving)
-            .regions["Dust Basin"]
-            .capacity(MEALS),
+        # By the close the sector has grown past the supply it was stuck at
+        # and the workers are served: no shortfall accrues over the last
+        # sixty days.
+        late = regional_glut(240, parameters=self.leaving)
+        self.assertGreater(
+            late.regions["Dust Basin"].capacity(MEALS),
+            early.regions["Dust Basin"].capacity(MEALS),
+        )
+        self.assertAlmostEqual(
+            sum(late.ledger.basket_shortfall.values()),
+            sum(regional_glut(180, parameters=self.leaving).ledger.basket_shortfall.values()),
+            places=3,
         )
 
     def test_the_investment_rule_reads_the_markets_demand(self):
@@ -4126,8 +4148,10 @@ class ExitOnReturnTests(unittest.TestCase):
                 self.assertLessEqual(biggest(loss, commodity), expected)
         # An order of magnitude, which is the claim; the exact size moved
         # 21% when docs/66 kept the basket sectors alive and the wage with
-        # them (docs/67 s4), so the bound is on the order and not the value.
-        self.assertGreater(biggest(entry, LEAVES), 60.0)
+        # them (docs/67 s4), and again when docs/68 let the sell-out be
+        # seen and the entry run's oversized entrant fell 66 -> 50, so the
+        # bound is on the order and not the value.
+        self.assertGreater(biggest(entry, LEAVES), 40.0)
         self.assertLess(biggest(loss, LEAVES), 20.0)
 
     def test_a_cost_advantage_draws_the_incumbent_down_to_the_reserve(self):

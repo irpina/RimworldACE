@@ -117,8 +117,9 @@ for the comment that now has to carry it.
   plan and the posted price under `procurement`, which is off by default,
   so the default model is untouched.
 - **It does not touch the churn** (`docs/65` §5). `docs/67` §6 says to
-  ask whether the churn survives this fix, and the answer belongs in
-  `docs/69`, after it is measured — not in the same change.
+  ask whether the churn survives this fix; the answer belongs in this
+  design's results, and the churn itself gets its own document after
+  that — not this change.
 
 ## 4. Predictions
 
@@ -206,8 +207,8 @@ need reopening.
 
 If the churn disappears, `docs/65` §5 was downstream of this defect after
 all and `docs/67` §6 was right to insist the question be asked here. If
-it gets worse, the sell-out was damping it, and either way it is
-`docs/69`'s subject and not a reason to change this rule.
+it gets worse, the sell-out was damping it, and either way it is the
+churn's own document's subject and not a reason to change this rule.
 
 ## 6. Cost
 

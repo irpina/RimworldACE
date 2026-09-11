@@ -4204,7 +4204,14 @@ class Economy:
         serve, which its plan reads tomorrow and its price answers as far
         as it was already making all it would (docs/62).  docs/60 noted
         it only for sellers that had sold today, so a sector that ran dry
-        could never see the demand that would restart it."""
+        could never see the demand that would restart it.
+
+        **Call this after the pass's `_buy` and before its
+        `_apply_pending`** (docs/68).  The predicate reads
+        `stock - pending_out`, so called before the draw-down it sees the
+        stock the order found and misses every seller the order itself
+        empties -- which is the ordinary case of scarcity, not the corner
+        one.  Called after, it sees the stock the order left behind."""
         if unfilled <= EPSILON:
             return
         for producer in region.producers:
@@ -4323,6 +4330,11 @@ class Economy:
             runs = planned[id(producer)]
             inputs = producer.process.inputs
             on_hand = producer.inputs_on_hand
+            # What this producer's order leaves its sellers short of is
+            # noted after its own `_buy`, not here: a seller emptied by
+            # the order it is answering must see the demand it missed
+            # (docs/68).
+            unserved: Dict[str, float] = {}
             if runs > EPSILON:
                 # What each input's sellers can supply, beyond what is
                 # already on hand, bounds the runs; what they cannot is
@@ -4335,7 +4347,7 @@ class Economy:
                     can_buy = min(need, self._available(region, name))
                     if can_buy < need:
                         region.unmet_demand[name] += need - can_buy
-                        self._note_sellouts(region, name, need - can_buy)
+                        unserved[name] = unserved.get(name, 0.0) + (need - can_buy)
                         runs = (have + can_buy) / per_run
             if runs > EPSILON:
                 # What the purse can pay for, at the prices actually asked,
@@ -4370,6 +4382,12 @@ class Economy:
                 # Liebig, on what is actually on hand.
                 for name, per_run in sorted(inputs.items()):
                     runs = min(runs, on_hand.get(name, 0.0) / per_run)
+            # The stock the order left behind, now that it has been drawn
+            # down.  A producer whose runs its purse cut to nothing bought
+            # nothing, so no seller was emptied and there is no sell-out
+            # (docs/68 s2).
+            for name, short in sorted(unserved.items()):
+                self._note_sellouts(region, name, short)
             planned[id(producer)] = max(0.0, runs)
             # Plant matter, on the calendar whether or not the producer ran.
             ration: Dict[str, float] = {}
@@ -4481,6 +4499,10 @@ class Economy:
                 worker_days = region.worker_days_due
                 purse = Economy._WorkerPurse(region)
                 purchases: List[Tuple[str, float]] = []
+                # Noted after the second loop's buys, for the reason in
+                # docs/68 s2: the note must read the stock the order
+                # leaves behind.
+                unserved: Dict[str, float] = {}
                 total_cost = 0.0
                 for name, quantity in sorted(region.subsistence_basket.items()):
                     if name not in self.commodities:
@@ -4495,7 +4517,7 @@ class Economy:
                     if inventory_shortfall > EPSILON:
                         region.unmet_demand[name] += inventory_shortfall
                         Ledger.add(self.ledger.basket_shortfall, region.name, inventory_shortfall)
-                        self._note_sellouts(region, name, inventory_shortfall)
+                        unserved[name] = unserved.get(name, 0.0) + inventory_shortfall
                     if bought <= 0.0:
                         continue
                     purchases.append((name, bought))
@@ -4516,6 +4538,12 @@ class Economy:
                     region.consumed_total[name] += got
                     Ledger.add(self.ledger.consumption, name, got)
                     Ledger.add(self.ledger.worker_spending, region.name, spend)
+                # Every seller the basket emptied now tests as empty, and
+                # one the workers could not pay still holds its stock: the
+                # cash-denied shortfall stays out of the signal without a
+                # special case (docs/68 s2).
+                for name, short in sorted(unserved.items()):
+                    self._note_sellouts(region, name, short)
                 self._apply_pending(region)
             region.worker_days_due = region.worker_days_earned
             region.wage_premium_due = region.wage_premium

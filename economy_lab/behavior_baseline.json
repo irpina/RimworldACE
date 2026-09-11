@@ -192,7 +192,7 @@
     },
     "entry.boom.employment_end": {
       "unit": "worker-days",
-      "value": 0.482159
+      "value": 0.483066
     },
     "entry.cost_competition.cheap_technique_share": {
       "unit": "fraction",
@@ -212,7 +212,7 @@
     },
     "entry.glut.end_over_reference": {
       "unit": "ratio",
-      "value": 0.997167
+      "value": 0.997626
     },
     "entry.gravitation.chemfuel_margin_end": {
       "unit": "ratio",
@@ -248,15 +248,15 @@
     },
     "entry.producer_loss.capacity_end": {
       "unit": "units/day",
-      "value": 17.3101
+      "value": 17.057926
     },
     "entry.producer_loss.end_over_reference": {
       "unit": "ratio",
-      "value": 1.106886
+      "value": 1.187103
     },
     "entry.producer_loss.peak_over_reference": {
       "unit": "ratio",
-      "value": 1.450599
+      "value": 1.434174
     },
     "entry.producer_loss.producers_end": {
       "unit": "producers",
@@ -264,11 +264,11 @@
     },
     "entry.subsistence.meals_end_over_reference": {
       "unit": "ratio",
-      "value": 1.206853
+      "value": 1.717421
     },
     "entry.subsistence.meals_producers_end": {
       "unit": "producers",
-      "value": 6.0
+      "value": 7.0
     },
     "equilibrium.advance.commodity_share": {
       "unit": "fraction",
@@ -520,7 +520,7 @@
     },
     "exit.boom.employment_end": {
       "unit": "worker-days",
-      "value": 0.212552
+      "value": 0.205112
     },
     "exit.cost_competition.cheap_technique_share": {
       "unit": "fraction",
@@ -556,15 +556,15 @@
     },
     "exit.glut.basket_shortfall": {
       "unit": "units",
-      "value": 63.103967
+      "value": 21.588284
     },
     "exit.glut.end_over_reference": {
       "unit": "ratio",
-      "value": 1.355303
+      "value": 1.038429
     },
     "exit.glut.withdrawals": {
       "unit": "withdrawals",
-      "value": 48.0
+      "value": 38.0
     },
     "exit.gravitation.basket_shortfall": {
       "unit": "units",
@@ -584,27 +584,27 @@
     },
     "exit.producer_loss.chemfuel_biggest_entrant": {
       "unit": "units/day",
-      "value": 0.645243
+      "value": 0.398578
     },
     "exit.producer_loss.exits_booked": {
       "unit": "units/day",
-      "value": 140.638916
+      "value": 121.076723
     },
     "exit.producer_loss.leaves_biggest_entrant": {
       "unit": "units/day",
-      "value": 11.71644
+      "value": 7.733433
     },
     "exit.producer_loss.producers_end": {
       "unit": "producers",
-      "value": 23.0
+      "value": 20.0
     },
     "exit.producer_loss.yayo_capacity_over_demand_seen": {
       "unit": "ratio",
-      "value": 1.961992
+      "value": 0.969303
     },
     "exit.producer_loss.yayo_price_end_over_reference": {
       "unit": "ratio",
-      "value": 1.402881
+      "value": 1.288883
     },
     "generous_basket.basket.share_of_working_day": {
       "unit": "fraction",
@@ -908,11 +908,11 @@
     },
     "procurement.boom.employment_end": {
       "unit": "worker-days",
-      "value": 0.487902
+      "value": 0.492523
     },
     "procurement.boom.yayo_price_end_over_reference": {
       "unit": "ratio",
-      "value": 0.881524
+      "value": 0.876495
     },
     "procurement.cost_competition.meals_posted_spread": {
       "unit": "ratio",
@@ -932,7 +932,7 @@
     },
     "procurement.glut.end_over_reference": {
       "unit": "ratio",
-      "value": 0.997167
+      "value": 0.997626
     },
     "procurement.glut.trough_day": {
       "unit": "day",
@@ -948,19 +948,19 @@
     },
     "procurement.producer_loss.end_over_reference": {
       "unit": "ratio",
-      "value": 1.160752
+      "value": 1.096802
     },
     "procurement.producer_loss.peak_over_reference": {
       "unit": "ratio",
-      "value": 1.450134
+      "value": 1.434166
     },
     "procurement.subsistence.basket_shortfall": {
       "unit": "units",
-      "value": 8.452287
+      "value": 7.690616
     },
     "procurement.subsistence.meals_peak_over_reference": {
       "unit": "ratio",
-      "value": 1.243735
+      "value": 2.19932
     },
     "procurement.technique_change.cheaper_share": {
       "unit": "fraction",
