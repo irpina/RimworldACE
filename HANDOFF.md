@@ -16,7 +16,8 @@
 **Exit floor design / results:** `docs/66`, `docs/67` (built; the floor works, and it uncovered a second defect)
 **Sell-out after the draw design / results:** `docs/68`, `docs/69` (built; the second defect is fixed and the scarcity signal works)
 **The churn design / results:** `docs/70`, `docs/71` (diagnosed; the first rule was built, failed and was reverted — the cause is elastic demand)
-**Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built** — one `dotnet run` away from measured)
+**Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built**)
+**Stage 1 port, third slice (the reserve army and habituation) design / results:** `docs/74`, `docs/75` (written to the contract; **the C# is not yet built** — two slices now await one `dotnet run`)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1991,16 +1992,45 @@ turned out to be an entrant clamped to 18% of cost, corrected in
 
 ---
 
-## Handoff: Phase C, the port's second slice (2026-09-12)
+## Handoff: Phase C, two slices written and unbuilt (2026-09-12)
 
-The wage slice is written and unbuilt. **The first thing the next session
-with a .NET SDK should do is `dotnet run --project
-economy_mod/Source/Economy.Core.Check`** — see "The port's second slice"
-above for what that checks and why it comes before anything else. If it
-is bit-exact, `docs/73` §5's first two items close and the next slice
-(the reserve-army premium and habituation, `docs/54` §6's third) can
-start. If it is not, the failure is in `WageSolver.cs` and the fixtures
-say which reading and by how many ulps.
+The wage slice (`docs/72`, `docs/73`) and the bargaining slice
+(`docs/74`, `docs/75`) are both written and **neither has been
+compiled** — the sessions that wrote them had no .NET SDK and the
+network policy blocked installing one.
+
+**The first thing the next session with a toolchain must do:**
+
+```
+dotnet run --project economy_mod/Source/Economy.Core.Check
+```
+
+It now checks three fixture directories — `labor_values`, `wages`,
+`bargaining` — and returns the first non-zero code. If it is bit-exact
+throughout, `docs/73` §5 and `docs/75` §4 both close. If it is not, the
+fixtures name the reading, the step and the ulp count, and each slice's
+C# is independent of the other's so the failures do not mask each other.
+
+**No third unbuilt slice** (`docs/74` §7). Build these two before
+writing any more port code.
+
+Both slices' arithmetic was checked by re-implementing the C# in Python
+*from the C# source* and running it against the fixtures: 112 readings
+for the wage, 960 for the bargaining, zero ulps in both. That checks
+order, branches and accumulation and nothing about whether it builds.
+
+Two rules for the rest of the port came out of these slices and are worth
+more than either slice:
+
+- **A fixture must carry the state a magnitude is computed against**, not
+  only the magnitude (`docs/73` §2). `Ledger.add` accumulates and
+  `region.cash -= bill` subtracts from a large purse, so the same wage
+  bill posts +13.326840677261316 and moves the purse by
+  −13.326840677254950.
+- **A fixture must be checked for which branches it actually takes**, not
+  which branches its scenario contains (`docs/75` §3). Three bargaining
+  fixtures never reached habituation's taken branch, because a sequence
+  freezes employment and the premium then converges monotonically.
 
 Everything else about Phase C is unchanged and still ahead: the daily
 tick amortised across ticks, the full economic state through save and

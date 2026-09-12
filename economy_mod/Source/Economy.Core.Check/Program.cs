@@ -108,8 +108,18 @@ namespace SocialProduction.Economy.Check
                 : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "wages");
             int wageCode = WageCheck.Run(wageDirectory);
 
+            // The bargaining rules (docs/74), against their own fixtures.
+            string bargainingDirectory = args.Length > 2
+                ? args[2]
+                : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "bargaining");
+            int bargainingCode = BargainingCheck.Run(bargainingDirectory);
+
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            return valueCode != 0 ? valueCode : wageCode;
+            if (valueCode != 0)
+            {
+                return valueCode;
+            }
+            return wageCode != 0 ? wageCode : bargainingCode;
         }
 
         internal sealed class Comparison

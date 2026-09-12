@@ -9,7 +9,7 @@ and re-run the C# harness, in that order.
 import json
 import unittest
 
-from economy_lab import fixtures, wage_fixtures
+from economy_lab import bargaining_fixtures, fixtures, wage_fixtures
 
 
 class PortFixtureTests(unittest.TestCase):
@@ -156,6 +156,71 @@ class WageFixtureTests(unittest.TestCase):
             ),
             before,
         )
+
+
+class BargainingFixtureTests(unittest.TestCase):
+    def test_the_committed_bargaining_fixtures_are_current(self):
+        for name, document in bargaining_fixtures.build_all().items():
+            with self.subTest(fixture=name):
+                path = bargaining_fixtures.DEFAULT_DIR / f"{name}.json"
+                self.assertTrue(
+                    path.exists(),
+                    f"{path} is missing; run python -m economy_lab.bargaining_fixtures",
+                )
+                committed = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(committed, document)
+
+    def test_the_rules_are_exactly_stationary_where_the_circuit_is(self):
+        """docs/74 s6.2, which is docs/46 s2's claim asserted on sixty days.
+
+        At the seed the employment rate equals the reference to the bit, so
+        the target premium is exactly zero and the premium never leaves it.
+        A rule that drifted one ulp a day would show sixty here and pass
+        any tolerance anyone would write, which is why the fixture is a
+        sequence and this assertion is equality.
+        """
+        document = bargaining_fixtures.build_all()["equilibrium_stationary"]
+        self.assertNotEqual(document["problem"]["wage_bargaining_strength"], 0.0)
+        for sequence in document["sequences"]:
+            with self.subTest(region=sequence["region"]):
+                for index, step in enumerate(sequence["steps"]):
+                    self.assertEqual(step["wage_premium"], 0.0, f"step {index}")
+                    self.assertEqual(step["habitual_scale"], 1.0, f"step {index}")
+
+    def test_the_standard_ratchets_and_never_falls(self):
+        """docs/74 s6.4: habituation is upward-only, and some fixture must
+        actually turn it.
+
+        The first three fixtures did not: a sequence freezes employment, so
+        the premium converges monotonically, and the reversal's premium
+        sits below a standard the boom already raised -- leaving the gap
+        negative for all sixty steps and the taken branch uncovered.
+        `boom_habituating` is in the set because of that (docs/75 s3).
+        """
+        built = bargaining_fixtures.build_all()
+        for name, document in built.items():
+            for sequence in document["sequences"]:
+                scales = [step["habitual_scale"] for step in sequence["steps"]]
+                with self.subTest(fixture=name, region=sequence["region"]):
+                    for earlier, later in zip(scales, scales[1:]):
+                        self.assertGreaterEqual(later, earlier)
+        rises = [
+            later > earlier
+            for sequence in built["boom_habituating"]["sequences"]
+            for earlier, later in zip(
+                [step["habitual_scale"] for step in sequence["steps"]],
+                [step["habitual_scale"] for step in sequence["steps"]][1:],
+            )
+        ]
+        self.assertTrue(any(rises), "no fixture turns the ratchet")
+
+    def test_the_bargaining_generator_does_not_move_the_laboratory(self):
+        """docs/74: both rules mutate, so the sequences run on a copy."""
+        economy = bargaining_fixtures.demand_boom(120, bargaining=True)
+        region = economy.regions["Dust Basin"]
+        before = (region.wage_premium, region.habitual_scale)
+        bargaining_fixtures.sequence(economy, "Dust Basin")
+        self.assertEqual((region.wage_premium, region.habitual_scale), before)
 
 
 if __name__ == "__main__":

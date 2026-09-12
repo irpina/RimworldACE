@@ -1,0 +1,520 @@
+{
+ "name": "boom_habituating",
+ "day": 180,
+ "steps": 60,
+ "problem": {
+  "wage_bargaining_strength": 1.0,
+  "wage_bargaining_speed": 0.1,
+  "habituation_speed": 0.02,
+  "regions": [
+   {
+    "name": "Dust Basin",
+    "has_basket": true,
+    "employment_rate": 0.3505878448486328,
+    "reference_employment_rate": 0.3175325393676758,
+    "wage_premium": 0.010422605607970535,
+    "habitual_scale": 1.0071008561403587
+   },
+   {
+    "name": "Green River",
+    "has_basket": true,
+    "employment_rate": 0.3175325393676758,
+    "reference_employment_rate": 0.3175325393676758,
+    "wage_premium": 0.0,
+    "habitual_scale": 1.0
+   }
+  ]
+ },
+ "sequences": [
+  {
+   "region": "Dust Basin",
+   "steps": [
+    {
+     "wage_premium": 0.012685875595269184,
+     "habitual_scale": 1.007212556529457
+    },
+    {
+     "wage_premium": 0.01472281858383797,
+     "habitual_scale": 1.0073627617705445
+    },
+    {
+     "wage_premium": 0.016556067273549874,
+     "habitual_scale": 1.0075466278806047
+    },
+    {
+     "wage_premium": 0.01820599109429059,
+     "habitual_scale": 1.0077598151448783
+    },
+    {
+     "wage_premium": 0.019690922532957233,
+     "habitual_scale": 1.0079984372926398
+    },
+    {
+     "wage_premium": 0.021027360827757212,
+     "habitual_scale": 1.0082590157633422
+    },
+    {
+     "wage_premium": 0.022230155293077192,
+     "habitual_scale": 1.0085384385539369
+    },
+    {
+     "wage_premium": 0.023312670311865177,
+     "habitual_scale": 1.0088339231890955
+    },
+    {
+     "wage_premium": 0.024286933828774362,
+     "habitual_scale": 1.009142983401889
+    },
+    {
+     "wage_premium": 0.02516377099399263,
+     "habitual_scale": 1.0094633991537312
+    },
+    {
+     "wage_premium": 0.025952924442689068,
+     "habitual_scale": 1.0097931896595103
+    },
+    {
+     "wage_premium": 0.026663162546515864,
+     "habitual_scale": 1.0101305891172503
+    },
+    {
+     "wage_premium": 0.02730237683995998,
+     "habitual_scale": 1.0104740248717046
+    },
+    {
+     "wage_premium": 0.027877669704059686,
+     "habitual_scale": 1.0108220977683517
+    },
+    {
+     "wage_premium": 0.02839543328174942,
+     "habitual_scale": 1.0111735644786197
+    },
+    {
+     "wage_premium": 0.02886142050167018,
+     "habitual_scale": 1.0115273215990808
+    },
+    {
+     "wage_premium": 0.029280808999598864,
+     "habitual_scale": 1.0118823913470911
+    },
+    {
+     "wage_premium": 0.02965825864773468,
+     "habitual_scale": 1.012237908693104
+    },
+    {
+     "wage_premium": 0.029997963331056917,
+     "habitual_scale": 1.012593109785863
+    },
+    {
+     "wage_premium": 0.030303697546046927,
+     "habitual_scale": 1.0129473215410667
+    },
+    {
+     "wage_premium": 0.030578858339537936,
+     "habitual_scale": 1.013299952277036
+    },
+    {
+     "wage_premium": 0.030826503053679847,
+     "habitual_scale": 1.013650483292569
+    },
+    {
+     "wage_premium": 0.031049383296407565,
+     "habitual_scale": 1.0139984612926458
+    },
+    {
+     "wage_premium": 0.031249975514862513,
+     "habitual_scale": 1.0143434915770901
+    },
+    {
+     "wage_premium": 0.031430508511471965,
+     "habitual_scale": 1.0146852319157778
+    },
+    {
+     "wage_premium": 0.03159298820842047,
+     "habitual_scale": 1.0150233870416305
+    },
+    {
+     "wage_premium": 0.03173921993567413,
+     "habitual_scale": 1.0153577036995114
+    },
+    {
+     "wage_premium": 0.03187082849020242,
+     "habitual_scale": 1.0156879661953253
+    },
+    {
+     "wage_premium": 0.03198927618927788,
+     "habitual_scale": 1.0160139923952043
+    },
+    {
+     "wage_premium": 0.032095879118445796,
+     "habitual_scale": 1.016335630129669
+    },
+    {
+     "wage_premium": 0.03219182175469692,
+     "habitual_scale": 1.0166527539621697
+    },
+    {
+     "wage_premium": 0.03227817012732293,
+     "habitual_scale": 1.0169652622854728
+    },
+    {
+     "wage_premium": 0.03235588366268634,
+     "habitual_scale": 1.017273074713017
+    },
+    {
+     "wage_premium": 0.03242582584451341,
+     "habitual_scale": 1.017576129735647
+    },
+    {
+     "wage_premium": 0.03248877380815777,
+     "habitual_scale": 1.017874382617097
+    },
+    {
+     "wage_premium": 0.03254542697543769,
+     "habitual_scale": 1.0181678035042638
+    },
+    {
+     "wage_premium": 0.03259641482598963,
+     "habitual_scale": 1.0184563757306984
+    },
+    {
+     "wage_premium": 0.03264230389148637,
+     "habitual_scale": 1.0187400942939142
+    },
+    {
+     "wage_premium": 0.03268360405043343,
+     "habitual_scale": 1.0190189644890446
+    },
+    {
+     "wage_premium": 0.03272077419348579,
+     "habitual_scale": 1.0192930006831333
+    },
+    {
+     "wage_premium": 0.03275422732223292,
+     "habitual_scale": 1.0195622252159153
+    },
+    {
+     "wage_premium": 0.03278433513810533,
+     "habitual_scale": 1.0198266674143592
+    },
+    {
+     "wage_premium": 0.0328114321723905,
+     "habitual_scale": 1.0200863627095198
+    },
+    {
+     "wage_premium": 0.032835819503247154,
+     "habitual_scale": 1.0203413518453943
+    },
+    {
+     "wage_premium": 0.03285776810101814,
+     "habitual_scale": 1.0205916801705068
+    },
+    {
+     "wage_premium": 0.03287752183901203,
+     "habitual_scale": 1.0208373970038769
+    },
+    {
+     "wage_premium": 0.03289530020320653,
+     "habitual_scale": 1.0210785550678634
+    },
+    {
+     "wage_premium": 0.03291130073098158,
+     "habitual_scale": 1.0213152099811258
+    },
+    {
+     "wage_premium": 0.032925701205979124,
+     "habitual_scale": 1.021547419805623
+    },
+    {
+     "wage_premium": 0.03293866163347692,
+     "habitual_scale": 1.02177524464218
+    },
+    {
+     "wage_premium": 0.03295032601822493,
+     "habitual_scale": 1.0219987462697009
+    },
+    {
+     "wage_premium": 0.03296082396449814,
+     "habitual_scale": 1.0222179878235969
+    },
+    {
+     "wage_premium": 0.032970272116144034,
+     "habitual_scale": 1.0224330335094478
+    },
+    {
+     "wage_premium": 0.032978775452625335,
+     "habitual_scale": 1.0226439483483114
+    },
+    {
+     "wage_premium": 0.0329864284554585,
+     "habitual_scale": 1.0228507979504544
+    },
+    {
+     "wage_premium": 0.03299331615800836,
+     "habitual_scale": 1.0230536483146055
+    },
+    {
+     "wage_premium": 0.03299951509030322,
+     "habitual_scale": 1.0232525656501195
+    },
+    {
+     "wage_premium": 0.033005094129368605,
+     "habitual_scale": 1.0234476162197044
+    },
+    {
+     "wage_premium": 0.03301011526452745,
+     "habitual_scale": 1.0236388662006008
+    },
+    {
+     "wage_premium": 0.03301463428617041,
+     "habitual_scale": 1.0238263815623123
+    }
+   ]
+  },
+  {
+   "region": "Green River",
+   "steps": [
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    },
+    {
+     "wage_premium": 0.0,
+     "habitual_scale": 1.0
+    }
+   ]
+  }
+ ]
+}
