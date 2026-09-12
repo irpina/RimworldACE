@@ -79,6 +79,20 @@ namespace SocialProduction.Economy
         /// </summary>
         private bool loadedFromSave;
 
+        /// <summary>
+        /// The resume check's verdict, decided **once, at load**, because
+        /// that is the only moment it is about.
+        ///
+        /// The first version recomputed it from the live scheduler every
+        /// time the report was rebuilt, so once a resumed day finished it
+        /// compared the cursor the save carried against the cursor the
+        /// finished day left — and reported a correct resume as a failure.
+        /// Latent while a day has one phase and certain the moment it has
+        /// two, which is why it was found by review rather than by the
+        /// harness (docs/96).
+        /// </summary>
+        private Check resumeCheck;
+
         public EconomyWorldComponent(World world) : base(world)
         {
         }
@@ -352,26 +366,34 @@ namespace SocialProduction.Economy
                         "a mismatch means the derivation reads state that is not in the save");
                 }
 
-                // An upgraded save had its cursor deliberately reset, so
-                // there is no resume to check -- expecting the old value
-                // would report the upgrade working as a failure.
-                if (upgraded)
+                // Decided once, at load, and reused: see `resumeCheck`.
+                if (resumeCheck == null)
                 {
-                    selfCheck.Add(
-                        "mid-day resume",
-                        "cursor 0 after a schema upgrade",
-                        "cursor " + dayCursor,
-                        dayCursor == 0 ? CheckVerdict.Passed : CheckVerdict.Failed,
-                        "a pre-schema-3 save carries no day to resume");
+                    resumeCheck = new Check();
+                    resumeCheck.Name = "mid-day resume";
+                    if (upgraded)
+                    {
+                        resumeCheck.Expected = "cursor 0 after a schema upgrade";
+                        resumeCheck.Observed = "cursor " + dayCursor;
+                        resumeCheck.Verdict = dayCursor == 0
+                            ? CheckVerdict.Passed : CheckVerdict.Failed;
+                        resumeCheck.Note = "a pre-schema-3 save carries no day to resume";
+                    }
+                    else
+                    {
+                        resumeCheck.Expected = "cursor " + cursorOnLoad;
+                        resumeCheck.Observed =
+                            scheduler == null ? "cursor 0" : "cursor " + scheduler.Cursor;
+                        resumeCheck.Verdict =
+                            resumeCheck.Expected == resumeCheck.Observed
+                                ? CheckVerdict.Passed : CheckVerdict.Failed;
+                        resumeCheck.Note =
+                            "re-running a phase is not harmless: the settlement pays a wage bill";
+                    }
                 }
-                else
-                {
-                    selfCheck.Expect(
-                        "mid-day resume",
-                        "cursor " + cursorOnLoad,
-                        scheduler == null ? "cursor 0" : "cursor " + scheduler.Cursor,
-                        "re-running a phase is not harmless: the settlement pays a wage bill");
-                }
+                selfCheck.Add(
+                    resumeCheck.Name, resumeCheck.Expected, resumeCheck.Observed,
+                    resumeCheck.Verdict, resumeCheck.Note);
                 if (upgraded)
                 {
                     selfCheck.Expect(

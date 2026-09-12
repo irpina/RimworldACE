@@ -37,6 +37,14 @@ namespace SocialProduction.Economy.Drive
             throw new Exception("no check named " + name);
         }
 
+        static string Describe(EconomyWorldComponent c, string name)
+        {
+            foreach (Check check in Report(c).Checks)
+                if (check.Name == name)
+                    return "expected " + check.Expected + ", observed " + check.Observed;
+            return "(absent)";
+        }
+
         static EconomyWorldComponent New()
         {
             return new EconomyWorldComponent(new RimWorld.Planet.World());
@@ -134,6 +142,46 @@ namespace SocialProduction.Economy.Drive
             T((int)Field(resumed, "dayCursor") == savedCursor,
                 "the cursor did not survive: saved " + savedCursor
                 + ", loaded " + Field(resumed, "dayCursor"));
+
+            // --- 4b. a mid-day save, reloaded, and then run to the end
+            // The case scenario 4 stops one step short of: after the
+            // resumed day *finishes*, the resume check must not still be
+            // comparing against the cursor the save carried.
+            FakeHost.Reset();
+            FakeHost.Populate(4);
+            EconomyWorldComponent partial = New();
+            partial.FinalizeInit(false);
+            for (int tick = 0; tick <= 60000; tick++)
+            {
+                FakeHost.TicksGame = tick;
+                partial.WorldComponentTick();
+                if ((int)Field(partial, "dayCursor") > 0) break;
+            }
+            Save(partial);
+            EconomyWorldComponent finished = Load();
+            for (int tick = 0; tick <= 200; tick++)
+            {
+                FakeHost.TicksGame = 60000 + tick;
+                finished.WorldComponentTick();
+            }
+            T(VerdictOf(finished, "mid-day resume") != CheckVerdict.Failed,
+                "finishing a resumed day was reported as a failed resume: "
+                + Describe(finished, "mid-day resume"));
+            T(Report(finished).Passed,
+                "a resumed day that completed did not report a pass: "
+                + Report(finished).Summary);
+            // The resume verdict is decided at load and must not drift as
+            // the day advances -- the defect docs/96 found by review, which
+            // a one-phase day cannot reach through the public surface.
+            string atLoad = Describe(finished, "mid-day resume");
+            for (int tick = 0; tick < 500; tick++)
+            {
+                FakeHost.TicksGame = 60200 + tick;
+                finished.WorldComponentTick();
+            }
+            T(Describe(finished, "mid-day resume") == atLoad,
+                "the resume check drifted as the day advanced: was '" + atLoad
+                + "', now '" + Describe(finished, "mid-day resume") + "'");
 
             // --- 5. a pre-schema-3 save -----------------------------
             FakeHost.Reset();
