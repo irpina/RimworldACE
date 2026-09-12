@@ -25,6 +25,7 @@
 **Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
 **Stage 1 wealth coupling design / results:** `docs/84`, `docs/85` — `WealthCoupling`; the default is provably inert and the bound cannot be escaped, 2,526 property checks
 **The shipping binary verified:** `docs/86` — `net472` builds with the real SDK, 0 warnings; the committed check harness **has now run** and passes; the `net472` artifact reproduces the laboratory to the bit under Mono
+**The mod compiled against ground truth:** `docs/87` — `economy_mod/Source/Economy.Facade/` is the RimWorld surface read out of the last real build with `monodis`; the mod's game-facing code builds `net472` against it with 0 errors, which proves the new wiring **adds no RimWorld API the previous real build did not already resolve**
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
@@ -2129,10 +2130,17 @@ first two of `docs/85` §6's five:
    build is clean, the harness passes, and the `net472` artifact is
    bit-exact under Mono.
 2. **Build the mod assembly** (`Economy.csproj`) against RimWorld's
-   shipped managed DLLs — game files this environment does not have.
-   The mod's own code compiles only against a hand-written façade
-   (`docs/85` §5), which catches syntax, types and call shapes but not
-   a wrong signature.
+   shipped managed DLLs — game files this environment does not have and
+   should not. Much reduced by `docs/87`: the mod's game-facing code now
+   builds `net472` against `economy_mod/Source/Economy.Facade/`, whose
+   every member was read out of the last real build's reference tables
+   with `monodis`. Because that façade contains nothing else, the build
+   proves the new wiring **uses no RimWorld API the previous real build
+   did not already resolve**. A real build is still the authority.
+   (If someone calls a RimWorld member the mod has not used before, the
+   façade build fails — that is deliberate, and keeps growth in the
+   RimWorld surface visible in a mod whose posture is no Harmony, no
+   gameplay mutation, no `Rand`.)
 3. The co-load and tab check under "Stage 1 runtime shell" below, stale
    since Labor Content gained an assembly. Then save, reload, and read
    the determinism row (`reproduced N/N`); a mid-day save must resume
