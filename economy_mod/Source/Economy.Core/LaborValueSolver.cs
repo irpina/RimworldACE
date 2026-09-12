@@ -278,7 +278,13 @@ namespace SocialProduction.Economy.Core
         /// single output, else by mass, with the mass total a <c>sum()</c>
         /// over the outputs in insertion order.
         /// </summary>
-        private static double ShareOfCost(ProcessSpec process, string commodity, Dictionary<string, double> mass)
+        /// <summary>
+        /// Exposed for <see cref="WageCostSolver"/>, which needs the same
+        /// apportionment the value solve uses (docs/79).  One
+        /// implementation rather than two: a second copy of this would be
+        /// a second thing to keep in step with the laboratory.
+        /// </summary>
+        internal static double ShareOfCost(ProcessSpec process, string commodity, Dictionary<string, double> mass)
         {
             double amount = process.OutputOf(commodity);
             bool present = false;

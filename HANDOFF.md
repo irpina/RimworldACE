@@ -19,6 +19,7 @@
 **Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built**)
 **Stage 1 port, third slice (the reserve army and habituation) design / results:** `docs/74`, `docs/75`
 **Stage 1 port, fourth slice (the regional price update) design / results:** `docs/77`, `docs/78` (bit-exact under Mono, `exp` included)
+**Stage 1 port, fifth slice (the wage-cost refresh):** `docs/79` — **the planned model's arithmetic is now ported**, 4,151 readings, zero ulps
 **The port compiled and run:** `docs/76` — every slice bit-exact under **Mono**, the runtime the game loads. No unbuilt slices remain.
 **A Mono defect that constrains save/load:** `docs/78` §3 — `double.Parse` is not correctly rounded, so **persist doubles as bits, not as decimal**.
 **Phase D (gameplay layer) design:** `docs/50`
@@ -2006,6 +2007,12 @@ bit-exact under Mono**, which is the runtime RimWorld loads (`docs/76`):
 | the basket and the wage | 72, 73 | 112 | Mono |
 | the reserve army and habituation | 74, 75 | 960 | Mono |
 | the regional price update | 77, 78 | 48 | Mono, `exp` included |
+| the wage-cost refresh | 79 | 43 | Mono |
+
+**The planned model's arithmetic core is ported**: 4,151 readings, zero
+ulps, against the runtime the game loads. The market model's rules —
+posted prices, procurement, entry, exit — are deliberately not ported
+while `docs/71` §5 leaves the reference following the planned model.
 
 `docs/74` §7's "no third unbuilt slice" rule is discharged; there are no
 unbuilt slices. The price slice carried the port's first transcendental
@@ -2057,10 +2064,19 @@ persistence slice around that rather than discovering it in a
 reload-determinism failure later. (It casts no doubt on the exactness
 results above: a mis-parse can only manufacture a failure, never a pass.)
 
+**A coverage gap in the laboratory, found by the port** (`docs/79`
+§3a). **No process in any scenario has more than one output** — not the
+six-commodity circuit, not Department I's nine, not the synthetic
+economy. So `share_of_cost`, the mass apportionment `docs/08` chose
+deliberately, returns 1.0 every time it is called and **has never been
+exercised by anything**, the 2,988 value-solve readings included. It is
+unfalsified because nothing has tested it, and a joint process — a
+refinery making two fractions, butchering making meat and leather — is
+something a real economy has everywhere. Belongs on the omissions list.
+A test pins it and fails when a joint process is added.
+
 **What is left in Phase C**, and the balance has shifted. The
-arithmetic slices are nearly done — `_update_wage_costs`, which drags in
-`Process.labor_per_unit` and the process graph with it, is the only one
-left. The engineering half is untouched and is now the
+arithmetic slices are **done**. The engineering half is untouched and is now the
 larger half: the daily tick amortised across ticks (about 1.1 s of C#
 work per simulated day at full scale, against a 60,000-tick day), the
 full economic state through save and load, the UI, and the

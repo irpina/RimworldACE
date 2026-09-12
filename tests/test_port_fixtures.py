@@ -13,6 +13,7 @@ from economy_lab import (
     bargaining_fixtures,
     fixtures,
     price_fixtures,
+    wage_cost_fixtures,
     wage_fixtures,
 )
 
@@ -295,6 +296,52 @@ class PriceFixtureTests(unittest.TestCase):
             {name: dict(region.prices) for name, region in economy.regions.items()},
             before,
         )
+
+
+class WageCostFixtureTests(unittest.TestCase):
+    def test_the_committed_wage_cost_fixtures_are_current(self):
+        for name, document in wage_cost_fixtures.build_all().items():
+            with self.subTest(fixture=name):
+                path = wage_cost_fixtures.DEFAULT_DIR / f"{name}.json"
+                self.assertTrue(
+                    path.exists(),
+                    f"{path} is missing; run python -m economy_lab.wage_cost_fixtures",
+                )
+                committed = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(committed, document)
+
+    def test_no_scenario_has_a_joint_process_and_that_is_the_finding(self):
+        """docs/79 s3a: mass apportionment is unreachable in this laboratory.
+
+        `share_of_cost` (docs/08) splits a process's joint cost across its
+        outputs by mass, and both the value solve and the wage-cost
+        refresh call it.  **Every process in every scenario has exactly
+        one output**, so it returns 1.0 every time and has never been
+        exercised by anything -- not by the 2,988 value-solve readings
+        either.
+
+        This test pins that, rather than pretending a fixture covers it.
+        When a joint process is finally added, this fails, and the right
+        response is to write the fixture the branch then needs.
+        """
+        for name, document in wage_cost_fixtures.build_all().items():
+            for region in document["problem"]["regions"]:
+                for producer in region["producers"]:
+                    with self.subTest(fixture=name, producer=producer["name"]):
+                        self.assertEqual(
+                            len(producer["process"]["outputs"]),
+                            1,
+                            "a joint process exists now; docs/79 s3a is stale "
+                            "and the apportionment needs a fixture",
+                        )
+
+    def test_the_wage_cost_generator_does_not_move_the_laboratory(self):
+        """docs/79: the refresh writes to every active producer."""
+        economy = wage_cost_fixtures.equilibrium(days=60)
+        region = economy.regions["Dust Basin"]
+        before = [p.wage_cost_per_unit for p in region.producers]
+        wage_cost_fixtures.expected(economy, "Dust Basin")
+        self.assertEqual([p.wage_cost_per_unit for p in region.producers], before)
 
 
 if __name__ == "__main__":

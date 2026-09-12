@@ -1,0 +1,361 @@
+{
+ "name": "technique_change_day120",
+ "day": 120,
+ "problem": {
+  "regions": [
+   {
+    "region": "Dust Basin",
+    "has_basket": true,
+    "wage_rate": 41.77357867015428,
+    "ticks_per_worker_day": 24000.0,
+    "commodity_mass": [
+     [
+      "yayo",
+      0.05
+     ],
+     [
+      "psychoid_leaves",
+      0.03
+     ],
+     [
+      "chemfuel",
+      0.05
+     ],
+     [
+      "meals",
+      0.44
+     ],
+     [
+      "garments",
+      0.6
+     ],
+     [
+      "herbal_medicine",
+      0.35
+     ]
+    ],
+    "producers": [
+     {
+      "name": "Dust cooperative",
+      "commodity": "yayo",
+      "active": true,
+      "process": {
+       "name": "yayo refining",
+       "outputs": [
+        [
+         "yayo",
+         1.0
+        ]
+       ],
+       "direct_labor": 350.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.6092020396549889
+     },
+     {
+      "name": "Dust psychoid fields",
+      "commodity": "psychoid_leaves",
+      "active": true,
+      "process": {
+       "name": "psychoid farming",
+       "outputs": [
+        [
+         "psychoid_leaves",
+         1.0
+        ]
+       ],
+       "direct_labor": 46.2,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.08041466923445853
+     },
+     {
+      "name": "Dust refinery",
+      "commodity": "chemfuel",
+      "active": true,
+      "process": {
+       "name": "chemfuel synthesis",
+       "outputs": [
+        [
+         "chemfuel",
+         1.0
+        ]
+       ],
+       "direct_labor": 25.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.04351443140392777
+     },
+     {
+      "name": "Dust provisioners",
+      "commodity": "meals",
+      "active": true,
+      "process": {
+       "name": "provisioning",
+       "outputs": [
+        [
+         "meals",
+         1.0
+        ]
+       ],
+       "direct_labor": 305.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.5308760631279189
+     },
+     {
+      "name": "Dust tailors",
+      "commodity": "garments",
+      "active": true,
+      "process": {
+       "name": "tailoring",
+       "outputs": [
+        [
+         "garments",
+         1.0
+        ]
+       ],
+       "direct_labor": 1620.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 2.81973515497452
+     },
+     {
+      "name": "Dust herbalists",
+      "commodity": "herbal_medicine",
+      "active": true,
+      "process": {
+       "name": "herb gathering",
+       "outputs": [
+        [
+         "herbal_medicine",
+         1.0
+        ]
+       ],
+       "direct_labor": 400.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.6962309024628444
+     },
+     {
+      "name": "Dust provisioners (new technique)",
+      "commodity": "meals",
+      "active": true,
+      "process": {
+       "name": "provisioning (efficient)",
+       "outputs": [
+        [
+         "meals",
+         1.0
+        ]
+       ],
+       "direct_labor": 152.5,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.26543803156395945
+     }
+    ]
+   },
+   {
+    "region": "Green River",
+    "has_basket": true,
+    "wage_rate": 41.97,
+    "ticks_per_worker_day": 24000.0,
+    "commodity_mass": [
+     [
+      "yayo",
+      0.05
+     ],
+     [
+      "psychoid_leaves",
+      0.03
+     ],
+     [
+      "chemfuel",
+      0.05
+     ],
+     [
+      "meals",
+      0.44
+     ],
+     [
+      "garments",
+      0.6
+     ],
+     [
+      "herbal_medicine",
+      0.35
+     ]
+    ],
+    "producers": [
+     {
+      "name": "River works",
+      "commodity": "yayo",
+      "active": true,
+      "process": {
+       "name": "yayo refining",
+       "outputs": [
+        [
+         "yayo",
+         1.0
+        ]
+       ],
+       "direct_labor": 350.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.6120625
+     },
+     {
+      "name": "River psychoid fields",
+      "commodity": "psychoid_leaves",
+      "active": true,
+      "process": {
+       "name": "psychoid farming",
+       "outputs": [
+        [
+         "psychoid_leaves",
+         1.0
+        ]
+       ],
+       "direct_labor": 46.2,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.08079225
+     },
+     {
+      "name": "River refinery",
+      "commodity": "chemfuel",
+      "active": true,
+      "process": {
+       "name": "chemfuel synthesis",
+       "outputs": [
+        [
+         "chemfuel",
+         1.0
+        ]
+       ],
+       "direct_labor": 25.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.043718749999999994
+     },
+     {
+      "name": "River provisioners",
+      "commodity": "meals",
+      "active": true,
+      "process": {
+       "name": "provisioning",
+       "outputs": [
+        [
+         "meals",
+         1.0
+        ]
+       ],
+       "direct_labor": 305.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.53336875
+     },
+     {
+      "name": "River tailors",
+      "commodity": "garments",
+      "active": true,
+      "process": {
+       "name": "tailoring",
+       "outputs": [
+        [
+         "garments",
+         1.0
+        ]
+       ],
+       "direct_labor": 1620.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 2.832975
+     },
+     {
+      "name": "River herbalists",
+      "commodity": "herbal_medicine",
+      "active": true,
+      "process": {
+       "name": "herb gathering",
+       "outputs": [
+        [
+         "herbal_medicine",
+         1.0
+        ]
+       ],
+       "direct_labor": 400.0,
+       "apportionment": "mass"
+      },
+      "wage_cost_per_unit": 0.6994999999999999
+     }
+    ]
+   }
+  ]
+ },
+ "expected": [
+  {
+   "region": "Dust Basin",
+   "wage_cost_per_unit": [
+    [
+     "Dust cooperative",
+     0.6091980222730833
+    ],
+    [
+     "Dust psychoid fields",
+     0.080414138940047
+    ],
+    [
+     "Dust refinery",
+     0.04351414444807737
+    ],
+    [
+     "Dust provisioners",
+     0.530872562266544
+    ],
+    [
+     "Dust tailors",
+     2.8197165602354137
+    ],
+    [
+     "Dust herbalists",
+     0.6962263111692379
+    ],
+    [
+     "Dust provisioners (new technique)",
+     0.265436281133272
+    ]
+   ]
+  },
+  {
+   "region": "Green River",
+   "wage_cost_per_unit": [
+    [
+     "River works",
+     0.6120625
+    ],
+    [
+     "River psychoid fields",
+     0.08079225
+    ],
+    [
+     "River refinery",
+     0.043718749999999994
+    ],
+    [
+     "River provisioners",
+     0.53336875
+    ],
+    [
+     "River tailors",
+     2.832975
+    ],
+    [
+     "River herbalists",
+     0.6994999999999999
+    ]
+   ]
+  }
+ ]
+}
