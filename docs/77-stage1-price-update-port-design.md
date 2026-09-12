@@ -6,6 +6,10 @@ unported. It is taken now because it is the slice that tests the
 determinism contract's hardest case, and that question should be
 answered before the engineering half of Phase C rather than during it.
 
+**Answered by `docs/78`:** outcome 1 — the two libms agree on these
+inputs and all 48 readings are exact. The slice found a defect anyway,
+in Mono's *decimal parser* rather than its `exp`.
+
 ## 1. Why this slice is the interesting one
 
 Every ported line so far has been `+`, `-`, `*`, `/` and comparison.

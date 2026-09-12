@@ -9,7 +9,12 @@ and re-run the C# harness, in that order.
 import json
 import unittest
 
-from economy_lab import bargaining_fixtures, fixtures, wage_fixtures
+from economy_lab import (
+    bargaining_fixtures,
+    fixtures,
+    price_fixtures,
+    wage_fixtures,
+)
 
 
 class PortFixtureTests(unittest.TestCase):
@@ -221,6 +226,75 @@ class BargainingFixtureTests(unittest.TestCase):
         before = (region.wage_premium, region.habitual_scale)
         bargaining_fixtures.sequence(economy, "Dust Basin")
         self.assertEqual((region.wage_premium, region.habitual_scale), before)
+
+
+class PriceFixtureTests(unittest.TestCase):
+    def test_the_committed_price_fixtures_are_current(self):
+        for name, document in price_fixtures.build_all().items():
+            with self.subTest(fixture=name):
+                path = price_fixtures.DEFAULT_DIR / f"{name}.json"
+                self.assertTrue(
+                    path.exists(),
+                    f"{path} is missing; run python -m economy_lab.price_fixtures",
+                )
+                committed = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(committed, document)
+
+    def test_the_stationary_circuit_does_not_move_its_prices(self):
+        """docs/77 s6.1: at the seed the pressure is exactly zero.
+
+        Which makes `exp` exactly 1.0 in any libm, the desired price
+        exactly the anchor, and the anchor exactly the reference -- so the
+        damped step moves nothing.  This is the one `exp` result the port
+        can rely on whatever else disagrees, and the four-year equilibrium
+        price range resting at exactly zero depends on it.
+        """
+        document = price_fixtures.build_all()["equilibrium_day60"]
+        before = {
+            region["name"]: dict(region["prices"])
+            for region in document["problem"]["regions"]
+        }
+        for expected in document["expected"]:
+            with self.subTest(region=expected["region"]):
+                for name, price in expected["prices"]:
+                    self.assertEqual(price, before[expected["region"]][name])
+
+    def test_some_fixture_drives_the_pressure_both_ways(self):
+        """docs/77 s5: the fixture set has to exercise `exp` off zero.
+
+        One fixture with a stock above target, so the gap is negative and
+        `exp` runs below one, and one with unmet demand, so the second
+        term is positive.  Without both the slice's only transcendental is
+        never called with an interesting argument.
+        """
+        built = price_fixtures.build_all()
+        moved = []
+        for name, document in built.items():
+            before = {
+                region["name"]: dict(region["prices"])
+                for region in document["problem"]["regions"]
+            }
+            for expected in document["expected"]:
+                for good, price in expected["prices"]:
+                    old = before[expected["region"]][good]
+                    if price > old:
+                        moved.append((name, "up"))
+                    elif price < old:
+                        moved.append((name, "down"))
+        self.assertIn("up", [direction for _, direction in moved])
+        self.assertIn("down", [direction for _, direction in moved])
+
+    def test_the_price_generator_does_not_move_the_laboratory(self):
+        """docs/77: `_update_prices` mutates, so the fixture copies first."""
+        economy = price_fixtures.equilibrium(days=60)
+        before = {
+            name: dict(region.prices) for name, region in economy.regions.items()
+        }
+        price_fixtures.expected(economy)
+        self.assertEqual(
+            {name: dict(region.prices) for name, region in economy.regions.items()},
+            before,
+        )
 
 
 if __name__ == "__main__":

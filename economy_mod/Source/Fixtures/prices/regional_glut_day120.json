@@ -1,0 +1,392 @@
+{
+ "name": "regional_glut_day120",
+ "day": 120,
+ "problem": {
+  "competitive_price_intensity": 0.5,
+  "unmet_demand_price_pressure": 2.0,
+  "commodities": [
+   {
+    "name": "yayo",
+    "reference_price": 21.0,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   },
+   {
+    "name": "psychoid_leaves",
+    "reference_price": 1.9,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   },
+   {
+    "name": "chemfuel",
+    "reference_price": 2.3,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   },
+   {
+    "name": "meals",
+    "reference_price": 15.0,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   },
+   {
+    "name": "garments",
+    "reference_price": 85.76,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   },
+   {
+    "name": "herbal_medicine",
+    "reference_price": 10.0,
+    "target_inventory_days": 20.0,
+    "inventory_price_sensitivity": 1.05,
+    "minimum_price_factor": 0.18,
+    "maximum_price_factor": 5.0,
+    "price_adjustment_speed": 0.22
+   }
+  ],
+  "regions": [
+   {
+    "name": "Dust Basin",
+    "throughput": [
+     [
+      "yayo",
+      10.0
+     ],
+     [
+      "psychoid_leaves",
+      80.0
+     ],
+     [
+      "chemfuel",
+      6.231428571428571
+     ],
+     [
+      "meals",
+      0.6801488095238095
+     ],
+     [
+      "garments",
+      0.042509300595238095
+     ],
+     [
+      "herbal_medicine",
+      0.042509300595238095
+     ]
+    ],
+    "inventory": [
+     [
+      "yayo",
+      199.92329383522903
+     ],
+     [
+      "psychoid_leaves",
+      1600.0
+     ],
+     [
+      "chemfuel",
+      124.62857142857143
+     ],
+     [
+      "meals",
+      13.602976190476191
+     ],
+     [
+      "garments",
+      0.850186011904762
+     ],
+     [
+      "herbal_medicine",
+      0.850186011904762
+     ]
+    ],
+    "unmet_demand": [
+     [
+      "yayo",
+      0.0
+     ],
+     [
+      "psychoid_leaves",
+      0.0
+     ],
+     [
+      "chemfuel",
+      0.0
+     ],
+     [
+      "meals",
+      0.0
+     ],
+     [
+      "garments",
+      0.0
+     ],
+     [
+      "herbal_medicine",
+      0.0
+     ]
+    ],
+    "cost_ratio": [
+     [
+      "yayo",
+      1.0
+     ],
+     [
+      "psychoid_leaves",
+      1.0
+     ],
+     [
+      "chemfuel",
+      0.9999999999999997
+     ],
+     [
+      "meals",
+      1.0
+     ],
+     [
+      "garments",
+      1.0
+     ],
+     [
+      "herbal_medicine",
+      0.9999999999999999
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      21.013443515272524
+     ],
+     [
+      "psychoid_leaves",
+      1.9
+     ],
+     [
+      "chemfuel",
+      2.3
+     ],
+     [
+      "meals",
+      15.0
+     ],
+     [
+      "garments",
+      85.76
+     ],
+     [
+      "herbal_medicine",
+      10.0
+     ]
+    ]
+   },
+   {
+    "name": "Green River",
+    "throughput": [
+     [
+      "yayo",
+      10.0
+     ],
+     [
+      "psychoid_leaves",
+      80.0
+     ],
+     [
+      "chemfuel",
+      6.231428571428571
+     ],
+     [
+      "meals",
+      0.6801488095238095
+     ],
+     [
+      "garments",
+      0.042509300595238095
+     ],
+     [
+      "herbal_medicine",
+      0.042509300595238095
+     ]
+    ],
+    "inventory": [
+     [
+      "yayo",
+      200.01451938978929
+     ],
+     [
+      "psychoid_leaves",
+      1600.0
+     ],
+     [
+      "chemfuel",
+      124.62857142857143
+     ],
+     [
+      "meals",
+      13.602976190476191
+     ],
+     [
+      "garments",
+      0.850186011904762
+     ],
+     [
+      "herbal_medicine",
+      0.850186011904762
+     ]
+    ],
+    "unmet_demand": [
+     [
+      "yayo",
+      0.0
+     ],
+     [
+      "psychoid_leaves",
+      0.0
+     ],
+     [
+      "chemfuel",
+      0.0
+     ],
+     [
+      "meals",
+      0.0
+     ],
+     [
+      "garments",
+      0.0
+     ],
+     [
+      "herbal_medicine",
+      0.0
+     ]
+    ],
+    "cost_ratio": [
+     [
+      "yayo",
+      1.0
+     ],
+     [
+      "psychoid_leaves",
+      1.0
+     ],
+     [
+      "chemfuel",
+      0.9999999999999999
+     ],
+     [
+      "meals",
+      1.0
+     ],
+     [
+      "garments",
+      1.0
+     ],
+     [
+      "herbal_medicine",
+      1.0
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      20.995064285291715
+     ],
+     [
+      "psychoid_leaves",
+      1.9
+     ],
+     [
+      "chemfuel",
+      2.3
+     ],
+     [
+      "meals",
+      15.0
+     ],
+     [
+      "garments",
+      85.76
+     ],
+     [
+      "herbal_medicine",
+      10.0
+     ]
+    ]
+   }
+  ]
+ },
+ "expected": [
+  {
+   "region": "Dust Basin",
+   "prices": [
+    [
+     "yayo",
+     21.012346824609523
+    ],
+    [
+     "psychoid_leaves",
+     1.9
+    ],
+    [
+     "chemfuel",
+     2.3
+    ],
+    [
+     "meals",
+     15.0
+    ],
+    [
+     "garments",
+     85.76
+    ],
+    [
+     "herbal_medicine",
+     10.0
+    ]
+   ]
+  },
+  {
+   "region": "Green River",
+   "prices": [
+    [
+     "yayo",
+     20.99579798815017
+    ],
+    [
+     "psychoid_leaves",
+     1.9
+    ],
+    [
+     "chemfuel",
+     2.3
+    ],
+    [
+     "meals",
+     15.0
+    ],
+    [
+     "garments",
+     85.76
+    ],
+    [
+     "herbal_medicine",
+     10.0
+    ]
+   ]
+  }
+ ]
+}

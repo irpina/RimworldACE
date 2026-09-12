@@ -18,7 +18,9 @@
 **The churn design / results:** `docs/70`, `docs/71` (diagnosed; the first rule was built, failed and was reverted — the cause is elastic demand)
 **Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built**)
 **Stage 1 port, third slice (the reserve army and habituation) design / results:** `docs/74`, `docs/75`
-**The port compiled and run:** `docs/76` — all three slices bit-exact under **Mono**, 4,060 readings, zero ulps. No unbuilt slices remain.
+**Stage 1 port, fourth slice (the regional price update) design / results:** `docs/77`, `docs/78` (bit-exact under Mono, `exp` included)
+**The port compiled and run:** `docs/76` — every slice bit-exact under **Mono**, the runtime the game loads. No unbuilt slices remain.
+**A Mono defect that constrains save/load:** `docs/78` §3 — `double.Parse` is not correctly rounded, so **persist doubles as bits, not as decimal**.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -2003,9 +2005,13 @@ bit-exact under Mono**, which is the runtime RimWorld loads (`docs/76`):
 | the value solve | 53, 54 | 2,988 | .NET 8 and Mono |
 | the basket and the wage | 72, 73 | 112 | Mono |
 | the reserve army and habituation | 74, 75 | 960 | Mono |
+| the regional price update | 77, 78 | 48 | Mono, `exp` included |
 
 `docs/74` §7's "no third unbuilt slice" rule is discharged; there are no
-unbuilt slices.
+unbuilt slices. The price slice carried the port's first transcendental
+and it agreed to the bit — contingently: CPython's `math.exp` and Mono's
+`Math.Exp` both reach the platform's glibc here, and another platform's
+libm may not. `exp` is answered for this machine, not settled.
 
 **How, when `docs/72` §7 said it was impossible.** Microsoft's
 distribution host is blocked by the network policy, but **Ubuntu's
@@ -2039,10 +2045,22 @@ reproducing the readings they shaped:
   reached habituation's taken branch, because a sequence freezes
   employment and the premium then converges monotonically.
 
+**A constraint on the save/load slice, found by accident** (`docs/78`
+§3). Mono's `double.Parse` is **not correctly rounded**:
+`2.299847713167259` comes back one ulp high, where CPython and .NET get
+it right. RimWorld runs on Mono and `Scribe_Values` writes a `double` as
+decimal text, so any state persisted that way does not round-trip
+bit-identically and the laboratory's exactness discipline would stop at
+the save file. **Persist doubles as bits** —
+`BitConverter.DoubleToInt64Bits` into a `long` — and design the
+persistence slice around that rather than discovering it in a
+reload-determinism failure later. (It casts no doubt on the exactness
+results above: a mis-parse can only manufacture a failure, never a pass.)
+
 **What is left in Phase C**, and the balance has shifted. The
-arithmetic slices are nearly done — the regional price update and
-`_update_wage_costs` (which drags in the process graph) are the two
-candidates left. The engineering half is untouched and is now the
+arithmetic slices are nearly done — `_update_wage_costs`, which drags in
+`Process.labor_per_unit` and the process graph with it, is the only one
+left. The engineering half is untouched and is now the
 larger half: the daily tick amortised across ticks (about 1.1 s of C#
 work per simulated day at full scale, against a 60,000-tick day), the
 full economic state through save and load, the UI, and the
