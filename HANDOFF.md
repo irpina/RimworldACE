@@ -21,7 +21,8 @@
 **Stage 1 port, fourth slice (the regional price update) design / results:** `docs/77`, `docs/78` (bit-exact under Mono, `exp` included)
 **Stage 1 port, fifth slice (the wage-cost refresh):** `docs/79` — **the planned model's arithmetic is now ported**, 4,151 readings, zero ulps
 **The port compiled and run:** `docs/76` — every slice bit-exact under **Mono**, the runtime the game loads. No unbuilt slices remain.
-**A Mono defect that constrains save/load:** `docs/78` §3 — `double.Parse` is not correctly rounded, so **persist doubles as bits, not as decimal**.
+**Stage 1 persistence design / results:** `docs/80`, `docs/81` — a codec with no RimWorld reference, 2,078 values exact; **not yet wired to `Scribe`**
+**The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -2052,17 +2053,32 @@ reproducing the readings they shaped:
   reached habituation's taken branch, because a sequence freezes
   employment and the premium then converges monotonically.
 
-**A constraint on the save/load slice, found by accident** (`docs/78`
-§3). Mono's `double.Parse` is **not correctly rounded**:
-`2.299847713167259` comes back one ulp high, where CPython and .NET get
-it right. RimWorld runs on Mono and `Scribe_Values` writes a `double` as
-decimal text, so any state persisted that way does not round-trip
-bit-identically and the laboratory's exactness discipline would stop at
-the save file. **Persist doubles as bits** —
-`BitConverter.DoubleToInt64Bits` into a `long` — and design the
-persistence slice around that rather than discovering it in a
-reload-determinism failure later. (It casts no doubt on the exactness
-results above: a mis-parse can only manufacture a failure, never a pass.)
+**The float boundary rule** (`docs/78` §3, corrected and sharpened by
+`docs/81` §3). Mono's `double.Parse` is not correctly rounded, but the
+danger is narrower and more specific than `docs/78` guessed:
+
+| path | decimal safe? |
+|---|---|
+| Mono writes, Mono reads | **yes** — 0 of 2,078 values failed |
+| CPython writes, Mono reads | **no** — 1 of 2,072 literals failed |
+| one runtime writes, another reads | **no**, same mechanism |
+
+Mono reads its own `ToString("R")` back correctly because that emits
+seventeen digits, past where its parser goes wrong; CPython's `repr`
+emits the shortest round-tripping form and Mono mis-reads one in two
+thousand. So:
+
+> **Never let a float cross an implementation boundary as decimal.**
+
+That covers saves, seed data, fixtures, and every hand-off between the
+laboratory and the game. The mod will be seeded from laboratory-authored
+data, so at the 647-commodity scale `docs/33` measured this is a
+certainty rather than a risk — a Stage 1 economy that is *almost* the
+laboratory's and never exactly it. `StateCodec` (`docs/80`, `docs/81`)
+exists for that, and it is measured: 2,078 values exact.
+
+(None of this casts doubt on the port's exactness results: a mis-parse
+can only manufacture a failure, never a pass.)
 
 **A coverage gap in the laboratory, found by the port** (`docs/79`
 §3a). **No process in any scenario has more than one output** — not the
