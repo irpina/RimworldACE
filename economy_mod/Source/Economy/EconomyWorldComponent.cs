@@ -105,6 +105,18 @@ namespace SocialProduction.Economy
                 ? "idle"
                 : "phase " + (scheduler.Cursor + 1) + " of " + scheduler.PhaseCount;
 
+        /// <summary>
+        /// The economy in units a player has: worker-days, price over
+        /// value, the rate of surplus value, rent as a share (docs/94).
+        ///
+        /// Empty until the model is wired to the world and the snapshot
+        /// carries an economy — the readout is built and checked, and
+        /// what it has to read is the last thing the port needs.
+        /// </summary>
+        public IReadOnlyList<RegionReadout> Readouts => readouts;
+
+        private List<RegionReadout> readouts = new List<RegionReadout>();
+
         /// <summary>Whether this save carries economy state, and how much.</summary>
         /// <summary>The self-check, rendered; what a session at the game pastes back.</summary>
         public string SelfCheckText => selfCheck.Render();

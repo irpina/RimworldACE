@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RimWorld;
+using SocialProduction.Economy.Core;
 using UnityEngine;
 using Verse;
 
@@ -48,6 +49,33 @@ namespace SocialProduction.Economy
             DrawRow(
                 inRect, ref y, "",
                 "The full self-check is in the log: paste it back (docs/88).");
+
+            // The economy itself, in units a player has (docs/94). Empty
+            // until the model is wired to the world, and saying so is
+            // better than an empty table that looks like a broken one.
+            if (economy != null && economy.Readouts.Count > 0)
+            {
+                foreach (RegionReadout readout in economy.Readouts)
+                {
+                    DrawRow(inRect, ref y, readout.Region,
+                        EconomyReadout.Headline(readout));
+                    foreach (ReadoutRow line in readout.Rows)
+                    {
+                        DrawRow(inRect, ref y, "  " + line.Commodity,
+                            EconomyReadout.Number(line.ValueWorkerDays)
+                            + " worker-days, " + EconomyReadout.Number(line.Price)
+                            + " silver, price/value "
+                            + EconomyReadout.Ratio(line.PriceOverValue)
+                            + ", rent " + EconomyReadout.Percent(line.RentShare));
+                    }
+                }
+            }
+            else
+            {
+                DrawRow(inRect, ref y, "Value, price, surplus, rent",
+                    "not yet: the model is ported and checked, "
+                    + "and not yet wired to the world (docs/94)");
+            }
 
             y += 12f;
             Widgets.DrawLineHorizontal(inRect.x, y, inRect.width);

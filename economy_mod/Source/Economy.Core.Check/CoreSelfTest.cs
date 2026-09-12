@@ -38,6 +38,7 @@ namespace SocialProduction.Economy.Check
             firstFew.Clear();
 
             CodecRoundTrip(fixturesRoot);
+            Readout();
             SchedulerInvariant();
             WealthProperties();
             ReportAndBudget();
@@ -119,6 +120,106 @@ namespace SocialProduction.Economy.Check
                     into.Add(node.GetDouble());
                     break;
             }
+        }
+
+        /// <summary>The readout is right, and survivable (docs/94).</summary>
+        private static void Readout()
+        {
+            Dictionary<string, double> values = new Dictionary<string, double>();
+            Dictionary<string, double> prices = new Dictionary<string, double>();
+            Dictionary<string, double> rent = new Dictionary<string, double>();
+            Dictionary<string, double> output = new Dictionary<string, double>();
+            double ticksPerDay = 24000.0;
+            double wage = 41.97;
+
+            // A commodity priced exactly at its value at this region's wage.
+            values["atvalue"] = 0.5 * ticksPerDay;      // half a worker-day
+            prices["atvalue"] = 0.5 * wage;             // ... in silver
+            // One at twice its value, which is the deviation the mod is about.
+            values["dear"] = 0.25 * ticksPerDay;
+            prices["dear"] = 0.5 * wage;
+            // And the degenerate cases, which must not reach a player as NaN.
+            values["novalue"] = 0.0;
+            prices["novalue"] = 12.0;
+            prices["nopricevalue"] = 0.0;
+            values["nan"] = double.NaN;
+            prices["nan"] = double.PositiveInfinity;
+            rent["dear"] = 30.0;
+            output["dear"] = 10.0;
+            rent["nan"] = double.NaN;
+            output["nan"] = 0.0;
+
+            RegionReadout readout = EconomyReadout.Build(
+                "Dust Basin", values, prices, rent, output,
+                ticksPerDay, wage, 275.0, 412.5, 0.3175);
+
+            Dictionary<string, ReadoutRow> rows = new Dictionary<string, ReadoutRow>();
+            foreach (ReadoutRow row in readout.Rows) rows[row.Commodity] = row;
+
+            T(rows.Count == readout.Rows.Count, "the readout produced duplicate rows");
+            T(rows["atvalue"].ValueWorkerDays == 0.5,
+                "worker-days is not the value over the working day");
+            // 3.2: exactly 1.0 at equality, and a pure number.
+            T(rows["atvalue"].PriceOverValue == 1.0,
+                "price over value is not exactly 1.0 at equality: "
+                + rows["atvalue"].PriceOverValue);
+            T(Math.Abs(rows["dear"].PriceOverValue - 2.0) < 1e-12,
+                "a commodity at twice its value did not read 2.0");
+            // The ratio must not depend on how long a tick is.
+            RegionReadout doubled = EconomyReadout.Build(
+                "Dust Basin", Scale(values, 2.0), prices, rent, output,
+                ticksPerDay * 2.0, wage, 275.0, 412.5, 0.3175);
+            foreach (ReadoutRow row in doubled.Rows)
+                if (row.Commodity == "atvalue")
+                    T(row.PriceOverValue == 1.0,
+                        "the ratio moved when the tick length did");
+
+            // 3.3
+            T(Math.Abs(readout.RateOfSurplusValue - 1.5) < 1e-12,
+                "the rate of surplus value is not surplus over necessary");
+            RegionReadout noBasket = EconomyReadout.Build(
+                "Nowhere", values, prices, rent, output, ticksPerDay, wage, 0.0, 5.0, 0.0);
+            T(noBasket.RateOfSurplusValue < 0.0, "a region with no basket got a rate anyway");
+            T(EconomyReadout.Ratio(noBasket.RateOfSurplusValue) == "n/a",
+                "an uncomputable rate did not render as n/a");
+
+            // 3.4: nothing reaches a player as NaN or infinity.
+            foreach (ReadoutRow row in readout.Rows)
+            {
+                T(!double.IsNaN(row.ValueWorkerDays) && !double.IsInfinity(row.ValueWorkerDays),
+                    row.Commodity + ": value is not a number");
+                T(!double.IsNaN(row.Price) && !double.IsInfinity(row.Price),
+                    row.Commodity + ": price is not a number");
+                T(!double.IsNaN(row.RentShare) && !double.IsInfinity(row.RentShare),
+                    row.Commodity + ": rent share is not a number");
+                string rendered = EconomyReadout.Number(row.ValueWorkerDays)
+                    + EconomyReadout.Ratio(row.PriceOverValue)
+                    + EconomyReadout.Percent(row.RentShare);
+                T(rendered.IndexOf("NaN", StringComparison.Ordinal) < 0
+                    && rendered.IndexOf("Inf", StringComparison.Ordinal) < 0
+                    && rendered.IndexOf("\u221E", StringComparison.Ordinal) < 0,
+                    row.Commodity + ": rendered as '" + rendered + "'");
+            }
+            T(rows["novalue"].PriceOverValue < 0.0,
+                "a commodity with no value reported a ratio anyway");
+            T(EconomyReadout.Number(double.NaN) == "n/a", "NaN did not render as n/a");
+            T(EconomyReadout.Number(double.PositiveInfinity) == "n/a",
+                "infinity did not render as n/a");
+            // 30 silver of rent on 10 units at 20.985 silver = 14.29%
+            T(Math.Abs(rows["dear"].RentShare - 30.0 / (10.0 * prices["dear"])) < 1e-12,
+                "the rent share is not rent over the sector's value");
+            T(EconomyReadout.Headline(readout).Contains("s/v 1.5x"),
+                "the headline does not carry the rate: "
+                + EconomyReadout.Headline(readout));
+        }
+
+        private static Dictionary<string, double> Scale(
+            Dictionary<string, double> source, double factor)
+        {
+            Dictionary<string, double> scaled = new Dictionary<string, double>();
+            foreach (KeyValuePair<string, double> entry in source)
+                scaled[entry.Key] = entry.Value * factor;
+            return scaled;
         }
 
         /// <summary>Spreading a day across ticks does not change it (docs/83).</summary>
