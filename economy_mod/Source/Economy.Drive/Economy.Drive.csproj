@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Drives EconomyWorldComponent through the sequence a session at the
+    game would drive it through, against the behaving façade (docs/90,
+    docs/91).  net472, the mod's own target, and never shipped: it
+    compiles the mod's game-facing sources directly rather than
+    referencing Economy.csproj, which needs RimWorld's assemblies.
+
+        dotnet run (project) economy_mod/Source/Economy.Drive
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>SocialProduction.Economy.Drive</AssemblyName>
+    <RootNamespace>SocialProduction.Economy.Drive</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../Economy/*.cs" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+    <ProjectReference Include="../Economy.Core/Economy.Core.csproj" />
+    <ProjectReference Include="../Economy.Facade/Economy.Facade.csproj" />
+  </ItemGroup>
+</Project>

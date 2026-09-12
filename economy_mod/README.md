@@ -155,3 +155,30 @@ ln -sfn "$PWD/economy_mod" "$MODS/SocialProductionEconomy"
 On Windows these are directory junctions with the same two names. Note that
 on macOS the `Mods` folder is *inside the app bundle*, so a Steam validation
 or update can remove the links; re-running the two commands is the fix.
+
+## Checking the port
+
+Two commands, neither of which needs RimWorld:
+
+```
+dotnet run --project Source/Economy.Core.Check
+dotnet run --project Source/Economy.Drive
+```
+
+The first checks all five ported slices against the laboratory's
+committed fixtures — the value solve, the basket and the wage, the
+reserve army and habituation, the regional price update, the wage-cost
+refresh — and then the properties of the parts that have no fixtures:
+`StateCodec`, `DayScheduler`, `WealthCoupling`, `SelfCheck` and
+`TickBudget`. It ends with `ALL PORT CHECKS PASSED` or a non-zero exit
+code naming what failed.
+
+The second drives `EconomyWorldComponent` through a fresh world, a day
+passing, a save and reload, a mid-day save resumed, and a pre-schema-3
+save upgraded — against `Source/Economy.Facade`, which is the RimWorld
+surface read out of the last real build and **never shipped**.
+
+Regenerate the fixtures with `python -m economy_lab.fixtures`,
+`.wage_fixtures`, `.bargaining_fixtures`, `.price_fixtures` and
+`.wage_cost_fixtures` when the model moves; `tests/test_port_fixtures.py`
+fails when they are stale.

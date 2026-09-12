@@ -114,12 +114,28 @@ namespace SocialProduction.Economy.Check
                 : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "bargaining");
             int bargainingCode = BargainingCheck.Run(bargainingDirectory);
 
+            // The price update and the wage-cost refresh (docs/77, docs/79).
+            string repository = FindRepositoryRoot();
+            int priceCode = PriceCheck.Run(
+                Path.Combine(repository, "economy_mod", "Source", "Fixtures", "prices"),
+                Path.Combine(repository, "economy_mod", "Source", "Fixtures", "wage_costs"));
+
+            // The parts with no fixtures: codec, scheduler, wealth, self-check.
+            int coreCode = CoreSelfTest.Run(
+                Path.Combine(repository, "economy_mod", "Source", "Fixtures"));
+
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            if (valueCode != 0)
+            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode };
+            foreach (int code in codes)
             {
-                return valueCode;
+                if (code != 0)
+                {
+                    return code;
+                }
             }
-            return wageCode != 0 ? wageCode : bargainingCode;
+            Console.WriteLine();
+            Console.WriteLine("ALL PORT CHECKS PASSED");
+            return 0;
         }
 
         internal sealed class Comparison
