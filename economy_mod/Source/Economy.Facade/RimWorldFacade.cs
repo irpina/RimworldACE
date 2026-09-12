@@ -34,12 +34,19 @@ namespace Verse
 
     public static class Scribe_Values
     {
-        public static void Look<T>(ref T value, string label, T defaultValue = default(T), bool forceSave = false) { }
+        // Behaviour, not just a signature: see FakeHost.cs and docs/90.
+        public static void Look<T>(ref T value, string label, T defaultValue = default(T), bool forceSave = false)
+        {
+            FakeHost.ScribeValue(ref value, label, defaultValue);
+        }
     }
 
     public static class Scribe_Collections
     {
-        public static void Look<T>(ref List<T> list, string label, LookMode lookMode = LookMode.Undefined, params object[] ctorArgs) { }
+        public static void Look<T>(ref List<T> list, string label, LookMode lookMode = LookMode.Undefined, params object[] ctorArgs)
+        {
+            FakeHost.ScribeList(ref list, label);
+        }
     }
 
     public static class Log
@@ -49,14 +56,14 @@ namespace Verse
         public static void Error(string text) { }
     }
 
-    public class TickManager { public int TicksGame { get { return 0; } } }
+    public class TickManager { public int TicksGame { get { return FakeHost.TicksGame; } } }
 
     public static class Find
     {
-        public static TickManager TickManager { get { return null; } }
-        public static RimWorld.Planet.World World { get { return null; } }
-        public static RimWorld.Planet.WorldObjectsHolder WorldObjects { get { return null; } }
-        public static RimWorld.Planet.WorldGrid WorldGrid { get { return null; } }
+        public static TickManager TickManager { get { return FakeHost.Ticks; } }
+        public static RimWorld.Planet.World World { get { return FakeHost.World; } }
+        public static RimWorld.Planet.WorldObjectsHolder WorldObjects { get { return FakeHost.WorldObjects; } }
+        public static RimWorld.Planet.WorldGrid WorldGrid { get { return FakeHost.WorldGrid; } }
     }
 
     public static class Text { public static GameFont Font { set { } } }
@@ -108,7 +115,8 @@ namespace RimWorld
 
     public class Faction
     {
-        public string Name { get { return null; } }
+        public string FakeName;
+        public string Name { get { return FakeName; } }
         public int loadID;
     }
 
@@ -127,11 +135,23 @@ namespace RimWorld.Planet
 
     public class Tile
     {
-        public RimWorld.BiomeDef PrimaryBiome { get { return null; } }
+        public RimWorld.BiomeDef FakeBiome;
+        public RimWorld.BiomeDef PrimaryBiome { get { return FakeBiome; } }
         public Hilliness hilliness;
     }
 
-    public class WorldGrid { public Tile this[PlanetTile tile] { get { return null; } } }
+    public class WorldGrid
+    {
+        public readonly Dictionary<int, Tile> Tiles = new Dictionary<int, Tile>();
+        public Tile this[PlanetTile tile]
+        {
+            get
+            {
+                Tile found;
+                return Tiles.TryGetValue(tile.tileId, out found) ? found : null;
+            }
+        }
+    }
 
     public class WorldInfo { public int persistentRandomValue; }
 
@@ -152,14 +172,17 @@ namespace RimWorld.Planet
     public class WorldObject
     {
         public int ID;
-        public PlanetTile Tile { get { return default(PlanetTile); } }
-        public RimWorld.Faction Faction { get { return null; } }
+        public PlanetTile FakeTile;
+        public RimWorld.Faction FakeFaction;
+        public PlanetTile Tile { get { return FakeTile; } }
+        public RimWorld.Faction Faction { get { return FakeFaction; } }
     }
 
     public class Settlement : WorldObject { }
 
     public class WorldObjectsHolder
     {
-        public List<Settlement> Settlements { get { return null; } }
+        public readonly List<Settlement> FakeSettlements = new List<Settlement>();
+        public List<Settlement> Settlements { get { return FakeSettlements; } }
     }
 }

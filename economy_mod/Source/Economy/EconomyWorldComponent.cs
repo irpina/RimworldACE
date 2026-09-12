@@ -309,17 +309,58 @@ namespace SocialProduction.Economy
             }
             else
             {
-                selfCheck.Expect(
-                    "reload determinism",
-                    "reproduced " + observedSettlementCount + "/" + observedSettlementCount,
-                    determinismStatus,
-                    "a mismatch means the derivation reads state that is not in the save");
-                selfCheck.Expect(
-                    "mid-day resume",
-                    "cursor " + cursorOnLoad,
-                    scheduler == null ? "cursor 0" : "cursor " + scheduler.Cursor,
-                    "re-running a phase is not harmless: the settlement pays a wage bill");
-                if (schemaOnLoad >= 0 && schemaOnLoad < StateCodec.SchemaVersion)
+                bool upgraded = schemaOnLoad >= 0 && schemaOnLoad < StateCodec.SchemaVersion;
+
+                // A save with no profiles node -- schema 1, or a world
+                // saved before any were derived -- has nothing to compare
+                // against. That is a case the check does not apply to, so
+                // it skips: reporting it as a failure is the same error as
+                // reporting it as a pass (docs/88 s5.2), and running the
+                // component found it where reasoning had not (docs/91 s3).
+                if (determinismStatus == "nothing saved to compare")
+                {
+                    selfCheck.Add(
+                        "reload determinism",
+                        "reproduced N/N",
+                        determinismStatus,
+                        CheckVerdict.Skipped,
+                        "the save carried no profiles to compare against");
+                }
+                else
+                {
+                    // The exact sentence `CompareWithLoaded` returns when
+                    // everything reproduced. Spelled once, here, because
+                    // the first version omitted " on reload" and reported
+                    // a perfect reload as a failure (docs/91 s3).
+                    selfCheck.Expect(
+                        "reload determinism",
+                        "reproduced " + observedSettlementCount + "/"
+                            + observedSettlementCount + " on reload",
+                        determinismStatus,
+                        "a mismatch means the derivation reads state that is not in the save");
+                }
+
+                // An upgraded save had its cursor deliberately reset, so
+                // there is no resume to check -- expecting the old value
+                // would report the upgrade working as a failure.
+                if (upgraded)
+                {
+                    selfCheck.Add(
+                        "mid-day resume",
+                        "cursor 0 after a schema upgrade",
+                        "cursor " + dayCursor,
+                        dayCursor == 0 ? CheckVerdict.Passed : CheckVerdict.Failed,
+                        "a pre-schema-3 save carries no day to resume");
+                }
+                else
+                {
+                    selfCheck.Expect(
+                        "mid-day resume",
+                        "cursor " + cursorOnLoad,
+                        scheduler == null ? "cursor 0" : "cursor " + scheduler.Cursor,
+                        "re-running a phase is not harmless: the settlement pays a wage bill");
+                }
+                if (upgraded)
                 {
                     selfCheck.Expect(
                         "old save loads clean",

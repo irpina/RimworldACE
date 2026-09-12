@@ -25,6 +25,7 @@
 **Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
 **Stage 1 wealth coupling design / results:** `docs/84`, `docs/85` — `WealthCoupling`; the default is provably inert and the bound cannot be escaped, 2,526 property checks
 **The shipping binary verified:** `docs/86` — `net472` builds with the real SDK, 0 warnings; the committed check harness **has now run** and passes; the `net472` artifact reproduces the laboratory to the bit under Mono
+**The component driven against a fake host:** `docs/90`, `docs/91` — the façade gained behaviour and the wiring was *run*, not only compiled: 28 assertions over five scenarios, and **three defects found that compiling and reasoning both missed**, all of them the self-check reporting a failure for a case that did not apply
 **The in-game self-check:** `docs/88`, `docs/89` — the mod checks itself on load and after a timed day and **logs a report to paste back**; `TickBudget` turns `PhasesPerTick` from a guess into a measurement. A session at the game is now: build, start, save/reload, load an old save, paste three reports.
 **The mod compiled against ground truth:** `docs/87` — `economy_mod/Source/Economy.Facade/` is the RimWorld surface read out of the last real build with `monodis`; the mod's game-facing code builds `net472` against it with 0 errors, which proves the new wiring **adds no RimWorld API the previous real build did not already resolve**
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
@@ -2142,7 +2143,11 @@ first two of `docs/85` §6's five:
    façade build fails — that is deliberate, and keeps growth in the
    RimWorld surface visible in a mod whose posture is no Harmony, no
    gameplay mutation, no `Rand`.)
-3. Start the game with both mods and **read the log**; save, reload,
+3. Start the game with both mods and **read the log**. The reports have
+   been exercised against a fake host (`docs/91`), so a `FAIL` there is
+   evidence about RimWorld rather than a coin-flip between a real
+   problem and a mis-worded check — three such mis-wordings were found
+   and fixed before they could reach the game; save, reload,
    **read the log**; load a pre-schema-3 save, **read the log**. The mod
    self-checks on load and again after a timed day (`docs/88`,
    `docs/89`) and prints a report naming what it expected, what it saw,
