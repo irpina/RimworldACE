@@ -24,6 +24,7 @@
 **Stage 1 persistence design / results:** `docs/80`, `docs/81` — a codec with no RimWorld reference, 2,078 values exact; **not yet wired to `Scribe`**
 **Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
 **Stage 1 wealth coupling design / results:** `docs/84`, `docs/85` — `WealthCoupling`; the default is provably inert and the bound cannot be escaped, 2,526 property checks
+**The shipping binary verified:** `docs/86` — `net472` builds with the real SDK, 0 warnings; the committed check harness **has now run** and passes; the `net472` artifact reproduces the laboratory to the bit under Mono
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
@@ -2113,18 +2114,31 @@ session scratchpad, not committed), not against RimWorld. That catches
 syntax, types and call shapes; it does not catch a wrong signature and
 it cannot run.
 
-**What a session at the game has to do**, in order (`docs/85` §6):
+**Toolchain note.** Both Mono (`mono-mcs`) and the .NET SDK
+(`dotnet-sdk-8.0`) install from **Ubuntu's archive**, even though
+Microsoft's distribution host is blocked by the network policy — the
+SDK needs `apt-get update` first or it 404s on a stale index. Three
+separate documents wrote a verification off as impossible before
+checking this. **A failure to obtain something is evidence about the
+attempt, not about the thing.**
 
-1. Build for real — `net472` against RimWorld's assemblies — and run
-   `dotnet run --project economy_mod/Source/Economy.Core.Check`, which
-   has still never run.
-2. The co-load and tab check under "Stage 1 runtime shell" below, stale
-   since Labor Content gained an assembly.
-3. Save, reload, read the determinism row (`reproduced N/N`); a mid-day
-   save must resume mid-day, and the new "Day in progress" row says
-   which phase.
-4. Load a schema-2 save: no economy state, no error.
-5. Profile the tick. `PhasesPerTick` is 1 and is a guess (`docs/83` §5);
+**What a session at the game has to do** — `docs/86` §5 closed the
+first two of `docs/85` §6's five:
+
+1. ~~Build `net472`; run the check harness.~~ **Done** (`docs/86`): the
+   build is clean, the harness passes, and the `net472` artifact is
+   bit-exact under Mono.
+2. **Build the mod assembly** (`Economy.csproj`) against RimWorld's
+   shipped managed DLLs — game files this environment does not have.
+   The mod's own code compiles only against a hand-written façade
+   (`docs/85` §5), which catches syntax, types and call shapes but not
+   a wrong signature.
+3. The co-load and tab check under "Stage 1 runtime shell" below, stale
+   since Labor Content gained an assembly. Then save, reload, and read
+   the determinism row (`reproduced N/N`); a mid-day save must resume
+   mid-day, and the new "Day in progress" row says which phase. Then a
+   schema-2 save: no economy state, no error.
+4. Profile the tick. `PhasesPerTick` is 1 and is a guess (`docs/83` §5);
    that number wants a frame graph, not an argument.
 
 **What is left in Phase C**, and the balance has shifted. The
