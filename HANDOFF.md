@@ -17,7 +17,8 @@
 **Sell-out after the draw design / results:** `docs/68`, `docs/69` (built; the second defect is fixed and the scarcity signal works)
 **The churn design / results:** `docs/70`, `docs/71` (diagnosed; the first rule was built, failed and was reverted — the cause is elastic demand)
 **Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built**)
-**Stage 1 port, third slice (the reserve army and habituation) design / results:** `docs/74`, `docs/75` (written to the contract; **the C# is not yet built** — two slices now await one `dotnet run`)
+**Stage 1 port, third slice (the reserve army and habituation) design / results:** `docs/74`, `docs/75`
+**The port compiled and run:** `docs/76` — all three slices bit-exact under **Mono**, 4,060 readings, zero ulps. No unbuilt slices remain.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1992,51 +1993,63 @@ turned out to be an entrant clamped to 18% of cost, corrected in
 
 ---
 
-## Handoff: Phase C, two slices written and unbuilt (2026-09-12)
+## Handoff: Phase C, the arithmetic slices are done (2026-09-12)
 
-The wage slice (`docs/72`, `docs/73`) and the bargaining slice
-(`docs/74`, `docs/75`) are both written and **neither has been
-compiled** — the sessions that wrote them had no .NET SDK and the
-network policy blocked installing one.
+Three slices of the model are ported, and **all three are compiled and
+bit-exact under Mono**, which is the runtime RimWorld loads (`docs/76`):
 
-**The first thing the next session with a toolchain must do:**
+| slice | docs | readings | exact |
+|---|---|---:|---|
+| the value solve | 53, 54 | 2,988 | .NET 8 and Mono |
+| the basket and the wage | 72, 73 | 112 | Mono |
+| the reserve army and habituation | 74, 75 | 960 | Mono |
 
-```
-dotnet run --project economy_mod/Source/Economy.Core.Check
-```
+`docs/74` §7's "no third unbuilt slice" rule is discharged; there are no
+unbuilt slices.
 
-It now checks three fixture directories — `labor_values`, `wages`,
-`bargaining` — and returns the first non-zero code. If it is bit-exact
-throughout, `docs/73` §5 and `docs/75` §4 both close. If it is not, the
-fixtures name the reading, the step and the ulp count, and each slice's
-C# is independent of the other's so the failures do not mask each other.
+**How, when `docs/72` §7 said it was impossible.** Microsoft's
+distribution host is blocked by the network policy, but **Ubuntu's
+archive is not, and it carries Mono**: `apt-get install -y mono-mcs`.
+Two results documents wrote the gap off without checking whether a
+*different* toolchain was reachable. Worth remembering: "the official
+toolchain is unreachable" is not "no toolchain is reachable".
 
-**No third unbuilt slice** (`docs/74` §7). Build these two before
-writing any more port code.
+**Still needs a machine with the .NET SDK**, and it is a shorter list
+than it was:
 
-Both slices' arithmetic was checked by re-implementing the C# in Python
-*from the C# source* and running it against the fixtures: 112 readings
-for the wage, 960 for the bargaining, zero ulps in both. That checks
-order, branches and accumulation and nothing about whether it builds.
+1. `dotnet run --project economy_mod/Source/Economy.Core.Check` — the
+   harness itself has never run. It does not compile under Mono, and
+   every error is `System.Text.Json` missing from Mono 6.8's BCL, with
+   no syntax and no accessibility errors; it targets `net8.0` where that
+   assembly exists.
+2. A `net472` build. Mono 6.8's default profile is close and is not it.
+3. Loading `Economy.Core` **in the game** — changes `verify.py`'s
+   expected surface, needs a human at the game.
 
-Two rules for the rest of the port came out of these slices and are worth
-more than either slice:
+**Two rules for the rest of the port**, both now confirmed by the port
+reproducing the readings they shaped:
 
-- **A fixture must carry the state a magnitude is computed against**, not
+- **A fixture carries the state a magnitude is computed against**, not
   only the magnitude (`docs/73` §2). `Ledger.add` accumulates and
   `region.cash -= bill` subtracts from a large purse, so the same wage
   bill posts +13.326840677261316 and moves the purse by
   −13.326840677254950.
-- **A fixture must be checked for which branches it actually takes**, not
-  which branches its scenario contains (`docs/75` §3). Three bargaining
-  fixtures never reached habituation's taken branch, because a sequence
-  freezes employment and the premium then converges monotonically.
+- **A fixture is checked for which branches it takes**, not which its
+  scenario contains (`docs/75` §3). Three bargaining fixtures never
+  reached habituation's taken branch, because a sequence freezes
+  employment and the premium then converges monotonically.
 
-Everything else about Phase C is unchanged and still ahead: the daily
-tick amortised across ticks, the full economic state through save and
-load, the UI, and the `MarketValue` wealth coupling. The in-game
-verification listed under "Stage 1 runtime shell" is still stale and
-still needs a human at the game.
+**What is left in Phase C**, and the balance has shifted. The
+arithmetic slices are nearly done — the regional price update and
+`_update_wage_costs` (which drags in the process graph) are the two
+candidates left. The engineering half is untouched and is now the
+larger half: the daily tick amortised across ticks (about 1.1 s of C#
+work per simulated day at full scale, against a 60,000-tick day), the
+full economic state through save and load, the UI, and the
+`MarketValue` wealth coupling — the project's second-largest remaining
+risk. **None of those can be finished without the game running**, which
+is a human's step. The in-game verification under "Stage 1 runtime
+shell" is still stale and still first.
 
 ## Handoff: the cobweb (2026-09-12)
 

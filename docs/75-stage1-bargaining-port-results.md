@@ -87,6 +87,11 @@ kind of thing a coverage claim gets wrong.
 
 ## 4. What is not verified
 
+**Closed by `docs/76`.** All three items below are discharged: both
+slices compile, all 960 readings here reproduce to the bit under Mono,
+and there are no unbuilt slices left for the "no third" rule to govern.
+The assumption that no toolchain was reachable was wrong and unchecked.
+
 Unchanged from `docs/73` §5 and now doubled:
 
 1. **Neither this slice's C# nor the wage slice's has been compiled.**

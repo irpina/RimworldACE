@@ -112,6 +112,13 @@ was done the moment it ran.
 
 ## 5. What is not verified, precisely
 
+**Closed by `docs/76`.** Items 1 and 2 below are no longer open: the
+library compiles and every reading here reproduces to the bit under
+Mono, which is the runtime the game loads. The environment had a
+toolchain after all — Ubuntu's archive carries Mono even though
+Microsoft's host is blocked — and this section was written without
+checking for one. Item 3 stands and item 4 is unchanged.
+
 1. **The C# does not compile in this session.** Not "probably compiles" —
    unrun. Syntax, accessibility (`Program.Comparison` and `Program.Compare`
    were widened from `private` to `internal` for the new harness) and the
