@@ -1,0 +1,299 @@
+{
+ "name": "wage_deviation_day180",
+ "day": 180,
+ "problem": {
+  "employment_quantum": 9.5367431640625e-07,
+  "commodities": [
+   "yayo",
+   "psychoid_leaves",
+   "chemfuel",
+   "meals",
+   "garments",
+   "herbal_medicine"
+  ],
+  "labor_values": [
+   [
+    "yayo",
+    735.9749515277776
+   ],
+   [
+    "psychoid_leaves",
+    47.49433595486111
+   ],
+   [
+    "chemfuel",
+    25.044852430555554
+   ],
+   [
+    "meals",
+    305.3587986111111
+   ],
+   [
+    "garments",
+    1643.5992214285714
+   ],
+   [
+    "herbal_medicine",
+    400.01944444444445
+   ]
+  ],
+  "regions": [
+   {
+    "name": "Dust Basin",
+    "subsistence_basket": [
+     [
+      "meals",
+      2.0
+     ],
+     [
+      "garments",
+      0.125
+     ],
+     [
+      "herbal_medicine",
+      0.125
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      24.912360780727862
+     ],
+     [
+      "psychoid_leaves",
+      2.596887312375719
+     ],
+     [
+      "chemfuel",
+      2.619477784735593
+     ],
+     [
+      "meals",
+      15.417327533097419
+     ],
+     [
+      "garments",
+      88.33016582665763
+     ],
+     [
+      "herbal_medicine",
+      10.28594671464725
+     ]
+    ],
+    "wage_premium": 0.010388711118734899,
+    "habitual_scale": 1.0,
+    "labor_pool": 1.0,
+    "worker_days_earned": 0.35054683685302734,
+    "ticks_per_worker_day": 24000.0,
+    "cash": 94246.04153558238,
+    "worker_cash": 1260.6357644116708
+   },
+   {
+    "name": "Green River",
+    "subsistence_basket": [
+     [
+      "meals",
+      2.0
+     ],
+     [
+      "garments",
+      0.125
+     ],
+     [
+      "herbal_medicine",
+      0.125
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      21.0
+     ],
+     [
+      "psychoid_leaves",
+      1.9
+     ],
+     [
+      "chemfuel",
+      2.3
+     ],
+     [
+      "meals",
+      15.0
+     ],
+     [
+      "garments",
+      85.76
+     ],
+     [
+      "herbal_medicine",
+      10.0
+     ]
+    ],
+    "wage_premium": 0.0,
+    "habitual_scale": 1.0,
+    "labor_pool": 1.0,
+    "worker_days_earned": 0.3175325393676758,
+    "ticks_per_worker_day": 24000.0,
+    "cash": 100000.0,
+    "worker_cash": 1259.1
+   }
+  ]
+ },
+ "readings": [
+  {
+   "region": "Dust Basin",
+   "basket_cost": 43.16166913385795,
+   "wage_rate": 43.610063245892015,
+   "basket_labor_value": 866.1699304563492,
+   "value_of_labor_power": 866.1699304563492,
+   "employment_rate": 0.35054683685302734,
+   "premium_over_value": 0.010388711118734899
+  },
+  {
+   "region": "Green River",
+   "basket_cost": 41.97,
+   "wage_rate": 41.97,
+   "basket_labor_value": 866.1699304563492,
+   "value_of_labor_power": 866.1699304563492,
+   "employment_rate": 0.3175325393676758,
+   "premium_over_value": 0.0
+  }
+ ],
+ "settlements": [
+  {
+   "region": "Dust Basin",
+   "inputs": {
+    "labor_by_producer": [
+     {
+      "producer": "Dust cooperative",
+      "ticks": 2674.827122394745
+     },
+     {
+      "producer": "Dust psychoid fields",
+      "ticks": 3696.0
+     },
+     {
+      "producer": "Dust refinery",
+      "ticks": 155.78571428571425
+     },
+     {
+      "producer": "Dust provisioners",
+      "ticks": 230.1456544597077
+     },
+     {
+      "producer": "Dust tailors",
+      "ticks": 76.40081152146035
+     },
+     {
+      "producer": "Dust herbalists",
+      "ticks": 18.86439790653342
+     },
+     {
+      "producer": "entrant-Dust Basin-yayo-75",
+      "ticks": 402.7922349861284
+     },
+     {
+      "producer": "entrant-Dust Basin-yayo-90",
+      "ticks": 206.53859432042557
+     },
+     {
+      "producer": "entrant-Dust Basin-yayo-105",
+      "ticks": 107.98785998591005
+     },
+     {
+      "producer": "entrant-Dust Basin-yayo-120",
+      "ticks": 76.57103934085714
+     },
+     {
+      "producer": "entrant-Dust Basin-psychoid_leaves-120",
+      "ticks": 338.11436017194126
+     },
+     {
+      "producer": "entrant-Dust Basin-chemfuel-120",
+      "ticks": 4.538507296405318
+     },
+     {
+      "producer": "entrant-Dust Basin-psychoid_leaves-135",
+      "ticks": 419.4423028228531
+     },
+     {
+      "producer": "entrant-Dust Basin-chemfuel-135",
+      "ticks": 5.122679919370576
+     }
+    ],
+    "labor_performed": 8413.131279412053
+   },
+   "worker_days_earned": 0.35054683685302734,
+   "before": {
+    "cash": 94246.04153558238,
+    "living_labor": 1389280.7034958457,
+    "necessary_labor": 50139.65089754404,
+    "wage_deviation_labor": 173.52754665526243,
+    "wage_premium_paid": 8.651174492674258,
+    "wages_paid": 2460.440598137112,
+    "worker_cash": 1260.6357644116708
+   },
+   "after": {
+    "cash": 94230.75416585658,
+    "living_labor": 1397693.8347752576,
+    "necessary_labor": 50443.28402684272,
+    "wage_deviation_labor": 176.6819035216239,
+    "wage_premium_paid": 8.808357630311322,
+    "wages_paid": 2475.7279678629197,
+    "worker_cash": 1275.9231341374787
+   }
+  },
+  {
+   "region": "Green River",
+   "inputs": {
+    "labor_by_producer": [
+     {
+      "producer": "River works",
+      "ticks": 3500.0
+     },
+     {
+      "producer": "River psychoid fields",
+      "ticks": 3696.0
+     },
+     {
+      "producer": "River refinery",
+      "ticks": 150.91857627459933
+     },
+     {
+      "producer": "River provisioners",
+      "ticks": 193.69484901428223
+     },
+     {
+      "producer": "River tailors",
+      "ticks": 64.30033922195435
+     },
+     {
+      "producer": "River herbalists",
+      "ticks": 15.876626968383789
+     }
+    ],
+    "labor_performed": 7620.79039147922
+   },
+   "worker_days_earned": 0.3175325393676758,
+   "before": {
+    "cash": 100000.0,
+    "living_labor": 1371742.27046626,
+    "necessary_labor": 49506.684757511124,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 2398.8313219070387,
+    "worker_cash": 1259.1
+   },
+   "after": {
+    "cash": 99986.67315932275,
+    "living_labor": 1379363.060857739,
+    "necessary_labor": 49781.721895052855,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 2412.1581625843,
+    "worker_cash": 1272.4268406772612
+   }
+  }
+ ]
+}

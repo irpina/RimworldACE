@@ -97,14 +97,22 @@ namespace SocialProduction.Economy.Check
             }
             Console.WriteLine();
             Console.WriteLine(bitExact
-                ? "every fixture reproduced to the bit"
+                ? "every value-solve fixture reproduced to the bit"
                 : withinTolerance
-                    ? "within tolerance, NOT bit-exact"
-                    : "OUTSIDE tolerance");
-            return withinTolerance ? (bitExact ? 0 : 1) : 3;
+                    ? "value solve within tolerance, NOT bit-exact"
+                    : "value solve OUTSIDE tolerance");
+
+            // The wage relation (docs/72), against its own fixture set.
+            string wageDirectory = args.Length > 1
+                ? args[1]
+                : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "wages");
+            int wageCode = WageCheck.Run(wageDirectory);
+
+            int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
+            return valueCode != 0 ? valueCode : wageCode;
         }
 
-        private sealed class Comparison
+        internal sealed class Comparison
         {
             public int Compared;
             public int Exact;
@@ -130,7 +138,7 @@ namespace SocialProduction.Economy.Check
             }
         }
 
-        private static Comparison Compare(Dictionary<string, double> expected, Dictionary<string, double> actual)
+        internal static Comparison Compare(Dictionary<string, double> expected, Dictionary<string, double> actual)
         {
             Comparison result = new Comparison();
             foreach (KeyValuePair<string, double> entry in expected)
@@ -168,7 +176,7 @@ namespace SocialProduction.Economy.Check
             return result;
         }
 
-        private static long Ulps(double a, double b)
+        internal static long Ulps(double a, double b)
         {
             if (a == b)
             {
@@ -227,7 +235,7 @@ namespace SocialProduction.Economy.Check
             return quantities;
         }
 
-        private static Dictionary<string, double> ReadPairs(JsonElement pairs)
+        internal static Dictionary<string, double> ReadPairs(JsonElement pairs)
         {
             Dictionary<string, double> values = new Dictionary<string, double>();
             foreach (JsonElement pair in pairs.EnumerateArray())
@@ -237,7 +245,7 @@ namespace SocialProduction.Economy.Check
             return values;
         }
 
-        private static string FindRepositoryRoot()
+        internal static string FindRepositoryRoot()
         {
             string directory = AppContext.BaseDirectory;
             while (directory != null && !File.Exists(Path.Combine(directory, "HANDOFF.md")))

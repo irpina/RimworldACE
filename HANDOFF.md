@@ -16,6 +16,7 @@
 **Exit floor design / results:** `docs/66`, `docs/67` (built; the floor works, and it uncovered a second defect)
 **Sell-out after the draw design / results:** `docs/68`, `docs/69` (built; the second defect is fixed and the scarcity signal works)
 **The churn design / results:** `docs/70`, `docs/71` (diagnosed; the first rule was built, failed and was reverted — the cause is elastic demand)
+**Stage 1 port, second slice (the basket and the wage) design / results:** `docs/72`, `docs/73` (written to the contract; **the C# is not yet built** — one `dotnet run` away from measured)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1461,6 +1462,44 @@ unchanged; loading it needs a human at the game and a new expected
 surface. `tests/test_port_fixtures.py` fails when the model moves and the
 fixtures have not been regenerated.
 
+### The port's second slice: the basket and the wage (2026-09-12)
+
+`docs/72`, `docs/73`. `economy_mod/Source/Economy.Core/WageProblem.cs`
+and `WageSolver.cs` hold the six wage readings and `_settle_labor`'s
+non-cash path, transliterated; `Economy.Core.Check/WageCheck.cs` checks
+them against `economy_mod/Source/Fixtures/wages/`, which
+`economy_lab/wage_fixtures.py` writes from four real economies covering
+every branch. The premium and the habitual standard are *inputs* to this
+slice; the rules that move them are the next one.
+
+**The C# has not been compiled.** The session that wrote it had no .NET
+SDK and could not install one, so the claim is "written to the contract",
+not "meets it". Its order and arithmetic were checked by re-implementing
+the C# in Python and running it against the fixtures — 112 readings,
+zero ulps — which checks the part most likely to be wrong and checks
+nothing about whether it builds.
+
+**Do this first, on a machine with the SDK:**
+
+```
+dotnet run --project economy_mod/Source/Economy.Core.Check
+```
+
+It now runs both fixture directories and returns non-zero if either is
+not bit-exact. `Program.Comparison` and `Program.Compare` were widened
+from `private` to `internal` so `WageCheck` could reuse them; that and
+the two new files are the whole compile surface. Build it before
+starting the next slice: two unbuilt slices stacked means finding a
+compile error in the first while debugging the second.
+
+One finding from the fixtures worth carrying to every later slice: a
+fixture must record the *state a magnitude is computed against*, not only
+the magnitude. `Ledger.add` accumulates and `region.cash -= bill`
+subtracts from a large purse, so the same wage bill posts +13.326840677261316
+to the ledger and moves the purse by −13.326840677254950. A fixture of
+differences would have let the port agree with the fixture while
+disagreeing with the model.
+
 ---
 
 ## Immediate next work
@@ -1951,6 +1990,23 @@ turned out to be an entrant clamped to 18% of cost, corrected in
 `docs/58` §5a.
 
 ---
+
+## Handoff: Phase C, the port's second slice (2026-09-12)
+
+The wage slice is written and unbuilt. **The first thing the next session
+with a .NET SDK should do is `dotnet run --project
+economy_mod/Source/Economy.Core.Check`** — see "The port's second slice"
+above for what that checks and why it comes before anything else. If it
+is bit-exact, `docs/73` §5's first two items close and the next slice
+(the reserve-army premium and habituation, `docs/54` §6's third) can
+start. If it is not, the failure is in `WageSolver.cs` and the fixtures
+say which reading and by how many ulps.
+
+Everything else about Phase C is unchanged and still ahead: the daily
+tick amortised across ticks, the full economic state through save and
+load, the UI, and the `MarketValue` wealth coupling. The in-game
+verification listed under "Stage 1 runtime shell" is still stale and
+still needs a human at the game.
 
 ## Handoff: the cobweb (2026-09-12)
 

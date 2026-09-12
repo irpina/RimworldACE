@@ -1,0 +1,330 @@
+{
+ "name": "capital_goods_day60",
+ "day": 60,
+ "problem": {
+  "employment_quantum": 9.5367431640625e-07,
+  "commodities": [
+   "yayo",
+   "psychoid_leaves",
+   "chemfuel",
+   "meals",
+   "garments",
+   "herbal_medicine",
+   "steel",
+   "wood",
+   "components"
+  ],
+  "labor_values": [
+   [
+    "yayo",
+    735.9897756411466
+   ],
+   [
+    "psychoid_leaves",
+    47.494630420964185
+   ],
+   [
+    "chemfuel",
+    25.04529457185145
+   ],
+   [
+    "meals",
+    305.362394693651
+   ],
+   [
+    "garments",
+    1643.5996307250855
+   ],
+   [
+    "herbal_medicine",
+    400.01944444444445
+   ],
+   [
+    "steel",
+    47.5
+   ],
+   [
+    "wood",
+    22.499999999999996
+   ],
+   [
+    "components",
+    5654.891128811858
+   ]
+  ],
+  "regions": [
+   {
+    "name": "Dust Basin",
+    "subsistence_basket": [
+     [
+      "meals",
+      2.0
+     ],
+     [
+      "garments",
+      0.125
+     ],
+     [
+      "herbal_medicine",
+      0.125
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      21.0
+     ],
+     [
+      "psychoid_leaves",
+      1.9
+     ],
+     [
+      "chemfuel",
+      2.3
+     ],
+     [
+      "meals",
+      15.0
+     ],
+     [
+      "garments",
+      85.76
+     ],
+     [
+      "herbal_medicine",
+      10.0
+     ],
+     [
+      "steel",
+      1.9
+     ],
+     [
+      "wood",
+      1.2
+     ],
+     [
+      "components",
+      32.0
+     ]
+    ],
+    "wage_premium": 0.0,
+    "habitual_scale": 1.0,
+    "labor_pool": 1.0,
+    "worker_days_earned": 0.3181886672973633,
+    "ticks_per_worker_day": 24000.0,
+    "cash": 100000.0,
+    "worker_cash": 1259.1
+   },
+   {
+    "name": "Green River",
+    "subsistence_basket": [
+     [
+      "meals",
+      2.0
+     ],
+     [
+      "garments",
+      0.125
+     ],
+     [
+      "herbal_medicine",
+      0.125
+     ]
+    ],
+    "prices": [
+     [
+      "yayo",
+      21.0
+     ],
+     [
+      "psychoid_leaves",
+      1.9
+     ],
+     [
+      "chemfuel",
+      2.3
+     ],
+     [
+      "meals",
+      15.0
+     ],
+     [
+      "garments",
+      85.76
+     ],
+     [
+      "herbal_medicine",
+      10.0
+     ],
+     [
+      "steel",
+      1.9
+     ],
+     [
+      "wood",
+      1.2
+     ],
+     [
+      "components",
+      32.0
+     ]
+    ],
+    "wage_premium": 0.0,
+    "habitual_scale": 1.0,
+    "labor_pool": 1.0,
+    "worker_days_earned": 0.3181886672973633,
+    "ticks_per_worker_day": 24000.0,
+    "cash": 100000.0,
+    "worker_cash": 1259.1
+   }
+  ]
+ },
+ "readings": [
+  {
+   "region": "Dust Basin",
+   "basket_cost": 41.97,
+   "wage_rate": 41.97,
+   "basket_labor_value": 866.1771737834933,
+   "value_of_labor_power": 866.1771737834933,
+   "employment_rate": 0.3181886672973633,
+   "premium_over_value": 0.0
+  },
+  {
+   "region": "Green River",
+   "basket_cost": 41.97,
+   "wage_rate": 41.97,
+   "basket_labor_value": 866.1771737834933,
+   "value_of_labor_power": 866.1771737834933,
+   "employment_rate": 0.3181886672973633,
+   "premium_over_value": 0.0
+  }
+ ],
+ "settlements": [
+  {
+   "region": "Dust Basin",
+   "inputs": {
+    "labor_by_producer": [
+     {
+      "producer": "Dust cooperative",
+      "ticks": 3500.0
+     },
+     {
+      "producer": "Dust psychoid fields",
+      "ticks": 3696.0
+     },
+     {
+      "producer": "Dust refinery",
+      "ticks": 151.05606888844582
+     },
+     {
+      "producer": "Dust provisioners",
+      "ticks": 194.0950870513916
+     },
+     {
+      "producer": "Dust tailors",
+      "ticks": 64.43320512771606
+     },
+     {
+      "producer": "Dust herbalists",
+      "ticks": 15.909433364868164
+     },
+     {
+      "producer": "Dust steelworks",
+      "ticks": 3.4792864087301587
+     },
+     {
+      "producer": "Dust woodcutters",
+      "ticks": 0.32402343749999996
+     },
+     {
+      "producer": "Dust machinists",
+      "ticks": 9.491617063492063
+     }
+    ],
+    "labor_performed": 7634.7887213421445
+   },
+   "worker_days_earned": 0.3181161880493164,
+   "before": {
+    "cash": 100000.0,
+    "living_labor": 458192.71024481487,
+    "necessary_labor": 16536.465634173983,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 801.2627019882194,
+    "worker_cash": 1259.1
+   },
+   "after": {
+    "cash": 99986.64866358758,
+    "living_labor": 465827.498966157,
+    "necessary_labor": 16812.010614873318,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 814.6140384006492,
+    "worker_cash": 1272.4513364124298
+   }
+  },
+  {
+   "region": "Green River",
+   "inputs": {
+    "labor_by_producer": [
+     {
+      "producer": "River works",
+      "ticks": 3500.0
+     },
+     {
+      "producer": "River psychoid fields",
+      "ticks": 3696.0
+     },
+     {
+      "producer": "River refinery",
+      "ticks": 151.05606888844588
+     },
+     {
+      "producer": "River provisioners",
+      "ticks": 194.0950870513916
+     },
+     {
+      "producer": "River tailors",
+      "ticks": 64.43320512771606
+     },
+     {
+      "producer": "River herbalists",
+      "ticks": 15.909433364868164
+     },
+     {
+      "producer": "River steelworks",
+      "ticks": 3.4792864087301587
+     },
+     {
+      "producer": "River woodcutters",
+      "ticks": 0.3240234375
+     },
+     {
+      "producer": "River machinists",
+      "ticks": 9.491617063492063
+     }
+    ],
+    "labor_performed": 7634.7887213421445
+   },
+   "worker_days_earned": 0.3181161880493164,
+   "before": {
+    "cash": 100000.0,
+    "living_labor": 458192.71024481487,
+    "necessary_labor": 16536.465634173983,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 801.2627019882194,
+    "worker_cash": 1259.1
+   },
+   "after": {
+    "cash": 99986.64866358758,
+    "living_labor": 465827.498966157,
+    "necessary_labor": 16812.010614873318,
+    "wage_deviation_labor": 0.0,
+    "wage_premium_paid": 0.0,
+    "wages_paid": 814.6140384006492,
+    "worker_cash": 1272.4513364124298
+   }
+  }
+ ]
+}
