@@ -23,6 +23,7 @@
 **The port compiled and run:** `docs/76` — every slice bit-exact under **Mono**, the runtime the game loads. No unbuilt slices remain.
 **Stage 1 persistence design / results:** `docs/80`, `docs/81` — a codec with no RimWorld reference, 2,078 values exact; **not yet wired to `Scribe`**
 **Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
+**Stage 1 wealth coupling design / results:** `docs/84`, `docs/85` — `WealthCoupling`; the default is provably inert and the bound cannot be escaped, 2,526 property checks
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
@@ -2099,18 +2100,32 @@ A test pins it and fails when a joint process is added.
 | the planned model's arithmetic, five slices | ported and exact, 4,151 readings under Mono |
 | the persistence codec (`StateCodec`) | built and exact, 2,078 values |
 | the day scheduler (`DayScheduler`) | built, invariant holds at every budget and save point |
-| wiring both into `EconomyWorldComponent` | **needs the game** |
-| the UI | **needs the game** |
-| the `MarketValue` wealth coupling | **needs the game** |
+| the wealth coupling (`WealthCoupling`) | built, 2,526 property checks |
+| wiring into `EconomyWorldComponent` and the tab | **written; compiled against a stub façade only** |
 
-Everything built has **no RimWorld reference**, which is exactly why it
-could be measured here. Everything left terminates in an observation —
-a save file reloading, a tab rendering, a raid arriving — that cannot be
-made outside a running game. The join is small and specified: one
-`Scribe_Values.Look` on the codec's string, the schema bump to 3, a
-schema-2 save loading with no economy state, and
-`WorldComponentTick`'s `while` loop replaced by a wall-clock budget
-converted to a phase count.
+Everything in the first eight rows has **no RimWorld reference**, which
+is exactly why it could be measured here. The last row is written and
+compiles — the schema bumped to 3, the economy persisted as one encoded
+string, `WorldComponentTick` replaced by a budgeted scheduler advance, a
+mid-day save resuming at its cursor, two new tab rows — but it compiles
+against a **hand-written stub façade** of the RimWorld API (kept in the
+session scratchpad, not committed), not against RimWorld. That catches
+syntax, types and call shapes; it does not catch a wrong signature and
+it cannot run.
+
+**What a session at the game has to do**, in order (`docs/85` §6):
+
+1. Build for real — `net472` against RimWorld's assemblies — and run
+   `dotnet run --project economy_mod/Source/Economy.Core.Check`, which
+   has still never run.
+2. The co-load and tab check under "Stage 1 runtime shell" below, stale
+   since Labor Content gained an assembly.
+3. Save, reload, read the determinism row (`reproduced N/N`); a mid-day
+   save must resume mid-day, and the new "Day in progress" row says
+   which phase.
+4. Load a schema-2 save: no economy state, no error.
+5. Profile the tick. `PhasesPerTick` is 1 and is a guess (`docs/83` §5);
+   that number wants a frame graph, not an argument.
 
 **What is left in Phase C**, and the balance has shifted. The
 arithmetic slices are **done**. The engineering half is untouched and is now the
