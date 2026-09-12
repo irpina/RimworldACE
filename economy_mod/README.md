@@ -182,3 +182,21 @@ Regenerate the fixtures with `python -m economy_lab.fixtures`,
 `.wage_fixtures`, `.bargaining_fixtures`, `.price_fixtures` and
 `.wage_cost_fixtures` when the model moves; `tests/test_port_fixtures.py`
 fails when they are stale.
+
+## Verifying the built assemblies
+
+```
+python Source/verify.py
+```
+
+Checks both: the mod's assembly (the four types its defs name, no
+`Rand`, no Harmony, no gameplay-writing API, and the binding surface
+exactly as measured) and the ported model's (its eleven types, and
+**no reference to RimWorld, Verse or Unity at all** — the claim
+`docs/53` §2 makes and `docs/93` finally checks against the binary).
+
+It also fails when `SocialProduction.Economy.dll` does not reference the
+ported model, which means it was built before the wiring landed and
+would run the old code with none of the new behaviour and nothing
+saying so. **On a fresh checkout it fails for exactly that reason**:
+rebuild the mod assembly against RimWorld's managed DLLs and it passes.
