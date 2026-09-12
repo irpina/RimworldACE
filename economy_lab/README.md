@@ -268,10 +268,15 @@ markup rather than a rate of profit.
   the very order it is answering sees the demand it missed, and the
   glut's basket — which used to go short every day at a price that never
   rose — is served from day 181 on (docs/69 §2). What holds the flag back
-  is the churn: entry and exit alternate in one region while the other
-  converges under identical rules, and the demand boom's plant moves into
-  yayo and out of meals for the same reason (docs/65 §5, docs/69 §4). It
-  has survived three corrections untouched and needs a design of its own;
+  is the cobweb (docs/70, docs/71). Final demand is price-elastic at 1.35,
+  and above unit elasticity a price cut raises the sector's revenue — so
+  the cheaper sector keeps building capacity for the demand its last cut
+  created, until the stock drains and the loop runs backwards. Entry on
+  margin is not in it: with the flag off the cycle is bit-identical. The
+  first rule against it, exit's floor extended to the plant the
+  investment rule would rebuild at once, was built, failed its central
+  prediction and was reverted, and whether to damp the cycle at all is
+  the open question;
 - a price system of its own: two-thirds of every upstream price is a wedge
   the model cannot attribute, because prices are anchored to RimWorld's
   authored MarketValue while costs are built from a wage those prices

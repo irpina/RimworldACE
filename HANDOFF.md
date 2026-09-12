@@ -1,6 +1,6 @@
 # Project handoff — Labor Content and Economy
 
-**Last updated:** 2026-09-11  
+**Last updated:** 2026-09-12  
 **Repository:** `C:\Users\PintS\OneDrive\Documents\Projects\snlt`  
 **GitHub:** `https://github.com/irpina/RimworldACE`  
 **Current branch:** `master`  
@@ -15,7 +15,7 @@
 **Exit on return design / results:** `docs/64`, `docs/65` (built and measured, off by default)
 **Exit floor design / results:** `docs/66`, `docs/67` (built; the floor works, and it uncovered a second defect)
 **Sell-out after the draw design / results:** `docs/68`, `docs/69` (built; the second defect is fixed and the scarcity signal works)
-**The churn:** the slice's one open finding, with no design against it — see "Handoff: the churn" below
+**The churn design / results:** `docs/70`, `docs/71` (diagnosed; the first rule was built, failed and was reverted — the cause is elastic demand)
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
 **Laboratory viewer design / results:** `docs/48`, `docs/49` (`python -m economy_lab.viewer`)
@@ -1952,85 +1952,68 @@ turned out to be an entrant clamped to 18% of cost, corrected in
 
 ---
 
-## Handoff: the churn (2026-09-11)
+## Handoff: the cobweb (2026-09-12)
 
-Exit on return is **built, measured, and corrected twice** (`docs/64` to
-`docs/69`). Both defects the slice turned up are fixed and the rule's
-signal is right. One finding is open, it is the only one, and it has no
-design against it.
+The churn is diagnosed (`docs/70`, `docs/71`). It is **not** entry and
+exit alternating, and it is not a stock target fighting a flow reserve.
+It is a cobweb: final demand is price-elastic at 1.35, and above unit
+elasticity a price cut raises the sector's revenue, so capacity chases
+the demand each cut creates until the stock drains and the whole loop
+runs backwards. Period: hundreds of days. No rule against it is built,
+deliberately.
 
 **Done and committed.**
-- The floor (`docs/66`, `docs/67`): capital never withdraws below the
-  larger of its reserve and the smallest plant the fund would build, and
-  retirement fires on `expected_demand <= EPSILON` rather than on the
-  plant's size.
-- The sell-out after the draw (`docs/68`, `docs/69`): every
-  `_note_sellouts` call now runs *after* its pass's `_buy` and before
-  `_apply_pending`, so the note reads the stock the order leaves behind.
-  A seller emptied by the order it is answering sees the demand it
-  missed. `_note_sellouts` itself is unchanged and its docstring carries
-  the call discipline; the cash-denied shortfall stays out of the signal
-  with no special case, because a seller the workers could not pay still
-  holds its stock.
-- Results: six predictions held, one in half, three wrong, each one
-  pre-registered in `docs/68` §5. The glut's basket shortfall 63.10 →
-  21.59 and, more to the point, **stops accruing** around day 181; the
-  glut's level 1.3553× → 1.0384×; meals in the glut priced at 19.80
-  against an authored 15 where they used to rest at 10.21 in the middle
-  of a shortage; `yayo_capacity_over_demand_seen` 1.9620 → 0.9693.
-- Twenty-four readings re-frozen, reference still **322**. The seeded
-  circuit, all of `cost_competition` and the whole `gravitation` run are
-  bit-identical with every flag on; the default model is bit-identical.
-- Tests: the defect test replaced by its opposite
-  (`test_a_seller_emptied_by_an_order_sees_the_demand_it_missed`), and
-  two bounds tuned to figures the correction moved are now bounds on the
-  claims. 237 in the laboratory suite, 272 with the viewer and the port.
-- README, viewer catalog (`overshoot` → `(64, 65, 66, 67, 68, 69)`) and
-  the `_exit_metrics` docstring brought up to date. `python -m
-  economy_lab overshoot` runs.
-
-**The open finding, in one paragraph.** Entry and exit alternate. In
-`gravitation`, Dust Basin's yayo price has a last-60-day range of 1.68%
-of its level while Green River's is 0.02% under identical rules, and Dust
-Basin ends with 17 chemfuel producers against entry's 13. In
-`demand_boom` with exit on, employment ends at 0.2051 against 0.4831
-without it — not because the boom goes short (its basket shortfall is
-exactly zero) but because capital moves: yayo capacity 17.30 → 35.40 and
-meals 1.66 → 0.39. These are one phenomenon in two scenarios. `docs/64`
-§7 named the likely causes — the reserve's size, and the fact that entry
-and exit read the same investment lead time as their horizon — and
-nothing since has tested them.
-
-**What it has already survived.** `docs/62`'s stock targets, `docs/66`'s
-floor and `docs/68`'s signal, the last two of which were each predicted
-to possibly dissolve it. After `docs/68` the gravitation readings are
-**bit-identical**, before and after. It is not a symptom of any of them,
-and `docs/65` §5 stands as written.
+- `docs/70`, the design, with three findings that stand: entry on margin
+  is not involved (with it off the cycle is bit-identical — same range,
+  same capacity, same 488 exits); the investment rule's buffer branch is
+  necessary to it as the trigger; and the cycle follows the **cheaper
+  sector**, not the region, with the trade route irrelevant. Equal costs
+  and both regions cycle identically; swap the costs and the cycle swaps
+  regions.
+- `docs/70`'s rule — exit's floor extended to the plant the investment
+  rule would immediately rebuild — built, measured and **reverted**. Its
+  scope predictions all held and its central one failed completely: the
+  gravitation range did not move at all. Nine `exit.*` readings moved for
+  nothing, so it is out.
+- `docs/71`, the results and the correction, with the elasticity sweep:
+  the bifurcation sits between 0.9 and 1.2, at unit elasticity, which is
+  where the economics says it should be. `docs/70` carries a pointer to
+  it, as `docs/60` does to `docs/62`.
+- The reference is **untouched at 322**, every metric at zero delta,
+  because the rule was reverted. The suite is green.
 
 **Not done — the next session's task, in order.**
-1. Design the churn's document before building. It is not a parameter
-   nudge: say what the alternation *is* — a lead-time oscillation, a
-   reserve too small to absorb the pipeline, or two rules answering one
-   signal in opposite directions — and predict what each candidate moves.
-   `docs/69` §4's boom table and `docs/65` §5's Dust Basin trace are the
-   two exhibits.
-2. Expect `exit.*` and `entry.*` to move and the seeded circuit not to.
-   The gravitation readings are the ones the design has to name in
-   advance, since they are the churn's own measure.
-3. The flag's default is the question after that, and only after that. A
-   rule that places and withdraws plant in alternation is not a rule to
-   make default, however correct the demand it now reads.
-4. `docs/69` §5 is a smaller loose end and not a defect: the corrected
-   signal makes incumbents better at shortages, so entry on margin's
-   price crossing in `producer_loss` moved from day 150 to day 200. If
-   the churn's design changes entry's horizon, re-read it.
+1. Decide what the laboratory is for here, and say it in the design
+   before choosing a rule. `docs/71` §5 makes the case that a cheap
+   sector overbuilding, crashing and rebuilding is not self-evidently a
+   defect — `docs/64` §7 listed a real cycle among exit's possible modes,
+   and this is one, with a threshold and a cause. Damping it and keeping
+   it are both defensible; doing either by accident is not.
+2. If it is to be damped, `docs/71` §5 names three candidates and prefers
+   the first: the posted price cuts on *idleness*, and above unit
+   elasticity idleness is self-replenishing because the cut creates the
+   demand that removes it. A price rule that read the revenue it gives up
+   would stop at unit elasticity by itself. That is the same kind of
+   correction as `docs/62` — a rule reading the wrong quantity — rather
+   than a new mechanism.
+3. The buffer branch's regional pool is a separate and smaller question,
+   named in `docs/70` §4: it reads `region.inventory`, a pool, in a model
+   where `docs/59` gave every producer its own stock and `docs/62`
+   removed the pool from every other target. Removing it outright is
+   already measured and rejected — the glut's shortfall goes 21.6 → 29.3,
+   because it is the market's only means of rebuilding a stock after a
+   shock. Rewriting it per-producer is the open version.
+4. The boom's meals collapse (`docs/69` §4) is still unexplained. Part of
+   its yayo overshoot is the cobweb — turning the buffer branch off takes
+   yayo from 35.40 to 12.10 — but employment only recovers from 0.2051 to
+   0.3027 and meals capacity stays at 0.42 against 1.66. Something else
+   takes the meals plant.
 
 **One known failure that is not ours.** `tests/test_port_fixtures.py`
 `test_the_committed_fixtures_are_current` fails on `scale_647_day3` with
-a last-digit float difference. It predates this work, it fails with the
-change stashed, and it is a machine difference rather than a model one —
-the fixture was frozen elsewhere. Regenerate it deliberately, on the
-machine that will keep it, or leave it.
+a last-digit float difference. It predates this work and fails with every
+change stashed — a machine difference, not a model one. Regenerate it
+deliberately, on the machine that will keep it, or leave it.
 
 **Standing rules that applied throughout:** no dependencies; no change
 to default model behaviour (`python -m economy_lab.baseline` zero

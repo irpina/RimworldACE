@@ -6,6 +6,12 @@ Written before implementation. `docs/65` §5 found it, `docs/66` and
 design against it. This document diagnoses it, and the diagnosis is not
 what `docs/64` §7 or `docs/65` §5 supposed.
 
+**Corrected by `docs/71`.** The rule in §4 was built, failed its central
+prediction — the cycle did not move at all — and was reverted. §1's
+ablations and §2's bifurcation stand; §3's mechanism does not. The engine
+is elastic demand above unit elasticity, and the buffer branch is its
+trigger rather than its cause.
+
 **The headline: it is not entry and exit alternating. With entry on
 margin switched off the cycle is bit-identical — same range, same
 capacity, same price, same 488 exits. What alternates with exit is the
