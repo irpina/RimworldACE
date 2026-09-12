@@ -36,6 +36,12 @@ namespace SocialProduction.Economy
             DrawRow(
                 inRect, ref y, "Reload determinism",
                 economy == null ? "Unavailable" : economy.DeterminismStatus);
+            DrawRow(
+                inRect, ref y, "Day in progress",
+                economy == null ? "Unavailable" : economy.DayProgress);
+            DrawRow(
+                inRect, ref y, "Economy state saved",
+                economy == null ? "Unavailable" : economy.PersistedState);
 
             y += 12f;
             Widgets.DrawLineHorizontal(inRect.x, y, inRect.width);

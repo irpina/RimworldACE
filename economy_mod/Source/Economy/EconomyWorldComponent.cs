@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RimWorld.Planet;
+using SocialProduction.Economy.Core;
 using Verse;
 
 namespace SocialProduction.Economy
@@ -7,7 +8,26 @@ namespace SocialProduction.Economy
     public sealed class EconomyWorldComponent : WorldComponent
     {
         private const int TicksPerDay = 60000;
-        private const int SaveSchemaVersion = 2;
+
+        /// <summary>
+        /// Schema 2 is the profiles-only shell. Economy state is schema 3
+        /// (docs/80 section 2): a schema-2 save must load with no economy
+        /// rather than read its fields as something they are not.
+        /// </summary>
+        private const int SaveSchemaVersion = StateCodec.SchemaVersion;
+
+        /// <summary>
+        /// Phases run per tick. A count, not a duration, because the
+        /// scheduler must not consult the clock (docs/82 section 3) — the
+        /// clock lives here, on the side that cannot be tested outside the
+        /// game, and hands the deterministic side a number.
+        ///
+        /// One is the conservative starting value: it spreads a four-phase
+        /// day over four ticks, which is 4/60 of a second at 1×, against a
+        /// day that is 60,000 ticks long. **It is a guess, and the first
+        /// thing to profile in game** (docs/83 section 5).
+        /// </summary>
+        private const int PhasesPerTick = 1;
 
         private int schemaVersion = SaveSchemaVersion;
         private int completedDays;
@@ -16,6 +36,24 @@ namespace SocialProduction.Economy
         private List<SettlementProfile> profiles = new List<SettlementProfile>();
         private int regionCount;
         private string determinismStatus = "not checked";
+
+        /// <summary>
+        /// The economy, encoded (docs/81). One `Scribe_Values.Look` on one
+        /// string rather than one per field: the codec is the only thing
+        /// that knows how a number is spelled, so nobody can add a field
+        /// and accidentally write a bare double through Mono's decimal
+        /// formatter.
+        /// </summary>
+        private string economyState = "";
+
+        /// <summary>
+        /// Which phase of the day runs next, persisted because a save can
+        /// land mid-day and re-running a phase is not harmless: the wage
+        /// settlement pays a wage bill (docs/83 section 3).
+        /// </summary>
+        private int dayCursor;
+
+        private DayScheduler scheduler;
 
         public EconomyWorldComponent(World world) : base(world)
         {
@@ -36,6 +74,18 @@ namespace SocialProduction.Economy
         /// must re-derive exactly what was stored. This says whether it did.
         /// </summary>
         public string DeterminismStatus => determinismStatus;
+
+        /// <summary>How far through the current day the scheduler is, for the tab.</summary>
+        public string DayProgress =>
+            scheduler == null || scheduler.DayComplete
+                ? "idle"
+                : "phase " + (scheduler.Cursor + 1) + " of " + scheduler.PhaseCount;
+
+        /// <summary>Whether this save carries economy state, and how much.</summary>
+        public string PersistedState =>
+            string.IsNullOrEmpty(economyState)
+                ? "none yet (schema " + schemaVersion + ")"
+                : economyState.Length + " chars, bit-exact encoding";
 
         public override void FinalizeInit(bool fromLoad)
         {
@@ -159,11 +209,65 @@ namespace SocialProduction.Economy
                 return;
             }
 
-            while (currentTick - lastProcessedTick >= TicksPerDay)
+            // A day already begun is finished before another starts
+            // (docs/82 section 3), a few phases per tick, so the day's
+            // work is spread instead of landing in one frame.
+            if (scheduler != null && !scheduler.DayComplete)
             {
-                StepDay();
-                lastProcessedTick += TicksPerDay;
+                scheduler.AdvanceTick(PhasesPerTick);
+                dayCursor = scheduler.Cursor;
+                if (scheduler.DayComplete)
+                {
+                    CompleteDay();
+                }
+                return;
             }
+
+            if (currentTick - lastProcessedTick >= TicksPerDay)
+            {
+                BeginDay();
+            }
+        }
+
+        /// <summary>
+        /// Start a day's work. The phases are the ported model's, in the
+        /// laboratory's order; today the component owns no economy state
+        /// to run them against, so the list is empty and a day completes
+        /// at once. Filling it is the step that needs the model wired to
+        /// the world, and the scheduler is already proved not to change
+        /// what it runs (docs/83).
+        /// </summary>
+        private void BeginDay()
+        {
+            scheduler = new DayScheduler(BuildPhases());
+            scheduler.BeginDay();
+            dayCursor = scheduler.Cursor;
+            scheduler.AdvanceTick(PhasesPerTick);
+            dayCursor = scheduler.Cursor;
+            if (scheduler.DayComplete)
+            {
+                CompleteDay();
+            }
+        }
+
+        private void CompleteDay()
+        {
+            StepDay();
+            lastProcessedTick += TicksPerDay;
+            dayCursor = 0;
+        }
+
+        private List<IDayPhase> BuildPhases()
+        {
+            // One placeholder phase so the scheduler always has work and
+            // the cursor means something. Replaced by the ported solvers
+            // when the component carries an EconomySnapshot.
+            List<IDayPhase> phases = new List<IDayPhase>();
+            phases.Add(new DayPhase("profiles", delegate
+            {
+                Adopt(ProfileBuilder.Build());
+            }));
+            return phases;
         }
 
         public override void ExposeData()
@@ -174,10 +278,39 @@ namespace SocialProduction.Economy
             Scribe_Values.Look(ref lastProcessedTick, "lastProcessedTick", -1);
             Scribe_Values.Look(ref observedSettlementCount, "observedSettlementCount", 0);
             Scribe_Collections.Look(ref profiles, "profiles", LookMode.Deep);
-            if (Scribe.mode == LoadSaveMode.PostLoadInit && profiles == null)
+            // The economy as one encoded string, never as loose doubles
+            // (docs/81 section 3): a float must not cross an
+            // implementation boundary as decimal, and a save file is such
+            // a boundary the moment the writing and reading runtimes are
+            // not guaranteed to be the same.
+            Scribe_Values.Look(ref economyState, "economyState", "");
+            Scribe_Values.Look(ref dayCursor, "dayCursor", 0);
+            if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
-                // A save written by schema 1 has no profiles node at all.
-                profiles = new List<SettlementProfile>();
+                if (profiles == null)
+                {
+                    // A save written by schema 1 has no profiles node at all.
+                    profiles = new List<SettlementProfile>();
+                }
+                if (economyState == null)
+                {
+                    economyState = "";
+                }
+                if (schemaVersion < StateCodec.SchemaVersion)
+                {
+                    // Schema 2 and earlier carry no economy. Start one
+                    // rather than read fields that are not there.
+                    economyState = "";
+                    dayCursor = 0;
+                    schemaVersion = StateCodec.SchemaVersion;
+                }
+                else if (dayCursor > 0)
+                {
+                    // A save taken mid-day resumes mid-day: the phases
+                    // already applied are not applied again (docs/83 s3).
+                    scheduler = new DayScheduler(BuildPhases());
+                    scheduler.ResumeAt(dayCursor);
+                }
             }
         }
 
