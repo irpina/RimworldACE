@@ -22,6 +22,7 @@
 **Stage 1 port, fifth slice (the wage-cost refresh):** `docs/79` — **the planned model's arithmetic is now ported**, 4,151 readings, zero ulps
 **The port compiled and run:** `docs/76` — every slice bit-exact under **Mono**, the runtime the game loads. No unbuilt slices remain.
 **Stage 1 persistence design / results:** `docs/80`, `docs/81` — a codec with no RimWorld reference, 2,078 values exact; **not yet wired to `Scribe`**
+**Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
 **Stage 1 port, first slice (the value solve) design / results:** `docs/53`, `docs/54`
@@ -2090,6 +2091,26 @@ unfalsified because nothing has tested it, and a joint process — a
 refinery making two fractions, butchering making meat and leather — is
 something a real economy has everywhere. Belongs on the omissions list.
 A test pins it and fails when a joint process is added.
+
+**Phase C, what is built and what is not.**
+
+| part | state |
+|---|---|
+| the planned model's arithmetic, five slices | ported and exact, 4,151 readings under Mono |
+| the persistence codec (`StateCodec`) | built and exact, 2,078 values |
+| the day scheduler (`DayScheduler`) | built, invariant holds at every budget and save point |
+| wiring both into `EconomyWorldComponent` | **needs the game** |
+| the UI | **needs the game** |
+| the `MarketValue` wealth coupling | **needs the game** |
+
+Everything built has **no RimWorld reference**, which is exactly why it
+could be measured here. Everything left terminates in an observation —
+a save file reloading, a tab rendering, a raid arriving — that cannot be
+made outside a running game. The join is small and specified: one
+`Scribe_Values.Look` on the codec's string, the schema bump to 3, a
+schema-2 save loading with no economy state, and
+`WorldComponentTick`'s `while` loop replaced by a wall-clock budget
+converted to a phase count.
 
 **What is left in Phase C**, and the balance has shifted. The
 arithmetic slices are **done**. The engineering half is untouched and is now the
