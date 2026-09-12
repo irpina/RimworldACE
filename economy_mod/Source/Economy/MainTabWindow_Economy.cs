@@ -42,6 +42,12 @@ namespace SocialProduction.Economy
             DrawRow(
                 inRect, ref y, "Economy state saved",
                 economy == null ? "Unavailable" : economy.PersistedState);
+            DrawRow(
+                inRect, ref y, "Self-check",
+                economy == null ? "Unavailable" : economy.SelfCheckSummary);
+            DrawRow(
+                inRect, ref y, "",
+                "The full self-check is in the log: paste it back (docs/88).");
 
             y += 12f;
             Widgets.DrawLineHorizontal(inRect.x, y, inRect.width);

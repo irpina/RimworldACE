@@ -25,6 +25,7 @@
 **Stage 1 amortised tick design / results:** `docs/82`, `docs/83` — `DayScheduler`; spreading a day across ticks leaves it bit-identical at every budget and every save point
 **Stage 1 wealth coupling design / results:** `docs/84`, `docs/85` — `WealthCoupling`; the default is provably inert and the bound cannot be escaped, 2,526 property checks
 **The shipping binary verified:** `docs/86` — `net472` builds with the real SDK, 0 warnings; the committed check harness **has now run** and passes; the `net472` artifact reproduces the laboratory to the bit under Mono
+**The in-game self-check:** `docs/88`, `docs/89` — the mod checks itself on load and after a timed day and **logs a report to paste back**; `TickBudget` turns `PhasesPerTick` from a guess into a measurement. A session at the game is now: build, start, save/reload, load an old save, paste three reports.
 **The mod compiled against ground truth:** `docs/87` — `economy_mod/Source/Economy.Facade/` is the RimWorld surface read out of the last real build with `monodis`; the mod's game-facing code builds `net472` against it with 0 errors, which proves the new wiring **adds no RimWorld API the previous real build did not already resolve**
 **The float boundary rule:** `docs/81` §4 — **never let a float cross an implementation boundary as decimal.** Mono reading Mono is fine; Mono reading CPython fails 1 in 2,072.
 **Phase D (gameplay layer) design:** `docs/50`
@@ -2141,13 +2142,17 @@ first two of `docs/85` §6's five:
    façade build fails — that is deliberate, and keeps growth in the
    RimWorld surface visible in a mod whose posture is no Harmony, no
    gameplay mutation, no `Rand`.)
-3. The co-load and tab check under "Stage 1 runtime shell" below, stale
-   since Labor Content gained an assembly. Then save, reload, and read
-   the determinism row (`reproduced N/N`); a mid-day save must resume
-   mid-day, and the new "Day in progress" row says which phase. Then a
-   schema-2 save: no economy state, no error.
-4. Profile the tick. `PhasesPerTick` is 1 and is a guess (`docs/83` §5);
-   that number wants a frame graph, not an argument.
+3. Start the game with both mods and **read the log**; save, reload,
+   **read the log**; load a pre-schema-3 save, **read the log**. The mod
+   self-checks on load and again after a timed day (`docs/88`,
+   `docs/89`) and prints a report naming what it expected, what it saw,
+   and why any difference matters — so this step is paste, not inspect.
+   The co-load check under "Stage 1 runtime shell" below is still stale
+   and is step 2's real content.
+4. ~~Profile the tick.~~ The self-check now measures it: the report's
+   budget line recommends a `PhasesPerTick` for a 2 ms frame budget and
+   says outright if no single phase fits. Set the constant from what it
+   reports.
 
 **What is left in Phase C**, and the balance has shifted. The
 arithmetic slices are **done**. The engineering half is untouched and is now the

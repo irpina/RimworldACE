@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using RimWorld.Planet;
 using SocialProduction.Economy.Core;
 using Verse;
@@ -55,6 +56,29 @@ namespace SocialProduction.Economy
 
         private DayScheduler scheduler;
 
+        /// <summary>
+        /// What the mod found when it checked itself, on load (docs/88).
+        /// The game produces the evidence rather than the person: a
+        /// report can be pasted, re-checked and contradicted by a later
+        /// run, and an impression cannot.
+        /// </summary>
+        private SelfCheckReport selfCheck = new SelfCheckReport();
+
+        /// <summary>Milliseconds each phase of the last day took, for the budget.</summary>
+        private readonly List<double> phaseMillis = new List<double>();
+
+        private int schemaOnLoad = -1;
+        private int cursorOnLoad;
+
+        /// <summary>
+        /// Whether this world came from a save. Remembered because the
+        /// self-check is re-run after the first day, and re-running it as
+        /// if loaded would fail the load-only checks on a fresh world —
+        /// a check must not report a failure for a case that does not
+        /// apply (docs/88 section 5.2's distinction, one level up).
+        /// </summary>
+        private bool loadedFromSave;
+
         public EconomyWorldComponent(World world) : base(world)
         {
         }
@@ -82,6 +106,11 @@ namespace SocialProduction.Economy
                 : "phase " + (scheduler.Cursor + 1) + " of " + scheduler.PhaseCount;
 
         /// <summary>Whether this save carries economy state, and how much.</summary>
+        /// <summary>The self-check, rendered; what a session at the game pastes back.</summary>
+        public string SelfCheckText => selfCheck.Render();
+
+        public string SelfCheckSummary => selfCheck.Summary;
+
         public string PersistedState =>
             string.IsNullOrEmpty(economyState)
                 ? "none yet (schema " + schemaVersion + ")"
@@ -109,11 +138,15 @@ namespace SocialProduction.Economy
                 lastProcessedTick = Find.TickManager.TicksGame;
             }
 
+            loadedFromSave = fromLoad;
+            RunSelfCheck(fromLoad);
+
             Log.Message(
                 "[Social Production: Economy] Stage 1 read-only component ready: "
                 + observedSettlementCount + " settlements in " + regionCount
                 + " regions; determinism check: " + determinismStatus
                 + ". Vanilla trade prices are unchanged.");
+            Log.Message(selfCheck.Render());
         }
 
         /// <summary>
@@ -214,8 +247,7 @@ namespace SocialProduction.Economy
             // work is spread instead of landing in one frame.
             if (scheduler != null && !scheduler.DayComplete)
             {
-                scheduler.AdvanceTick(PhasesPerTick);
-                dayCursor = scheduler.Cursor;
+                Advance();
                 if (scheduler.DayComplete)
                 {
                     CompleteDay();
@@ -242,16 +274,112 @@ namespace SocialProduction.Economy
             scheduler = new DayScheduler(BuildPhases());
             scheduler.BeginDay();
             dayCursor = scheduler.Cursor;
-            scheduler.AdvanceTick(PhasesPerTick);
-            dayCursor = scheduler.Cursor;
+            phaseMillis.Clear();
+            Advance();
             if (scheduler.DayComplete)
             {
                 CompleteDay();
             }
         }
 
+        /// <summary>
+        /// Check what a person was previously asked to look at, and say
+        /// what was found in a form that can be pasted and re-checked
+        /// (docs/88 section 2). A fresh world skips the load-only checks
+        /// rather than passing them, because a skip and a pass are not
+        /// the same thing.
+        /// </summary>
+        private void RunSelfCheck(bool fromLoad)
+        {
+            selfCheck = new SelfCheckReport();
+            selfCheck.Expect(
+                "save schema",
+                StateCodec.SchemaVersion.ToString(),
+                schemaVersion.ToString(),
+                "schema 3 carries economy state; 2 and below do not");
+
+            if (!fromLoad)
+            {
+                selfCheck.Add("reload determinism", "reproduced N/N", "fresh world",
+                    CheckVerdict.Skipped, "nothing saved to compare");
+                selfCheck.Add("mid-day resume", "the saved cursor", "fresh world",
+                    CheckVerdict.Skipped);
+                selfCheck.Add("old save loads clean", "no economy state", "fresh world",
+                    CheckVerdict.Skipped);
+            }
+            else
+            {
+                selfCheck.Expect(
+                    "reload determinism",
+                    "reproduced " + observedSettlementCount + "/" + observedSettlementCount,
+                    determinismStatus,
+                    "a mismatch means the derivation reads state that is not in the save");
+                selfCheck.Expect(
+                    "mid-day resume",
+                    "cursor " + cursorOnLoad,
+                    scheduler == null ? "cursor 0" : "cursor " + scheduler.Cursor,
+                    "re-running a phase is not harmless: the settlement pays a wage bill");
+                if (schemaOnLoad >= 0 && schemaOnLoad < StateCodec.SchemaVersion)
+                {
+                    selfCheck.Expect(
+                        "old save loads clean",
+                        "no economy state",
+                        economyState.Length == 0 ? "no economy state" : "state present",
+                        "a schema-" + schemaOnLoad + " save must not be read as schema 3");
+                }
+                else
+                {
+                    selfCheck.Add("old save loads clean", "no economy state",
+                        "save was already schema " + schemaOnLoad, CheckVerdict.Skipped);
+                }
+            }
+
+            if (phaseMillis.Count > 0)
+            {
+                selfCheck.Add("tick budget", "measured",
+                    TickBudget.Describe(phaseMillis, TickBudget.DefaultBudgetMs),
+                    TickBudget.BudgetUnreachable(phaseMillis, TickBudget.DefaultBudgetMs)
+                        ? CheckVerdict.Failed : CheckVerdict.Passed,
+                    "PhasesPerTick is " + PhasesPerTick + " and was a guess until this ran");
+            }
+            else
+            {
+                selfCheck.Add("tick budget", "measured", "no day has run yet",
+                    CheckVerdict.Skipped);
+            }
+        }
+
+        /// <summary>
+        /// One tick's worth of the day, timed.
+        ///
+        /// The clock lives here and not in the scheduler, which must stay
+        /// free of it to be deterministic (docs/82 section 3). What the
+        /// clock is for is `TickBudget`: `PhasesPerTick` is a guess until
+        /// a real day has been timed, and this is what turns it into a
+        /// measurement the self-check reports.
+        /// </summary>
+        private void Advance()
+        {
+            Stopwatch clock = Stopwatch.StartNew();
+            int ran = scheduler.AdvanceTick(PhasesPerTick);
+            clock.Stop();
+            dayCursor = scheduler.Cursor;
+            if (ran > 0)
+            {
+                double each = clock.Elapsed.TotalMilliseconds / ran;
+                for (int i = 0; i < ran; i++)
+                {
+                    phaseMillis.Add(each);
+                }
+            }
+        }
+
         private void CompleteDay()
         {
+            // The day is timed, so the budget stops being a guess. Re-run
+            // the checks with the measurement in hand, in the same posture
+            // the world loaded in.
+            RunSelfCheck(loadedFromSave);
             StepDay();
             lastProcessedTick += TicksPerDay;
             dayCursor = 0;
@@ -287,6 +415,10 @@ namespace SocialProduction.Economy
             Scribe_Values.Look(ref dayCursor, "dayCursor", 0);
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
+                // Remembered before the upgrade below rewrites them, so
+                // the self-check can say what the save actually carried.
+                schemaOnLoad = schemaVersion;
+                cursorOnLoad = dayCursor;
                 if (profiles == null)
                 {
                     // A save written by schema 1 has no profiles node at all.
