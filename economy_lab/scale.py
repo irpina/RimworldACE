@@ -170,6 +170,39 @@ def _required_output(
     return required
 
 
+def _required_with_basket(
+    rows: Sequence[dict],
+    processes: Dict[str, Process],
+    final_demand: Dict[str, float],
+    staple: str,
+    basket_quantity: float,
+    ticks_per_worker_day: float,
+    *,
+    tolerance: float = 1e-6,
+    max_iterations: int = 200,
+) -> Tuple[Dict[str, float], int]:
+    """The requirement cascade with the workforce's basket in the demand
+    (docs/128).  The staple's own labor adds workers who need more
+    staple, a geometric series whose ratio is the basket's share of the
+    working day, so it converges whenever labor-power can be reproduced
+    at all.  Returns the requirement and the iterations it took."""
+    required = _required_output(rows, processes, final_demand)
+    for iteration in range(1, max_iterations + 1):
+        workers = sum(
+            required[name] * processes[name].direct_labor
+            for name in required
+        ) / ticks_per_worker_day
+        demand = dict(final_demand)
+        demand[staple] = demand.get(staple, 0.0) + workers * basket_quantity
+        previous = required[staple]
+        required = _required_output(rows, processes, demand)
+        if abs(required[staple] - previous) <= tolerance * max(previous, 1.0):
+            break
+    else:
+        raise RuntimeError("basket_in_demand did not converge")
+    return required, iteration
+
+
 def synthetic_economy(
     *,
     commodities: int = 653,
@@ -181,6 +214,7 @@ def synthetic_economy(
     target_inventory_days: float = 20.0,
     record_history: bool = True,
     seed: int = 20260825,
+    basket_in_demand: bool = False,
 ) -> Economy:
     """A running economy of the requested size.
 
@@ -192,6 +226,14 @@ def synthetic_economy(
 
     Fixed capital is omitted — it is exogenous data the generator has no
     source for, and it is not what is being measured.
+
+    ``basket_in_demand`` (docs/128) sizes the staple sector to feed the
+    workforce the rest of the economy employs, as a fixed point over the
+    requirement cascade.  Off, the workers' consumption is not in the
+    demand the sectors are sized to, and at any scale where the workforce
+    is large against the graph's own use of the staple the staple runs
+    short and the wage, which is its price, spirals.  Off by default:
+    ``fixtures.py`` pins this generator's output.
     """
     rows = population(commodities)
     processes, record = build_processes(rows, seed=seed)
@@ -228,6 +270,11 @@ def synthetic_economy(
         / max(record["labor"][staple], 1.0),
         1e-6,
     )
+    if basket_in_demand:
+        required, record["basket_iterations"] = _required_with_basket(
+            rows, processes, final_demand, staple, basket_quantity,
+            ticks_per_worker_day,
+        )
 
     region_names = [f"region_{index:03d}" for index in range(regions)]
     built: List[Region] = []

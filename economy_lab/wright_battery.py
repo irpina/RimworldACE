@@ -117,15 +117,18 @@ def measure_sa(seed, beta=1.0):
 
 
 def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
-               quantum=1.0):
+               quantum=1.0, basket_in_demand=True):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
-    rescaled so that most producers can employ a whole worker (docs/126).
+    rescaled so that most producers can employ a whole worker (docs/126),
+    with the staple sector sized to feed that workforce (docs/128).
 
-    The knobs are the design's experiments: ``demand`` is prediction 1,
-    ``quantum`` prediction 2, ``basket_fraction`` predictions 3 and 4.
+    The knobs are the designs' experiments: ``demand`` is docs/126
+    prediction 1, ``quantum`` its prediction 2, ``basket_fraction`` its 3
+    and 4; ``basket_in_demand=False`` reproduces docs/127's spiral.
     """
     base = synthetic_economy(commodities=COMMODITIES, regions=REGIONS,
                              daily_demand=demand, basket_fraction=basket_fraction,
+                             basket_in_demand=basket_in_demand,
                              record_history=False, seed=seed)
     regions = list(base.regions.values())
     for region in regions:

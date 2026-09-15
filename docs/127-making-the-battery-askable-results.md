@@ -57,6 +57,11 @@ the opposite reason to the one predicted.
 
 ## 2. The battery, both models, 20 seeds each
 
+> **Superseded by `docs/129` §2.** The money wage share (0.088) and
+> the GDP kurtosis (6.54) in this table were measured with a wage–price
+> spiral running, which `docs/128` §1 traced and `docs/129` removed; the
+> corrected readings are 0.0147 and −0.54.
+
 | fact | Wright reports | SA control | ours at ×200 | ours (`docs/125`) |
 |---|---|---|---|---|
 | size observations | — | 21,653 | 3,849 | 73 |
@@ -83,6 +88,12 @@ while ours lands on 0.088. That is the like-for-like `docs/125` §4 asked
 for, and §3 says what the gap is.
 
 ## 3. The wage share is an input here and an outcome there
+
+> **Corrected by `docs/128` §1.** The collapse below is a wage–price
+> spiral through a staple sector the generator sized without the
+> workforce's own consumption, not a cost share the prices cannot pay;
+> with the staple sized to feed its workers (`docs/129`) a 0.5 basket
+> lives. The shares in this table are inflated by the spiral.
 
 The design's substantive claim was that our wage share is *authored*
 by `basket_fraction`. Turning the parameter:
