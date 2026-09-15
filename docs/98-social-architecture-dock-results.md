@@ -1,8 +1,21 @@
 # Docking with the Social Architecture of Capitalism: results
 
-Measured against `docs/97`'s nine predictions. **Five passed, two failed,
-one passed by half, and one of the failures corrects `docs/97`'s own
-headline.**
+Measured against `docs/97`'s nine predictions. As written: five passed,
+two failed, one passed by half, and one of the failures corrects
+`docs/97`'s own headline. **After `docs/99`: six passed, two failed** —
+see the banner below.
+
+**Corrected by `docs/99`.** The headline below is **wrong**. The wage
+share does move — 4.2% of its level over a demand boom — and the
+measurement that said otherwise was taken on four scenarios where
+`wage_bargaining_strength` defaults to `0.0`, so the rule that moves it
+never ran. That is the same "*a default is not a scenario*" error this
+document catches in its own prediction 4, committed eleven paragraphs
+earlier. What survives: `necessary ÷ living` is an **identity**,
+`value_of_labor_power ÷ ticks_per_worker_day`, which no quantity rule can
+move — so §2's A6 reading measured the wrong ratio *and* the wrong
+configuration. **A6 passes**, and the scorecard is six of nine, not five.
+§5's step 4 is retired. Everything else here stands.
 
 **The headline, corrected: our lab's wage share does not move. It is
 0.036090 in every thirty-day window of a 720-day run, to fifteen
@@ -27,7 +40,7 @@ more honest finding than the design document asserted.
 | 2 | A2 fails live: `fund_wage_support` strictly positive | **fail** — latent, 1e-13 |
 | 3 | A3 fails: 0 deaths by wage bill, exits positive | **pass** |
 | 4 | A5 fails: `labor_pool` is `inf` in every scenario | **fail** — it is `1.0` |
-| 5 | A6 holds: shares sum to 1 *and* fluctuate ≥1% | **half** — sum yes, fluctuate no |
+| 5 | A6 holds: shares sum to 1 *and* fluctuate ≥1% | ~~**half**~~ → **pass** (`docs/99`) |
 | 6 | SA reference reproduces facts 1 and 6 | **pass**, after three failed reconstructions |
 | 7 | SA self-organises into three classes, employers <20% | **pass** |
 | 8 | SA conserves money to the bit | **pass** |
@@ -108,7 +121,13 @@ is a fraction of it.** Employment moves (0.3175 → 0.4679); the pool never
 does. Nobody enters, nobody leaves, and no rule sizes it. That is
 `docs/50` §5's worker mobility, reached from a second direction.
 
-### A6 — the shares (prediction 5, half — and this is the finding)
+### A6 — the shares (prediction 5, ~~half~~ — **retracted by `docs/99`**)
+
+> Everything in this subsection measures `necessary ÷ living` on scenarios
+> where bargaining is off. That ratio is an identity and those scenarios
+> form no premium, so it could not have moved whatever the model did.
+> With bargaining on, the realized share moves 4.2%. Kept as written so
+> the error stays legible.
 
 Shares sum to one exactly: `1.000000000000` in every window, both
 scenarios. That half is close to tautological given how `necessary_labor`
