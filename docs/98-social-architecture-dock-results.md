@@ -55,8 +55,8 @@ more honest finding than the design document asserted.
 | # | prediction | verdict |
 |---|---|---|
 | 1 | A1 holds: `cash_balance()` within 1e-6 | **pass** |
-| 2 | A2 fails live: `fund_wage_support` strictly positive | **fail** — latent, 1e-13 |
-| 3 | A3 fails: 0 deaths by wage bill, exits positive | **pass** |
+| 2 | A2 fails live: `fund_wage_support` strictly positive | ~~**fail** — latent, 1e-13~~ → **pass** (`docs/108`) |
+| 3 | A3 fails: 0 deaths by wage bill, exits positive | ~~**pass**~~ → **refuted** (`docs/105`) |
 | 4 | A5 fails: `labor_pool` is `inf` in every scenario | **fail** — it is `1.0` |
 | 5 | A6 holds: shares sum to 1 *and* fluctuate ≥1% | ~~**half**~~ → **pass** (`docs/99`) |
 | 6 | SA reference reproduces facts 1 and 6 | **pass** — re-established on the paper's own rules (`docs/100`) |
@@ -78,7 +78,12 @@ more honest finding than the design document asserted.
 Inside 1e-6 everywhere, and exactly zero where no purse is in play. The
 one proposition our architecture shares with Wright's outright.
 
-### A2 — who bears the wage risk (prediction 2, fail)
+### A2 — who bears the wage risk (prediction 2, ~~fail~~ — **retracted by `docs/108`**)
+
+**The figures below are of a configuration that cannot reach the branch,
+and the conclusion drawn from them is wrong.** With the producer quantum
+and sales-follow-production both on, `fund_wage_support` is 9.75e-04, the
+branch is live, and prediction 2 passes. See `docs/108` §1.
 
 `ledger.fund_wage_support`, summed:
 
