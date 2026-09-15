@@ -73,6 +73,17 @@ still not *created* endogenously — total labour is conserved by
 prediction 3, so nobody enters or leaves the workforce, only the region
 — but it is no longer a frozen parameter either.
 
+### Prediction 5 is scoped, not general — `docs/110`
+
+**The ablation grid refutes the generality this section's wording
+invites.** Labour flows toward the boom in the regime measured here, and
+the grid confirms it in 32 of 32 `bare` cells. But across all 192
+mobility-on cells the boom region *loses* labour in **62**, and under
+`exit_on_return` it loses in **every one** (−0.9383 … −0.5049): exit
+withdraws Dust Basin's capacity, employment collapses to 0.177, the
+premium goes negative, and mobility faithfully follows the wage out of
+the region. See `docs/110` §5.
+
 ### Prediction 4, and what the cap actually binds on
 
 The maximum employment rate observed over 300 stepped days is 0.3657,
