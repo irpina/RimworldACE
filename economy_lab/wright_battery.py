@@ -117,7 +117,7 @@ def measure_sa(seed, beta=1.0):
 
 
 def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
-               quantum=1.0, basket_in_demand=True):
+               quantum=1.0, basket_in_demand=True, producers_per_commodity=1):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -129,6 +129,7 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
     base = synthetic_economy(commodities=COMMODITIES, regions=REGIONS,
                              daily_demand=demand, basket_fraction=basket_fraction,
                              basket_in_demand=basket_in_demand,
+                             producers_per_commodity=producers_per_commodity,
                              record_history=False, seed=seed)
     regions = list(base.regions.values())
     for region in regions:
@@ -233,7 +234,61 @@ def measure_ours(seed, **knobs):
         "capacity_rank": capacity_correlation(economy, previous_sizes),
         "employing": len(previous_sizes),
         "bankruptcies": deaths,
+        **sector_structure(economy, previous_sizes),
     }
+
+
+def _spearman(pairs):
+    if len(pairs) < 10:
+        return None
+
+    def ranks(values):
+        order = sorted(range(len(values)), key=lambda i: values[i])
+        out = [0.0] * len(values)
+        for rank, index in enumerate(order):
+            out[index] = float(rank)
+        return out
+
+    a = ranks([p[0] for p in pairs])
+    b = ranks([p[1] for p in pairs])
+    n = len(a)
+    mean_a, mean_b = sum(a) / n, sum(b) / n
+    cov = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b))
+    var_a = math.sqrt(sum((x - mean_a) ** 2 for x in a))
+    var_b = math.sqrt(sum((y - mean_b) ** 2 for y in b))
+    return cov / (var_a * var_b) if var_a and var_b else None
+
+
+def sector_structure(economy, sizes):
+    """docs/130 §2: what competition did *within* sectors.
+
+    ``cost_rank``: Spearman rho, pooled over sectors with at least two
+    employing producers, between within-sector overhead rank and
+    within-sector employment rank.  ``sector_cv``: the median over those
+    sectors of the coefficient of variation of employment.
+    """
+    pairs, cvs = [], []
+    for region in economy.regions.values():
+        sectors = {}
+        for producer in region.producers:
+            key = (region.name, producer.name)
+            if key in sizes:
+                sectors.setdefault(producer.commodity, []).append(
+                    (producer.unit_cost, sizes[key]))
+        for members in sectors.values():
+            if len(members) < 2:
+                continue
+            by_cost = sorted(range(len(members)), key=lambda i: members[i][0])
+            by_size = sorted(range(len(members)), key=lambda i: members[i][1])
+            cost_rank = {i: r for r, i in enumerate(by_cost)}
+            size_rank = {i: r for r, i in enumerate(by_size)}
+            pairs.extend((cost_rank[i], size_rank[i]) for i in range(len(members)))
+            values = [m[1] for m in members]
+            mean = sum(values) / len(values)
+            if mean > 0:
+                cvs.append(st.pstdev(values) / mean)
+    return {"cost_rank": _spearman(pairs),
+            "sector_cv": st.median(cvs) if cvs else None}
 
 
 def capacity_correlation(economy, sizes):
@@ -269,22 +324,32 @@ def capacity_correlation(economy, sizes):
     return cov / (var_a * var_b) if var_a and var_b else None
 
 
+STRUCTURAL = ("capacity_rank", "cost_rank", "sector_cv", "employing",
+              "bankruptcies")
+
+
 def _job(job):
-    which, seed = job
-    return measure_ours(seed) if which == "ours" else measure_sa(seed)
+    which, seed, knobs = job
+    return measure_ours(seed, **knobs) if which == "ours" else measure_sa(seed)
 
 
-def sweep(seeds=20, processes=4):
-    jobs = [(which, seed) for which in ("ours", "sa") for seed in range(seeds)]
+def sweep(seeds=20, processes=4, **knobs):
+    jobs = [(which, seed, knobs) for which in ("ours", "sa") for seed in range(seeds)]
     with Pool(processes) as pool:
         return pool.map(_job, jobs)
 
 
 def main(argv):
+    """``python -m economy_lab.wright_battery out.json 20 [knob=value ...]``;
+    knobs are :func:`build_ours`'s keyword arguments."""
     seeds = int(argv[2]) if len(argv) > 2 else 20
-    runs = sweep(seeds=seeds)
+    knobs = {}
+    for arg in argv[3:]:
+        key, value = arg.split("=", 1)
+        knobs[key] = int(value) if key == "producers_per_commodity" else float(value)
+    runs = sweep(seeds=seeds, **knobs)
     rows = [dict(facts(run), model=run["model"], seed=run["seed"],
-                 capacity_rank=run.get("capacity_rank")) for run in runs]
+                 **{key: run.get(key) for key in STRUCTURAL}) for run in runs]
     with open(argv[1], "w") as handle:
         json.dump(rows, handle)
     print("runs:", len(rows))

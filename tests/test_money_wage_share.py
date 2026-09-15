@@ -144,3 +144,49 @@ class TestBasketInDemand(unittest.TestCase):
         a = next(p for p in region_with.producers if p.commodity == staple).capacity_per_day
         b = next(p for p in region_without.producers if p.commodity == staple).capacity_per_day
         self.assertGreater(a, b)
+
+
+class TestProducersPerCommodity(unittest.TestCase):
+    """docs/130: several firms per commodity, from a separate stream."""
+
+    def test_one_per_commodity_is_the_default_and_is_untouched(self):
+        from economy_lab.scale import synthetic_economy
+        default = synthetic_economy(commodities=40, regions=1, record_history=False, seed=1)
+        explicit = synthetic_economy(commodities=40, regions=1, record_history=False,
+                                     seed=1, producers_per_commodity=1, cost_spread=0.5)
+        a = [(p.name, p.capacity_per_day, p.unit_cost) for p in next(iter(default.regions.values())).producers]
+        b = [(p.name, p.capacity_per_day, p.unit_cost) for p in next(iter(explicit.regions.values())).producers]
+        self.assertEqual(a, b)
+
+    def test_capacity_is_split_and_overhead_is_spread(self):
+        from economy_lab.scale import synthetic_economy
+        one = synthetic_economy(commodities=40, regions=1, record_history=False, seed=1)
+        four = synthetic_economy(commodities=40, regions=1, record_history=False,
+                                 seed=1, producers_per_commodity=4, cost_spread=0.1)
+        base = {p.commodity: p for p in next(iter(one.regions.values())).producers}
+        sectors = {}
+        for producer in next(iter(four.regions.values())).producers:
+            sectors.setdefault(producer.commodity, []).append(producer)
+        for commodity, members in sectors.items():
+            self.assertEqual(len(members), 4)
+            self.assertAlmostEqual(sum(p.capacity_per_day for p in members),
+                                   base[commodity].capacity_per_day)
+            for producer in members:
+                self.assertLessEqual(abs(producer.unit_cost - base[commodity].unit_cost),
+                                     0.05 * base[commodity].unit_cost + 1e-12)
+        self.assertEqual(len({p.name for p in next(iter(four.regions.values())).producers}),
+                         4 * len(base))
+
+    def test_zero_firms_is_refused(self):
+        from economy_lab.scale import synthetic_economy
+        with self.assertRaises(ValueError):
+            synthetic_economy(commodities=40, regions=1, record_history=False,
+                              producers_per_commodity=0)
+
+    def test_sector_structure_reads_competition(self):
+        economy = wb.build_ours(1, demand=4.0, producers_per_commodity=3)
+        economy.step(5)
+        structure = wb.sector_structure(economy, wb.employment(economy))
+        self.assertIn("cost_rank", structure)
+        self.assertIn("sector_cv", structure)
+        self.assertIsNotNone(structure["sector_cv"])

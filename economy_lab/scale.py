@@ -215,6 +215,8 @@ def synthetic_economy(
     record_history: bool = True,
     seed: int = 20260825,
     basket_in_demand: bool = False,
+    producers_per_commodity: int = 1,
+    cost_spread: float = 0.1,
 ) -> Economy:
     """A running economy of the requested size.
 
@@ -234,6 +236,12 @@ def synthetic_economy(
     is large against the graph's own use of the staple the staple runs
     short and the wage, which is its price, spirals.  Off by default:
     ``fixtures.py`` pins this generator's output.
+
+    ``producers_per_commodity`` (docs/130) splits each commodity's
+    capacity equally among that many producers, whose overheads are
+    spread by ``cost_spread`` from a stream separate from the one that
+    builds the processes, so that one producer per commodity draws
+    nothing it did not draw before.
     """
     rows = population(commodities)
     processes, record = build_processes(rows, seed=seed)
@@ -276,6 +284,11 @@ def synthetic_economy(
             ticks_per_worker_day,
         )
 
+    if producers_per_commodity < 1:
+        raise ValueError("producers_per_commodity must be at least 1")
+    firms = producers_per_commodity
+    spread = _Random(seed + 1) if firms > 1 else None
+
     region_names = [f"region_{index:03d}" for index in range(regions)]
     built: List[Region] = []
     for index, region_name in enumerate(region_names):
@@ -294,15 +307,28 @@ def synthetic_economy(
                 COST_SHARE_OF_PRICE * record["price"][name] * jitter
                 - reference_inputs,
             )
-            producers.append(
-                Producer(
-                    f"{region_name}:{name}",
-                    name,
-                    capacity,
-                    overhead,
-                    process=process,
+            if spread is None:
+                producers.append(
+                    Producer(
+                        f"{region_name}:{name}",
+                        name,
+                        capacity,
+                        overhead,
+                        process=process,
+                    )
                 )
-            )
+                continue
+            for firm in range(firms):
+                unit = spread.next() / 2.0 ** 64
+                producers.append(
+                    Producer(
+                        f"{region_name}:{name}#{firm}",
+                        name,
+                        capacity / firms,
+                        overhead * (1.0 + cost_spread * (unit - 0.5)),
+                        process=process,
+                    )
+                )
         region = Region(
             region_name,
             cash=1_000_000.0,
