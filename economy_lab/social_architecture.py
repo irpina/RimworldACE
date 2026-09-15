@@ -44,6 +44,12 @@ from typing import Dict, List, Optional, Set, Tuple
 NO_EMPLOYER = None
 
 
+#: The exchange rules M1 can use (docs/115).  A 2x2 over Wright's two
+#: named ingredients: revenue proportional to headcount (the law of
+#: value) and a random draw (contingency).
+MARKET_RULES = ("wright", "neutral", "fixed", "fixed_neutral")
+
+
 @dataclass
 class History:
     """What Wright's seven measures need, recorded as the run goes.
@@ -109,6 +115,11 @@ class Economy:
     wage_min: int = 10
     wage_max: int = 90
     seed: int = 0
+    #: Which exchange rule M1 uses (docs/115).  ``"wright"`` is the
+    #: paper's and the default; the others ablate one or both of its two
+    #: ingredients -- sampling frequency proportional to headcount (the
+    #: law of value) and a random draw (contingency).
+    market_rule: str = "wright"
 
     money: List[float] = field(default_factory=list)
     employer: List[Optional[int]] = field(default_factory=list)
@@ -128,6 +139,8 @@ class Economy:
     def __post_init__(self) -> None:
         if not self.wage_min <= self.wage_max:
             raise ValueError("wage_min must not exceed wage_max")
+        if self.market_rule not in MARKET_RULES:
+            raise ValueError(f"unknown market rule {self.market_rule!r}")
         self.rng = random.Random(self.seed)
         # SR1: "Allocate M/N coins to each of the N actors.  Set e_i = 0
         # for all i (i.e. all actors are initially unemployed)."
@@ -284,12 +297,35 @@ class Economy:
         A firm therefore samples the market once per member per month on
         average, which is the model's "weak formulation of the law of
         value": revenue is statistically linear in labour expended.
+
+        ``market_rule`` ablates that (docs/115).  Wright names M1's two
+        ingredients himself -- sampling "once for every employee ... a
+        bias justified by the law of value", and a random amount "to
+        reflect contingency" -- so the variants remove one, the other or
+        both.  ``"wright"`` is the paper's rule and the default, and it
+        takes the same branch it always did so the model stays
+        bit-identical.
         """
         if self.is_unemployed(a) or self.market <= 0.0:
             return
-        drawn = self.rng.uniform(0.0, self.market)
-        self.market -= drawn
         owner = self.employer[a] if self.employer[a] is not None else a
+        rule = self.market_rule
+        if rule == "wright":
+            drawn = self.rng.uniform(0.0, self.market)
+        else:
+            # The size a firm is neutralised against is its whole
+            # membership -- the owner plus the staff -- because that is
+            # how many times it samples per month under SR1.
+            members = len(self._staff.get(owner, ())) + 1
+            if rule == "neutral":
+                drawn = self.rng.uniform(0.0, self.market) / members
+            elif rule == "fixed":
+                drawn = self.market / self.actors
+            else:  # fixed_neutral
+                drawn = self.market / (self.actors * members)
+        if drawn > self.market:
+            drawn = self.market
+        self.market -= drawn
         self.money[owner] += drawn
         self.revenue[owner] += drawn
         self.year_gross[owner] += drawn
