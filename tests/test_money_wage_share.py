@@ -260,3 +260,23 @@ class TestEndogenousDemandAndAccumulation(unittest.TestCase):
         self.assertAlmostEqual(
             (sum(economy.ledger.construction_wages.values()) - built) / excess, 1.0, places=6)
         self.assertAlmostEqual(producer.cash, producer.cash_target)
+
+
+class TestParameterKnobs(unittest.TestCase):
+    """docs/134: the knobs reach what they name."""
+
+    def test_the_knobs_reach_the_model_and_the_generator(self):
+        a = wb.build_ours(1, demand=1.0)
+        b = wb.build_ours(1, demand=1.0, cash_multiplier=1.0, cost_spread=0.5,
+                          construction_cost_multiplier=20.0, producers_per_commodity=2)
+        self.assertEqual(b.construction_cost_multiplier, 20.0)
+        self.assertLess(sum(r.cash for r in b.regions.values()),
+                        sum(r.cash for r in a.regions.values()))
+
+    def test_a_refused_run_is_returned_as_its_error(self):
+        """A fund with next to nothing cannot cover payroll; the battery
+        keeps the refusal as a record rather than dying with it."""
+        record = wb.measure_ours(1, demand=1.0, cash_multiplier=1e-6)
+        self.assertIn("error", record)
+        self.assertIn("cannot cover its wage bill", record["error"])
+        self.assertGreater(record["day"], 0)

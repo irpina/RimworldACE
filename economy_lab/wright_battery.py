@@ -121,7 +121,9 @@ def measure_sa(seed, beta=1.0):
 
 def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                quantum=1.0, basket_in_demand=True, producers_per_commodity=1,
-               fund_spending=False, accumulate=False, retention_rate=0.5):
+               fund_spending=False, accumulate=False, retention_rate=0.5,
+               cash_multiplier=CASH_MULTIPLIER, cost_spread=0.1,
+               construction_cost_multiplier=60.0):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -134,11 +136,12 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                              daily_demand=demand, basket_fraction=basket_fraction,
                              basket_in_demand=basket_in_demand,
                              producers_per_commodity=producers_per_commodity,
+                             cost_spread=cost_spread,
                              record_history=False, seed=seed)
     regions = list(base.regions.values())
     for region in regions:
         region.labor_pool = LABOR_POOL_PER_DEMAND * demand
-        region.cash *= CASH_MULTIPLIER * demand
+        region.cash *= cash_multiplier * demand
         region.worker_cash *= demand
         for producer in region.producers:
             producer.cash = max(producer.cash, PURSE_FLOOR_PER_DEMAND * demand)
@@ -151,6 +154,7 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
         investment_interval_days=INVESTMENT_INTERVAL,
         accumulate=accumulate,
         retention_rate=retention_rate,
+        construction_cost_multiplier=construction_cost_multiplier,
     )
     if fund_spending:
         # docs/132 §2: seeded so that day one's demand is the authored
@@ -190,9 +194,14 @@ def money_totals(economy):
 
 
 def measure_ours(seed, **knobs):
-    """Our model, through the identical instrument."""
+    """Our model, through the identical instrument.  A run the model
+    refuses (payroll it cannot cover) is returned as a record with
+    ``error`` set and nothing else, so a sweep can score the refusal."""
     economy = build_ours(seed, **knobs)
-    economy.step(MONTH * BURN_IN_MONTHS)
+    try:
+        economy.step(MONTH * BURN_IN_MONTHS)
+    except RuntimeError as failure:
+        return {"model": "ours", "seed": seed, "error": str(failure), "day": economy.day}
     labor_pool = LABOR_POOL_PER_DEMAND * knobs.get("demand", DEMAND)
 
     def totals():
@@ -211,7 +220,10 @@ def measure_ours(seed, **knobs):
     active_seen = []
 
     for _ in range(WINDOW_MONTHS):
-        economy.step(MONTH)
+        try:
+            economy.step(MONTH)
+        except RuntimeError as failure:
+            return {"model": "ours", "seed": seed, "error": str(failure), "day": economy.day}
         current = employment(economy)
         sizes.extend(current.values())
         growth.extend(_growth(previous_sizes, current))
