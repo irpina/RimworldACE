@@ -146,6 +146,11 @@ class ScenarioParameters:
     wage_bargaining_strength: float = 0.0
     wage_bargaining_speed: float = 0.1
     bargaining_scenario_strength: float = 1.0
+    #: Worker mobility (docs/106): the fraction of a region's labor pool
+    #: that its wage's shortfall against the mean moves away in a day.
+    #: Zero -- the default -- is off and bit-identical.
+    worker_mobility_strength: float = 0.0
+    mobility_scenario_strength: float = 0.05
     #: Final demand for yayo in the local region rises by this factor on
     #: the shock day; investment meets it and employment climbs.
     boom_demand_multiplier: float = 1.25
@@ -1117,6 +1122,7 @@ def seeded_two_region_economy(
         history_every=parameters.history_every,
         wage_bargaining_strength=parameters.wage_bargaining_strength,
         wage_bargaining_speed=parameters.wage_bargaining_speed,
+        worker_mobility_strength=parameters.worker_mobility_strength,
         habituation_speed=parameters.habituation_speed,
         producer_cash=parameters.producer_cash,
         working_capital_days=parameters.working_capital_days,

@@ -809,6 +809,12 @@ class Ledger:
     liquidity_curtailment: Dict[str, float] = field(default_factory=dict)
     fund_wage_support: Dict[str, float] = field(default_factory=dict)
     bankruptcies: List[Tuple[int, str, str]] = field(default_factory=list)
+    #: Worker mobility (docs/106): net worker-days a region's labor pool
+    #: gained (positive) or lost (negative) to the other regions, summed
+    #: over the run.  Observational; empty unless the rule is on.  The
+    #: sum over regions is zero to floating-point, which is what says the
+    #: rule moves labour rather than making it.
+    labor_migrated: Dict[str, float] = field(default_factory=dict)
     #: Exit (docs/64): capacity withdrawn because its return was below
     #: the going one, as (day, region, producer, capacity).  Also booked
     #: to ``capacity_lost``.  Empty unless the rule is on.
@@ -869,6 +875,7 @@ class Economy:
         history_every: int = 1,
         wage_bargaining_strength: float = 0.0,
         wage_bargaining_speed: float = 0.1,
+        worker_mobility_strength: float = 0.0,
         habituation_speed: float = 0.0,
         producer_cash: bool = False,
         working_capital_days: float = 5.0,
@@ -950,6 +957,13 @@ class Economy:
             raise ValueError("wage_bargaining_speed must be between zero and one")
         self.wage_bargaining_strength = wage_bargaining_strength
         self.wage_bargaining_speed = wage_bargaining_speed
+        if worker_mobility_strength < 0.0:
+            raise ValueError("worker_mobility_strength must be non-negative")
+        #: The fraction of a region's labor pool that its wage's shortfall
+        #: against the mean moves away in a day (docs/106).  Zero is off,
+        #: and off is the default: the rule changes a committed scenario's
+        #: outcome, so it is gated like every other rule added here.
+        self.worker_mobility_strength = worker_mobility_strength
         if not 0.0 <= habituation_speed <= 1.0:
             raise ValueError("habituation_speed must be between zero and one")
         #: How fast a sustained premium becomes the habitual standard
@@ -1127,6 +1141,10 @@ class Economy:
     def step(self, days: int = 1) -> None:
         for index in range(days):
             self.day += 1
+            # Labour moves toward the higher wage before anything is made
+            # with it, and therefore before ``_bargain`` reads the
+            # employment rate it changes the denominator of (docs/106).
+            self._migrate()
             self._arrive_shipments()
             self._complete_projects()
             self._refresh_throughput()
@@ -3248,6 +3266,76 @@ class Economy:
         )
         producer.capital_cost_per_unit = money
         producer.capital_labor_per_unit = labor
+
+    def _migrate(self) -> None:
+        """Move labour toward the higher wage (docs/106).
+
+        Each region's *pull* is its wage's distance from the mean wage, as
+        a fraction of the mean.  Regions below the mean send labour;
+        regions above it receive, in proportion to their pull.  A sender
+        never gives up more than the pool it is not already employing, so
+        no region's employment rate can be pushed above one by a
+        departure, and the last recipient takes the remainder rather than
+        its computed share, so the total is conserved exactly rather than
+        nearly.
+
+        Zero strength returns before touching anything, which keeps a
+        model without mobility bit-identical rather than merely close.  A
+        region with an infinite pool is skipped: an unbounded reserve army
+        cannot meaningfully gain or lose members.  At the seeded
+        equilibrium the two regions' wages are equal, so every pull is
+        exactly zero and nothing moves.
+        """
+        if self.worker_mobility_strength == 0.0:
+            return
+        regions = [
+            self.regions[name]
+            for name in sorted(self.regions)
+            if self.regions[name].labor_pool != float("inf")
+        ]
+        if len(regions) < 2:
+            return
+        wages = [region.wage_rate() for region in regions]
+        mean = sum(wages) / len(wages)
+        if mean <= 0.0:
+            return
+        pulls = [(wage - mean) / mean for wage in wages]
+
+        sent = 0.0
+        for region, pull in zip(regions, pulls):
+            if pull >= 0.0:
+                continue
+            leaving = self.worker_mobility_strength * (-pull) * region.labor_pool
+            room = region.labor_pool - region.worker_days_earned
+            if room < 0.0:
+                room = 0.0
+            if leaving > room:
+                leaving = room
+            if leaving <= 0.0:
+                continue
+            region.labor_pool -= leaving
+            Ledger.add(self.ledger.labor_migrated, region.name, -leaving)
+            sent += leaving
+        if sent <= 0.0:
+            return
+
+        receivers = [
+            (region, pull) for region, pull in zip(regions, pulls) if pull > 0.0
+        ]
+        total_pull = sum(pull for _, pull in receivers)
+        if not receivers or total_pull <= 0.0:
+            # Nowhere above the mean to go: unreachable while some region
+            # is below it, but the arithmetic is not asked to prove that.
+            return
+        remaining = sent
+        for index, (region, pull) in enumerate(receivers):
+            if index == len(receivers) - 1:
+                arriving = remaining
+            else:
+                arriving = sent * pull / total_pull
+                remaining -= arriving
+            region.labor_pool += arriving
+            Ledger.add(self.ledger.labor_migrated, region.name, arriving)
 
     def _bargain(self, region: Region) -> None:
         """Move the wage premium toward what the reserve army allows (docs/46).
