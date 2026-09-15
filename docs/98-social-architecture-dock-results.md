@@ -5,6 +5,16 @@ two failed, one passed by half, and one of the failures corrects
 `docs/97`'s own headline. **After `docs/99`: six passed, two failed** —
 see the banner below.
 
+**Corrected by `docs/101`.** A3 below is **wrong as stated**. "Neither is
+the wage bill" is false: `_produce` has curtailed output to what the purse
+affords since `docs/55`, and `_outlay_per_run` includes the wage — for
+five of the circuit's nine processes it is *nothing but* the wage. The
+measurement (zero deaths by wage bill) stands; the explanation does not.
+Producers do not die of the wage bill because the curtailment is
+**continuous** where Wright's F1 is **floored**, so a drained purse
+reaches a fixed point instead of zero. `cash_circuit`'s component producer
+sits at 0.7% of its purse target, alive, for 1200 days.
+
 **Corrected by `docs/100`.** §3 of this document is **refuted**. The
 paper arrived; Wright's rule F1 fires against the firm's *money
 holdings*, which is the rule §3 rejected, and his model is stationary
@@ -91,7 +101,11 @@ what an unreachable branch is worth — a latent false verdict nobody could
 find until the state that reaches it arrives. A colony that hires pawns
 is exactly that state.
 
-### A3 — what kills a producer (prediction 3, pass)
+### A3 — what kills a producer (prediction 3, ~~pass~~ — **explanation withdrawn by `docs/101`**)
+
+> The table is right and the reason given under it is wrong. There *is* a
+> solvency rule on the purse and it *does* include wages; it simply cannot
+> reach a conclusion. See `docs/101` §3.
 
 | scenario | exits | retired | bankruptcies | deaths by wage bill |
 |---|---:|---:|---:|---:|

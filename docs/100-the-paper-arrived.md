@@ -158,6 +158,14 @@ and the paper it reconstructs.
 
 ## 7. What follows
 
+> **Withdrawn by `docs/101`.** The rule proposed below already exists.
+> `_produce` curtails output to what the purse affords, against an outlay
+> that includes the wage, and has since `docs/55` — so "it needs no new
+> state, since `producer.cash` already exists" was righter than intended.
+> What is actually missing is not the rule but a *floor*: F1 employs whole
+> workers, ours employs a continuous flow, and only the former can reach
+> zero. Read `docs/101` instead.
+
 The A3 design is now better specified than it would have been. F1 is
 directly portable to our producers, and it is simpler than what `docs/98`
 §5 step 2 proposed:
