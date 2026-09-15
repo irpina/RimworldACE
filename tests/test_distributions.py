@@ -107,3 +107,101 @@ class TheSimpleFitsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheGoodnessOfFitTest(unittest.TestCase):
+    """docs/113 section 2.1: a KS distance is not a verdict."""
+
+    def test_a_genuine_power_law_is_not_rejected(self):
+        rng = random.Random(4)
+        result = D.goodness_of_fit(
+            _pareto(rng, 2.5, 4000), synthetics=60, seed=1
+        )
+        self.assertGreater(result["p"], 0.1)
+        self.assertFalse(result["rejected"])
+
+    def test_lognormal_data_is_rejected_as_a_power_law(self):
+        # 8000 points, not 4000: at 4000 this same data gives p = 0.25 and
+        # is *not* rejected.  That is docs/113 section 3's sample-size
+        # point arriving inside the test suite -- the test's power to tell
+        # two families apart is a function of n, which is exactly why the
+        # firm-size test is run per seed rather than pooled.
+        rng = random.Random(4)
+        values = [math.exp(rng.gauss(0.0, 1.2)) for _ in range(8000)]
+        result = D.goodness_of_fit(values, synthetics=60, seed=1)
+        self.assertLessEqual(result["p"], 0.1)
+        self.assertTrue(result["rejected"])
+
+    def test_the_same_lognormal_survives_at_half_the_sample(self):
+        rng = random.Random(4)
+        values = [math.exp(rng.gauss(0.0, 1.2)) for _ in range(4000)]
+        result = D.goodness_of_fit(values, synthetics=60, seed=1)
+        self.assertGreater(result["p"], 0.1)
+
+    def test_the_rule_of_thumb_is_the_one_csn_state(self):
+        rng = random.Random(9)
+        result = D.goodness_of_fit(
+            _pareto(rng, 2.5, 2000), synthetics=40, seed=2
+        )
+        self.assertEqual(result["rejected"], result["p"] <= 0.1)
+
+
+class TheLikelihoodRatioTest(unittest.TestCase):
+    """docs/113 section 2.2, and the truncation bug it caught."""
+
+    def setUp(self):
+        rng = random.Random(4)
+        self.power = _pareto(rng, 2.5, 5000)
+        self.lognormal = [math.exp(rng.gauss(0.0, 1.2)) for _ in range(5000)]
+
+    def _ratio(self, data, alternative):
+        fit = D.power_law_fit(data)
+        return D.likelihood_ratio(
+            data, fit["x_min"], fit["alpha"], alternative
+        )
+
+    def test_the_power_law_beats_an_exponential_on_power_law_data(self):
+        result = self._ratio(self.power, "exponential")
+        self.assertGreater(result["normalised"], 2.0)
+        self.assertEqual(result["favours"], "power_law")
+
+    def test_the_lognormal_wins_on_lognormal_data(self):
+        # The regression this pins: fitting the lognormal *untruncated*
+        # while the power law is normalised on the tail rigs the
+        # comparison, and reported +9.09 for the power law on data drawn
+        # from a lognormal.  The alternative must be fitted on the same
+        # support (docs/113 section 2.2).
+        result = self._ratio(self.lognormal, "lognormal")
+        self.assertLess(result["normalised"], -2.0)
+        self.assertEqual(result["favours"], "alternative")
+
+    def test_a_lognormal_is_hard_to_beat_even_on_true_power_law_data(self):
+        # CSN's general finding, and the reason a passed goodness-of-fit
+        # test is weak evidence: the two families are barely separable.
+        result = self._ratio(self.power, "lognormal")
+        self.assertFalse(result["determined"])
+        self.assertEqual(result["favours"], "neither")
+
+    def test_an_unknown_alternative_is_refused(self):
+        fit = D.power_law_fit(self.power)
+        with self.assertRaises(ValueError):
+            D.likelihood_ratio(self.power, fit["x_min"], fit["alpha"], "cauchy")
+
+
+class TheExponentialGoodnessOfFitTest(unittest.TestCase):
+    def test_exponential_data_is_not_rejected(self):
+        rng = random.Random(6)
+        values = [rng.expovariate(1.2) for _ in range(400)]
+        result = D.exponential_goodness_of_fit(values, synthetics=300, seed=1)
+        self.assertGreater(result["p"], 0.1)
+        self.assertAlmostEqual(result["lambda"], 1.2, delta=0.15)
+
+    def test_a_heavy_tail_is_rejected_as_exponential(self):
+        rng = random.Random(6)
+        result = D.exponential_goodness_of_fit(
+            _pareto(rng, 2.2, 400), synthetics=300, seed=1
+        )
+        self.assertLessEqual(result["p"], 0.1)
+
+    def test_too_little_data_is_none(self):
+        self.assertIsNone(D.exponential_goodness_of_fit([1.0, 2.0]))
