@@ -148,6 +148,8 @@ def power_law_fit(
     *,
     discrete: bool = False,
     min_tail: int = 50,
+    ks_sample: int = 20000,
+    max_candidates: int = 200,
 ) -> Optional[dict]:
     """Fit a power law, choosing ``x_min`` by KS minimisation (CSN).
 
@@ -155,32 +157,85 @@ def power_law_fit(
     KS distance -- or ``None`` when no tail of at least ``min_tail``
     points exists.  Convert the exponent with :func:`to_wright` before
     comparing against the paper.
+
+    The exponent for each candidate ``x_min`` comes from a suffix sum of
+    ``log x`` computed once, so the scan is linear in the number of
+    distinct values rather than quadratic in the sample; the KS distance
+    is evaluated on at most ``ks_sample`` evenly spaced points of the
+    tail, which bounds the cost on the pooled millions of firm sizes.
+
+    At most ``max_candidates`` values of ``x_min`` are tried, spaced
+    evenly through the sorted sample.  Continuous data makes every point
+    a distinct candidate, so an uncapped scan is quadratic; capping is
+    what CSN's own implementations do on large samples, and the grid is
+    far finer than the exponent's own confidence interval.
     """
-    positive = sorted(value for value in values if value > 0.0)
-    if len(positive) < min_tail:
+    ordered = sorted(value for value in values if value > 0.0)
+    count = len(ordered)
+    if count < min_tail:
         return None
-    candidates = sorted(set(positive))
+    suffix = 0.0
+    suffixes = [0.0] * (count + 1)
+    for i in range(count - 1, -1, -1):
+        suffix += math.log(ordered[i])
+        suffixes[i] = suffix
+
+    limit = count - min_tail
+    stride = max(1, (limit + 1) // max_candidates)
     best = None
-    for x_min in candidates:
-        tail = [value for value in positive if value >= x_min]
-        if len(tail) < min_tail:
-            break
-        alpha = (
-            _alpha_discrete(tail, x_min) if discrete
-            else _alpha_continuous(tail, x_min)
-        )
-        if alpha is None or alpha <= 1.0:
-            continue
-        distance = _ks_distance(tail, x_min, alpha)
-        if best is None or distance < best["ks"]:
-            best = {
-                "alpha": alpha,
-                "alpha_wright": to_wright(alpha),
-                "x_min": x_min,
-                "tail": len(tail),
-                "ks": distance,
-            }
+    start = 0
+    while start <= limit:
+        x_min = ordered[start]
+        nxt = start + stride
+        while nxt < count and ordered[nxt] == x_min:
+            nxt += 1
+        tail_size = count - start
+        base = x_min - 0.5 if discrete else x_min
+        if base > 0.0:
+            total = suffixes[start] - tail_size * math.log(base)
+            if total > 0.0:
+                alpha = 1.0 + tail_size / total
+                if alpha > 1.0:
+                    distance = _ks_distance_sampled(
+                        ordered, start, x_min, alpha, ks_sample
+                    )
+                    if best is None or distance < best["ks"]:
+                        best = {
+                            "alpha": alpha,
+                            "alpha_wright": to_wright(alpha),
+                            "x_min": x_min,
+                            "tail": tail_size,
+                            "ks": distance,
+                        }
+        start = nxt
     return best
+
+
+def _ks_distance_sampled(
+    ordered: Sequence[float],
+    start: int,
+    x_min: float,
+    alpha: float,
+    ks_sample: int,
+) -> float:
+    """KS distance on the tail ``ordered[start:]``, at most ``ks_sample``
+    evenly spaced points."""
+    count = len(ordered)
+    tail_size = count - start
+    step = 1 if tail_size <= ks_sample else tail_size // ks_sample
+    worst = 0.0
+    index = start
+    while index < count:
+        position = index - start
+        fitted = 1.0 - (ordered[index] / x_min) ** (1.0 - alpha)
+        below = position / tail_size
+        above = (position + 1) / tail_size
+        if fitted - below > worst:
+            worst = fitted - below
+        if above - fitted > worst:
+            worst = above - fitted
+        index += step
+    return worst
 
 
 def bootstrap_alpha(
