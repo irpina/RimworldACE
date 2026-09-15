@@ -130,6 +130,10 @@ class ScenarioParameters:
     #: single value at the laboratory's scale -- Dust Basin employs 0.318
     #: worker-days in total -- so it is swept rather than set.
     producer_employment_quantum: float = 0.0
+    #: Revenue conditional on having produced (docs/104).  Off by
+    #: default; only jointly effective with a producer quantum, since
+    #: without the floor no producer is ever idle.
+    sales_follow_production: bool = False
     subsistence_loss_fraction: float = 0.70
 
     # --- wages off the value of labor-power (docs/46) -----------------------
@@ -1097,6 +1101,7 @@ def seeded_two_region_economy(
         labor_value_per_tick=parameters.labor_value_per_tick,
         employment_quantum=parameters.employment_quantum,
         producer_employment_quantum=parameters.producer_employment_quantum,
+        sales_follow_production=parameters.sales_follow_production,
         labor_value_tolerance=parameters.labor_value_tolerance,
         labor_value_max_iterations=parameters.labor_value_max_iterations,
         competitive_price_intensity=parameters.competitive_price_intensity,

@@ -855,6 +855,7 @@ class Economy:
         labor_value_per_tick: float = 11.4 / 720.0,
         employment_quantum: float = 2.0 ** -20,
         producer_employment_quantum: float = 0.0,
+        sales_follow_production: bool = False,
         labor_value_tolerance: float = 1e-12,
         labor_value_max_iterations: int = 1000,
         competitive_price_intensity: float = 0.5,
@@ -918,6 +919,13 @@ class Economy:
         #: the rule changes a committed scenario's outcome, so it is
         #: gated like every other market rule here.
         self.producer_employment_quantum = producer_employment_quantum
+        #: Whether a producer that made nothing may still be paid for a
+        #: commodity's sales (docs/104).  With this off, `_supply_shares`
+        #: falls back to apportioning by capacity when nobody ran, which
+        #: is what pays `docs/103`'s oscillating producer on its idle
+        #: days.  With it on, a commodity nobody produced has no sellers
+        #: and the fund is paid instead.
+        self.sales_follow_production = sales_follow_production
         self.labor_value_tolerance = labor_value_tolerance
         self.labor_value_max_iterations = labor_value_max_iterations
         if competitive_price_intensity < 0.0:
@@ -3733,7 +3741,21 @@ class Economy:
                 p.last_runs * p.process.outputs.get(name, 0.0) for p in producers
             ]
             total = sum(weights)
-            if total <= EPSILON:
+            if total <= EPSILON and not self.sales_follow_production:
+                # Nobody ran, so nobody has a claim by output.  Falling
+                # back to capacity pays a producer for goods it did not
+                # make, which is what makes idleness restorative and the
+                # bankruptcy branch unreachable (docs/103 section 3).
+                # With `sales_follow_production` there is no fallback:
+                # `_pay_sellers` finds no sellers and credits the fund.
+                #
+                # This also changes the opening day, which has no
+                # yesterday: on day 1 nothing has been produced yet, so
+                # every commodity falls back here.  Under the rule the
+                # fund is paid instead, which is the better reading --
+                # the seeded inventory was made by nobody in-model, so
+                # no producer has a claim on it -- but it is a real
+                # difference and `docs/105` prediction 3 records it.
                 weights = [p.capacity_per_day for p in producers]
                 total = sum(weights)
             if total <= EPSILON:
