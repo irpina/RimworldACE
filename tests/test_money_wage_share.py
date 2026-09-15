@@ -276,7 +276,7 @@ class TestParameterKnobs(unittest.TestCase):
     def test_a_refused_run_is_returned_as_its_error(self):
         """A fund with next to nothing cannot cover payroll; the battery
         keeps the refusal as a record rather than dying with it."""
-        record = wb.measure_ours(1, demand=1.0, cash_multiplier=1e-6)
+        record = wb.measure_ours(1, demand=1.0, cash_multiplier=0.003)
         self.assertIn("error", record)
         self.assertIn("cannot cover its wage bill", record["error"])
         self.assertGreater(record["day"], 0)
