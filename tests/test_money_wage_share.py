@@ -65,8 +65,9 @@ class TestBatteryKnobs(unittest.TestCase):
     def test_the_battery_books_the_money_flows(self):
         economy = wb.build_ours(1, demand=1.0)
         economy.step(3)
-        wages, receipts, purchases = wb.money_totals(economy)
+        wages, receipts, purchases, construction = wb.money_totals(economy)
         self.assertGreater(wages, 0.0)
+        self.assertEqual(construction, 0.0)
         self.assertGreater(receipts, purchases)
 
     def test_the_control_s_money_share_is_its_wage_share(self):
@@ -190,3 +191,72 @@ class TestProducersPerCommodity(unittest.TestCase):
         self.assertIn("cost_rank", structure)
         self.assertIn("sector_cv", structure)
         self.assertIsNotNone(structure["sector_cv"])
+
+
+class TestEndogenousDemandAndAccumulation(unittest.TestCase):
+    """docs/132: the fund spends a share of its silver; producers
+    accumulate out of retained earnings and their plant wears."""
+
+    def test_off_by_default(self):
+        economy = equilibrium(days=30, parameters=replace(ScenarioParameters(), producer_cash=True))
+        self.assertEqual(economy.fund_spending_rate, 0.0)
+        self.assertFalse(economy.accumulate)
+        self.assertEqual(economy.ledger.construction_wages, {})
+        for region in economy.regions.values():
+            self.assertEqual(region.demand_scale, 1.0)
+
+    def test_accumulate_needs_producer_cash_and_a_proper_retention(self):
+        base = wb.build_ours(1, demand=1.0)
+        with self.assertRaises(ValueError):
+            wb.Economy(list(base.commodities.values()), list(base.regions.values()),
+                       base.routes, record_history=False, accumulate=True)
+        with self.assertRaises(ValueError):
+            wb.build_ours(1, demand=1.0, accumulate=True, retention_rate=1.5)
+
+    def test_demand_scales_with_the_fund_s_silver(self):
+        economy = wb.build_ours(1, demand=1.0, fund_spending=True)
+        economy.step(1)
+        region = next(iter(economy.regions.values()))
+        economy._refresh_throughput()
+        before = region.demand_scale
+        region.cash *= 2.0
+        economy._refresh_throughput()
+        self.assertAlmostEqual(region.demand_scale / before, 2.0, places=9)
+
+    def test_the_rate_is_seeded_to_the_authored_demand(self):
+        economy = wb.build_ours(1, demand=1.0, fund_spending=True)
+        economy._refresh_throughput()
+        first = next(iter(economy.regions.values()))
+        self.assertAlmostEqual(first.demand_scale, 1.0, places=9)
+
+    def test_money_is_conserved_with_both_rules_on(self):
+        economy = wb.build_ours(1, demand=1.0, fund_spending=True, accumulate=True)
+        economy.step(40)
+        self.assertLess(abs(economy.cash_balance()), 1e-6 * economy.ledger.initial_cash)
+        self.assertGreater(sum(economy.ledger.construction_wages.values()), 0.0)
+
+    def test_wear_sheds_what_an_empty_purse_cannot_replace(self):
+        economy = wb.build_ours(1, demand=1.0, accumulate=True)
+        region = next(iter(economy.regions.values()))
+        producer = max((p for p in region.producers if p.capacity_per_day > 1e-3),
+                       key=lambda p: p.capacity_per_day)
+        producer.cash = 0.0
+        before = producer.capacity_per_day
+        economy._wear_bill_free(region, producer)
+        expected = before * (1.0 - 1.0 / economy.capital_service_life_days)
+        self.assertAlmostEqual(producer.capacity_per_day, expected)
+
+    def test_retained_earnings_build_capacity_and_pay_the_fund(self):
+        economy = wb.build_ours(1, demand=1.0, accumulate=True, retention_rate=1.0)
+        region = next(iter(economy.regions.values()))
+        producer = max((p for p in region.producers if p.capacity_per_day > 1e-3),
+                       key=lambda p: p.capacity_per_day)
+        producer.cash = 1.0e6
+        before, built = producer.capacity_per_day, sum(economy.ledger.construction_wages.values())
+        economy._settle_purses()
+        # The target is set, not read, so the excess is what is left above it.
+        excess = 1.0e6 - producer.cash_target
+        self.assertGreater(producer.capacity_per_day, before)
+        self.assertAlmostEqual(
+            (sum(economy.ledger.construction_wages.values()) - built) / excess, 1.0, places=6)
+        self.assertAlmostEqual(producer.cash, producer.cash_target)

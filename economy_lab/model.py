@@ -515,6 +515,18 @@ class Region:
     #: wage is untouched by it.  One at seeding, and every place it enters
     #: is skipped rather than multiplied by one while it stays there.
     habitual_scale: float = 1.0
+    #: Endogenous final demand (docs/132): the fund spends a share of its
+    #: silver on final goods, each good getting the share of that money
+    #: it had of the authored demand's value at seeding, so the quantity
+    #: bought is money over today's price.  ``demand_scale`` is the money
+    #: spent today over the authored value at seeding, kept for the
+    #: record; ``money_demand`` the quantities.  One and empty, and
+    #: skipped, while the rule is off; set daily by
+    #: ``Economy._refresh_throughput``.
+    demand_scale: float = 1.0
+    money_demand: Dict[str, float] = field(default_factory=dict)
+    spending_shares: Dict[str, float] = field(default_factory=dict)
+    authored_value: float = 0.0
     #: Procurement (docs/59): stock the owners' fund holds -- imports, and
     #: what a scenario injects -- and sells on at the regional price.
     fund_stock: Dict[str, float] = field(default_factory=dict)
@@ -567,7 +579,10 @@ class Region:
                 )
             )
         derived = sum(terms)
-        total = self.base_daily_demand.get(commodity, 0.0) + derived
+        base = self.base_daily_demand.get(commodity, 0.0)
+        if self.money_demand and base > 0.0:
+            base = self.money_demand.get(commodity, 0.0)
+        total = base + derived
         basket_quantity = self.subsistence_basket.get(commodity, 0.0)
         if basket_quantity > 0.0:
             # Worker demand for a basket good, at full-capacity employment —
@@ -620,9 +635,10 @@ class Region:
         )
         totals: Dict[str, float] = {}
         for name in self.prices:
-            total = self.base_daily_demand.get(name, 0.0) + sum(
-                terms.get(name, ())
-            )
+            base = self.base_daily_demand.get(name, 0.0)
+            if self.money_demand and base > 0.0:
+                base = self.money_demand.get(name, 0.0)
+            total = base + sum(terms.get(name, ()))
             quantity = self.subsistence_basket.get(name, 0.0)
             if quantity > 0.0:
                 if self.habitual_scale != 1.0:
@@ -690,6 +706,10 @@ class Region:
         base = self.base_daily_demand.get(commodity.name, 0.0)
         if base <= 0:
             return 0.0
+        if self.money_demand:
+            # docs/132 §2: a quantity of money, not of goods, so the
+            # price elasticity is one by construction.
+            return self.money_demand.get(commodity.name, 0.0)
         price = max(self.prices[commodity.name], EPSILON)
         return base * (price / commodity.reference_price) ** (
             -commodity.demand_elasticity
@@ -816,6 +836,12 @@ class Ledger:
     #: where producers hold cash, so empty in the default model.
     sales_receipts: Dict[str, float] = field(default_factory=dict)
     producer_purchases: Dict[str, float] = field(default_factory=dict)
+    #: Accumulation (docs/132): silver producers paid for construction --
+    #: replacing worn plant and building new capacity -- by region.  Paid
+    #: to the owners' fund, whose spending rule is what returns it to
+    #: circulation; not ``wages_paid``, since no living labour is
+    #: measured for it (docs/133 section 1 records why not the workers).
+    construction_wages: Dict[str, float] = field(default_factory=dict)
     #: Worker mobility (docs/106): net worker-days a region's labor pool
     #: gained (positive) or lost (negative) to the other regions, summed
     #: over the run.  Observational; empty unless the rule is on.  The
@@ -898,6 +924,9 @@ class Economy:
         exit_on_return: bool = False,
         capacity_reserve: float = 0.10,
         exit_gain: float = 1.0,
+        fund_spending_rate: float = 0.0,
+        accumulate: bool = False,
+        retention_rate: float = 0.5,
     ) -> None:
         if input_rationing not in (PROPORTIONAL, ALL_OR_NOTHING):
             raise ValueError(f"unknown input rationing rule {input_rationing!r}")
@@ -997,6 +1026,23 @@ class Economy:
             raise ValueError("posted_price_speed must be non-negative")
         self.posted_price_speed = posted_price_speed
         self.posted_share_gain = posted_share_gain
+        #: Endogenous final demand (docs/132): the money value of each
+        #: region's authored final demand is this share of the fund's
+        #: silver, recomputed daily.  Zero, the default, leaves every
+        #: ``demand_scale`` at one and is bit-identical.
+        if fund_spending_rate < 0.0:
+            raise ValueError("fund_spending_rate must be non-negative")
+        self.fund_spending_rate = fund_spending_rate
+        #: Accumulation (docs/132): bill-free plant wears and is replaced
+        #: out of the purse, and retained earnings build capacity; both
+        #: paid to the region's workers as construction wages.  Off by
+        #: default and bit-identical; needs ``producer_cash``.
+        if accumulate and not producer_cash:
+            raise ValueError("accumulate needs producer_cash switched on")
+        if not 0.0 <= retention_rate <= 1.0:
+            raise ValueError("retention_rate must lie in [0, 1]")
+        self.accumulate = accumulate
+        self.retention_rate = retention_rate
         #: Whether producers own their output and buy their inputs from
         #: each other at posted prices (docs/59).  Needs purses to pay
         #: from and prices to ask; off by default and bit-identical off.
@@ -1185,9 +1231,39 @@ class Economy:
 
     def _refresh_throughput(self) -> None:
         """Recompute every region's throughput demand for the day."""
+        if self.fund_spending_rate > 0.0:
+            for region in self.regions.values():
+                self._spend_the_fund(region)
         self._throughput = {
             name: region.throughput_demands()
             for name, region in self.regions.items()
+        }
+
+    def _spend_the_fund(self, region: Region) -> None:
+        """docs/132 §2: today's final demand is ``fund_spending_rate`` of
+        the fund's silver, split among final goods by the value shares the
+        authored demand had at seeding, and turned into quantities at
+        today's prices.  The shares are fixed at the first call so that a
+        good in short supply cannot draw the whole fund's spending into
+        itself as its price rises (docs/133 section 1)."""
+        if not region.spending_shares:
+            values = {
+                name: base * region.prices.get(name, 0.0)
+                for name, base in sorted(region.base_daily_demand.items())
+                if base > 0.0
+            }
+            total = sum(values.values())
+            if total <= EPSILON:
+                return
+            region.spending_shares = {
+                name: value / total for name, value in values.items()
+            }
+            region.authored_value = total
+        money = self.fund_spending_rate * max(region.cash, 0.0)
+        region.demand_scale = money / max(region.authored_value, EPSILON)
+        region.money_demand = {
+            name: money * share / max(region.prices.get(name, 0.0), EPSILON)
+            for name, share in region.spending_shares.items()
         }
 
     def throughput(self, region: str, commodity: str) -> float:
@@ -3238,6 +3314,8 @@ class Economy:
             if not producer.process.capital_bill:
                 # No bill, no wear that matter could fail to replace.  Steel
                 # and wood can never lose capacity, and a test says so.
+                if self.accumulate:
+                    self._wear_bill_free(region, producer)
                 continue
             supplied = min(
                 producer.replacement_supplied,
@@ -3257,6 +3335,37 @@ class Economy:
             if producer.capacity_per_day < 1e-9:
                 producer.capacity_per_day = 0.0
                 producer.active = False
+
+    def _bill_free_construction_unit(self, producer: Producer, region: Region) -> float:
+        """Silver per unit of daily capacity for a process with no bill:
+        the construction unit ``_invest`` uses for one (docs/132 §3)."""
+        return (
+            producer.effective_unit_cost(region.prices)
+            * self.construction_cost_multiplier
+        )
+
+    def _wear_bill_free(self, region: Region, producer: Producer) -> None:
+        """docs/132 §3, the F1 analogue.  A day's wear on bill-free plant
+        is replaced out of the purse at the construction unit, paid to the
+        fund; the fraction the purse cannot pay is shed."""
+        life = max(self.capital_service_life_days, EPSILON)
+        unit = self._bill_free_construction_unit(producer, region)
+        due = producer.capacity_per_day * unit / life
+        if due <= 0.0:
+            return
+        paid = min(due, max(producer.cash, 0.0))
+        if paid > 0.0:
+            producer.cash -= paid
+            region.cash += paid
+            Ledger.add(self.ledger.construction_wages, region.name, paid)
+        lost = producer.capacity_per_day * (1.0 - paid / due) / life
+        if lost <= 0.0:
+            return
+        producer.capacity_per_day -= lost
+        Ledger.add(self.ledger.capacity_lost, producer.commodity, lost)
+        if producer.capacity_per_day < 1e-9:
+            producer.capacity_per_day = 0.0
+            producer.active = False
 
     def _set_capital_consumption(
         self, producer: Producer, region: Optional[Region] = None
@@ -4021,6 +4130,18 @@ class Economy:
                 if producer.cash > producer.cash_target:
                     excess = producer.cash - producer.cash_target
                     producer.cash = producer.cash_target
+                    if self.accumulate and not producer.process.capital_bill:
+                        # docs/132 §3: retained earnings become capacity,
+                        # built by the region's workers.
+                        retained = excess * self.retention_rate
+                        unit = self._bill_free_construction_unit(producer, region)
+                        if retained > 0.0 and unit > EPSILON:
+                            producer.capacity_per_day += retained / unit
+                            region.cash += retained
+                            Ledger.add(
+                                self.ledger.construction_wages, region.name, retained
+                            )
+                            excess -= retained
                     region.cash += excess
                     producer.distributed_total += excess
                     Ledger.add(self.ledger.distributions, region.name, excess)

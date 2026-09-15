@@ -78,6 +78,9 @@ def facts(record):
         "gross_wage_share": (st.mean(record["gross_wage_shares"])
                              if record.get("gross_wage_shares") else None),
         "growth_std": st.pstdev(growth) if len(growth) > 1 else None,
+        "gdp_growth_std": st.pstdev(gdp_growth) if len(gdp_growth) > 1 else None,
+        "total_wage_share": (st.mean(record["total_wage_shares"])
+                             if record.get("total_wage_shares") else None),
         "profit_skew": (D.skewness(record["profit_rates"])
                         if len(record["profit_rates"]) > 3 else None),
         "unemployment": record.get("unemployment"),
@@ -117,7 +120,8 @@ def measure_sa(seed, beta=1.0):
 
 
 def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
-               quantum=1.0, basket_in_demand=True, producers_per_commodity=1):
+               quantum=1.0, basket_in_demand=True, producers_per_commodity=1,
+               fund_spending=False, accumulate=False, retention_rate=0.5):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -138,14 +142,25 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
         region.worker_cash *= demand
         for producer in region.producers:
             producer.cash = max(producer.cash, PURSE_FLOOR_PER_DEMAND * demand)
-    return Economy(
+    economy = Economy(
         list(base.commodities.values()), regions, base.routes,
         record_history=False,
         producer_cash=True,
         posted_prices=True,
         producer_employment_quantum=quantum,
         investment_interval_days=INVESTMENT_INTERVAL,
+        accumulate=accumulate,
+        retention_rate=retention_rate,
     )
+    if fund_spending:
+        # docs/132 §2: seeded so that day one's demand is the authored
+        # one -- from the fund as it stands *after* the purses were seeded
+        # out of it, which is the silver the rule will read.
+        first = regions[0]
+        authored = sum(base * first.prices[name]
+                       for name, base in first.base_daily_demand.items())
+        economy.fund_spending_rate = authored / first.cash
+    return economy
 
 
 def employment(economy):
@@ -165,11 +180,13 @@ def employment(economy):
 
 
 def money_totals(economy):
-    """Wages paid, sales receipts and producer purchases, all silver."""
+    """Wages paid, sales receipts, producer purchases and construction
+    wages, all silver."""
     ledger = economy.ledger
     return (sum(ledger.wages_paid.values()),
             sum(ledger.sales_receipts.values()),
-            sum(ledger.producer_purchases.values()))
+            sum(ledger.producer_purchases.values()),
+            sum(ledger.construction_wages.values()))
 
 
 def measure_ours(seed, **knobs):
@@ -185,10 +202,11 @@ def measure_ours(seed, **knobs):
         return living, necessary, value
 
     sizes, growth, gdp, shares, profits = [], [], [], [], []
-    money_shares, gross_shares = [], []
+    money_shares, gross_shares, total_shares = [], [], []
     previous_sizes = employment(economy)
     last_living, last_necessary, last_value = totals()
-    last_wages, last_receipts, last_purchases = money_totals(economy)
+    last_wages, last_receipts, last_purchases, last_construction = money_totals(economy)
+    money_stock = economy.ledger.initial_cash
     deaths_at_start = len(economy.ledger.bankruptcies)
     active_seen = []
 
@@ -203,14 +221,16 @@ def measure_ours(seed, **knobs):
         if living - last_living > 0:
             shares.append((necessary - last_necessary) / (living - last_living))
         last_living, last_necessary, last_value = living, necessary, value
-        wages, receipts, purchases = money_totals(economy)
+        wages, receipts, purchases, construction = money_totals(economy)
         d_wages, d_receipts = wages - last_wages, receipts - last_receipts
         d_added = d_receipts - (purchases - last_purchases)
         if d_added > 0:
             money_shares.append(d_wages / d_added)
+            total_shares.append((d_wages + construction - last_construction) / d_added)
         if d_receipts > 0:
             gross_shares.append(d_wages / d_receipts)
-        last_wages, last_receipts, last_purchases = wages, receipts, purchases
+        last_wages, last_receipts, last_purchases, last_construction = (
+            wages, receipts, purchases, construction)
         rate = economy.value_rate_of_profit()
         if rate is not None:
             profits.append(rate)
@@ -229,7 +249,11 @@ def measure_ours(seed, **knobs):
         "wage_shares": shares,
         "money_wage_shares": money_shares,
         "gross_wage_shares": gross_shares,
+        "total_wage_shares": total_shares,
         "profit_rates": profits,
+        # docs/132 predictions 2 and 3.
+        "cash_balance": economy.cash_balance() / money_stock,
+        "fund_share": sum(r.cash for r in economy.regions.values()) / money_stock,
         "unemployment": max(0.0, 1.0 - employed / (labor_pool * REGIONS)),
         "capacity_rank": capacity_correlation(economy, previous_sizes),
         "employing": len(previous_sizes),
@@ -325,7 +349,7 @@ def capacity_correlation(economy, sizes):
 
 
 STRUCTURAL = ("capacity_rank", "cost_rank", "sector_cv", "employing",
-              "bankruptcies")
+              "bankruptcies", "cash_balance", "fund_share")
 
 
 def _job(job):
@@ -346,7 +370,12 @@ def main(argv):
     knobs = {}
     for arg in argv[3:]:
         key, value = arg.split("=", 1)
-        knobs[key] = int(value) if key == "producers_per_commodity" else float(value)
+        if key == "producers_per_commodity":
+            knobs[key] = int(value)
+        elif key in ("fund_spending", "accumulate"):
+            knobs[key] = value.lower() in ("1", "true", "on", "yes")
+        else:
+            knobs[key] = float(value)
     runs = sweep(seeds=seeds, **knobs)
     rows = [dict(facts(run), model=run["model"], seed=run["seed"],
                  **{key: run.get(key) for key in STRUCTURAL}) for run in runs]
