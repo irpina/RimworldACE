@@ -1,5 +1,8 @@
 # Does a power law actually fit? Results
 
+> **Annotated by `docs/123` §2.** The explanation of the exponent gap in the section "The exponent will not sit still" is wrong: Wright's n is ~20,000, not 1,000, and his estimator is OLS on a log-log histogram, not MLE. The drift measurement stands; its use to explain his 1.038 does not.
+
+
 `docs/113` is the design. **Five of seven predictions hold, one is
 refuted and one is split** — and the refutation is in the direction
 *against* the power law, not for it.

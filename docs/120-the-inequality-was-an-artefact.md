@@ -1,5 +1,8 @@
 # The inequality was an artefact of my own band
 
+> **Annotated by `docs/123` §3–4.** §4's "tension" (β = 1.078 vs 0.972, disagreement 0.106) is withdrawn: the 1.078 matched an MLE curve to Wright's OLS number, which our data cannot reproduce under his method. "Exactly 1.00" is grid resolution; interpolated 0.98–1.02. The joint argmin at β = 1 and the kurtosis-binds-from-above result stand.
+
+
 Corrects `docs/119` §6. No new runs; this re-reads the sweep already
 recorded, plus the β ∈ {2, 3, 5} extension.
 

@@ -1,5 +1,8 @@
 # The size-exponent sweep: results
 
+> **Annotated by `docs/123` §1.** §5–6 attribute the `drawn > market` clamp to Wright. It is ours; his draw is bounded by [0, V] by construction. The cap counts stand; the attribution and "safety check" framing are withdrawn.
+
+
 Measures `docs/118`. 20 values of β over [0, 1.5] × 50 seeds = 1000 runs,
 120-month burn-in then a 180-month window, fitted per seed at n ≈ 21,900.
 Reproduce with `python -m economy_lab.size_exponent out.json 50`.

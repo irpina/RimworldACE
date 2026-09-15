@@ -1,5 +1,8 @@
 # What we would put to Ian Wright
 
+> **Annotated by `docs/123`.** Point 1's claim that the gap is "the same estimator drifting" is wrong (§2). Point 6's attribution of a "guard line" to Wright is wrong and its closing question is withdrawn (§1). Point 7's "two facts want different strengths" is not established (§3); the joint argmin at β = 1 stands. Do not send this memo without those three corrections.
+
+
 A synthesis of `docs/111`–`docs/120`, ordered by what we think would
 matter most to the author of *The Social Architecture of Capitalism*.
 Everything here comes from a stdlib reimplementation of the nine rules
