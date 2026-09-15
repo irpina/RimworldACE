@@ -14,6 +14,20 @@ Three things, in the order they were built:
    where economic rules are made falsifiable before any game-runtime work.
    This is where the project is currently active.
 
+## Verifying the Wright results
+
+The economy laboratory includes a reimplementation of Ian Wright's
+*Social Architecture of Capitalism* and a series of measurements against
+it (`docs/111`-`docs/121`). To check that work rather than take it on
+trust:
+
+    python -m economy_lab.verify_wright     # ~60s, no dependencies
+
+Every check recomputes a figure and compares it against what the cited
+document claims; a FAIL means a document is wrong. `docs/122` gives the
+rest of the audit trail, including where a skeptical reader should push
+hardest.
+
 ## What happened to the original plan
 
 The brief proposed building an input-output graph from `DefDatabase<RecipeDef>`
