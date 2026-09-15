@@ -54,7 +54,7 @@ def run_cell(job):
 
 def sweep(seeds=50, processes=4):
     """Every rule against every seed, returned in (rule, seed) order."""
-    jobs = [(rule, seed) for rule in sa.MARKET_RULES for seed in range(seeds)]
+    jobs = [(rule, seed) for rule in sa.ABLATION_RULES for seed in range(seeds)]
     with Pool(processes) as pool:
         return pool.map(run_cell, jobs)
 

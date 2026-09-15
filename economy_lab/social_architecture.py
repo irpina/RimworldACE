@@ -47,7 +47,11 @@ NO_EMPLOYER = None
 #: The exchange rules M1 can use (docs/115).  A 2x2 over Wright's two
 #: named ingredients: revenue proportional to headcount (the law of
 #: value) and a random draw (contingency).
-MARKET_RULES = ("wright", "neutral", "fixed", "fixed_neutral")
+MARKET_RULES = ("wright", "neutral", "fixed", "fixed_neutral", "scaled")
+
+#: The four cells of the ``docs/115`` ablation, without the continuous
+#: ``"scaled"`` rule ``docs/118`` adds on top of them.
+ABLATION_RULES = ("wright", "neutral", "fixed", "fixed_neutral")
 
 
 @dataclass
@@ -120,6 +124,16 @@ class Economy:
     #: ingredients -- sampling frequency proportional to headcount (the
     #: law of value) and a random draw (contingency).
     market_rule: str = "wright"
+    #: The size exponent of ``docs/118``, used only by ``"scaled"``.
+    #: Expected revenue goes as ``members ** size_exponent``, so 1.0 is
+    #: ``"wright"`` and 0.0 is ``"neutral"`` -- both **bit-identically**,
+    #: which is why the scale is applied by dividing by
+    #: ``members ** (1.0 - size_exponent)`` rather than multiplying by
+    #: ``members ** (size_exponent - 1.0)``.  The multiplicative form
+    #: rounds ``1/members`` before multiplying and disagrees with
+    #: ``x / members`` on 23% of draws; the divisive form is exact at
+    #: both endpoints because ``m ** 1.0`` and ``m ** 0.0`` are.
+    size_exponent: float = 1.0
 
     money: List[float] = field(default_factory=list)
     employer: List[Optional[int]] = field(default_factory=list)
@@ -141,6 +155,14 @@ class Economy:
             raise ValueError("wage_min must not exceed wage_max")
         if self.market_rule not in MARKET_RULES:
             raise ValueError(f"unknown market rule {self.market_rule!r}")
+        if self.size_exponent < 0.0:
+            raise ValueError("size_exponent must not be negative")
+        if self.size_exponent != 1.0 and self.market_rule != "scaled":
+            # Otherwise it would sit there doing nothing, which is the
+            # kind of silent no-op docs/108 was written about.
+            raise ValueError(
+                "size_exponent applies only to the 'scaled' market rule; "
+                f"got {self.size_exponent!r} with {self.market_rule!r}")
         self.rng = random.Random(self.seed)
         # SR1: "Allocate M/N coins to each of the N actors.  Set e_i = 0
         # for all i (i.e. all actors are initially unemployed)."
@@ -321,6 +343,12 @@ class Economy:
                 drawn = self.rng.uniform(0.0, self.market) / members
             elif rule == "fixed":
                 drawn = self.market / self.actors
+            elif rule == "scaled":
+                # docs/118: expected revenue goes as members ** beta,
+                # because a firm is selected once per member per month on
+                # average and each draw is divided by this.
+                drawn = (self.rng.uniform(0.0, self.market)
+                         / members ** (1.0 - self.size_exponent))
             else:  # fixed_neutral
                 drawn = self.market / (self.actors * members)
         if drawn > self.market:

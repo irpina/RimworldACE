@@ -91,12 +91,15 @@ class TheAblationRemovesWhatItClaimsTest(unittest.TestCase):
         self.assertEqual(first.money, second.money)
 
     def test_all_four_rules_are_distinct_economies(self):
+        # ABLATION_RULES, not MARKET_RULES: "scaled" at its default
+        # exponent of 1.0 *is* "wright", so including it here would ask
+        # for five distinct outcomes from four distinct economies.
         outcomes = set()
-        for rule in sa.MARKET_RULES:
+        for rule in sa.ABLATION_RULES:
             economy = sa.Economy(seed=7, market_rule=rule)
             economy.run(120)
             outcomes.add((len(economy.firm_sizes()), max(economy.firm_sizes())))
-        self.assertEqual(len(outcomes), len(sa.MARKET_RULES))
+        self.assertEqual(len(outcomes), len(sa.ABLATION_RULES))
 
 
 if __name__ == "__main__":

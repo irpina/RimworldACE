@@ -17,7 +17,7 @@ def tiny(rule, seed):
 
 class TestRunCell(unittest.TestCase):
     def test_every_rule_has_a_label(self):
-        self.assertEqual(set(ablation.LABEL), set(sa.MARKET_RULES))
+        self.assertEqual(set(ablation.LABEL), set(sa.ABLATION_RULES))
 
     def test_a_cell_records_every_field_the_report_reads(self):
         record = ablation.run_cell(("wright", 0))
@@ -58,13 +58,13 @@ class TestDecompose(unittest.TestCase):
         self.assertAlmostEqual(effects["interaction_fraction"], 0.5)
 
     def test_a_flat_metric_reports_no_interaction_rather_than_dividing_by_zero(self):
-        means = {rule: 2.0 for rule in sa.MARKET_RULES}
+        means = {rule: 2.0 for rule in sa.ABLATION_RULES}
         self.assertEqual(ablation.decompose(means)["interaction_fraction"], 0.0)
 
 
 class TestReadings(unittest.TestCase):
     def setUp(self):
-        self.runs = [ablation.run_cell((rule, 0)) for rule in sa.MARKET_RULES]
+        self.runs = [ablation.run_cell((rule, 0)) for rule in sa.ABLATION_RULES]
 
     def test_pooled_reports_every_row_the_table_prints(self):
         row = ablation.pooled(self.runs, "wright")
