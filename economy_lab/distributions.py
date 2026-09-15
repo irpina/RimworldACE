@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 def to_wright(alpha_csn: float) -> float:
@@ -557,6 +557,78 @@ def exponential_goodness_of_fit(
             worse += 1
     return {
         "lambda": rate,
+        "ks": observed,
+        "p": worse / synthetics,
+        "rejected": worse / synthetics <= 0.1,
+    }
+
+
+def geometric_goodness_of_fit(
+    values: Sequence[float],
+    *,
+    synthetics: int = 1000,
+    seed: int = 0,
+) -> Optional[dict]:
+    """KS goodness of fit for a **geometric** distribution on 1, 2, 3, ...
+
+    The right null for Wright's fact 5.  Recession durations are whole
+    years, and testing integer data against a *continuous* exponential
+    inflates the KS distance mechanically -- the empirical CDF is a step
+    function the continuous fit cannot follow.  Measured, not assumed:
+    the same 481 durations give KS 0.4975 against a continuous
+    exponential and a fraction of that against the geometric, which is
+    the exponential's discrete analogue.
+
+    Reports the decay rate ``lambda = -ln(1 - p)``, which is what Wright's
+    log-linear histogram slope estimates.
+    """
+    counts = [int(round(value)) for value in values if value >= 1]
+    if len(counts) < 20:
+        return None
+    average = sum(counts) / len(counts)
+    if average <= 1.0:
+        return None
+    success = 1.0 / average
+
+    def distance(sample: Sequence[int]) -> float:
+        """Discrete KS: compared at each **distinct** value.
+
+        Comparing per observation instead inflates the statistic on tied
+        data -- with 318 of 481 durations equal to 1, the empirical CDF
+        is flat across 318 positions while the fitted one is a single
+        number, and the difference is an artifact of the loop rather than
+        of the fit.  The left-limit term of the continuous statistic is
+        dropped for the same reason: on a discrete support it compares
+        ``F(1)`` against an empirical zero and reports 0.69 for data
+        drawn from the very distribution being fitted.
+        """
+        count = len(sample)
+        tally: Dict[int, int] = {}
+        for value in sample:
+            tally[value] = tally.get(value, 0) + 1
+        worst = 0.0
+        cumulative = 0
+        for value in sorted(tally):
+            cumulative += tally[value]
+            empirical = cumulative / count
+            fitted = 1.0 - (1.0 - success) ** value
+            worst = max(worst, abs(empirical - fitted))
+        return worst
+
+    observed = distance(counts)
+    rng = random.Random(seed)
+    worse = 0
+    for _ in range(synthetics):
+        sample = [
+            1 + int(math.log(1.0 - rng.random()) / math.log(1.0 - success))
+            for _ in range(len(counts))
+        ]
+        if distance(sample) >= observed:
+            worse += 1
+    return {
+        "p_success": success,
+        "lambda": -math.log(1.0 - success),
+        "mean": average,
         "ks": observed,
         "p": worse / synthetics,
         "rejected": worse / synthetics <= 0.1,

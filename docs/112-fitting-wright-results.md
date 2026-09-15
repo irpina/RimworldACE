@@ -92,7 +92,15 @@ distinguishable on the evidence his paper presents** — his figure carries
 no confidence interval, because OLS on a log-log histogram does not
 produce one.
 
-## 4. The shapes all hold
+## 4. The shapes all hold — **qualified by `docs/114`**
+
+> **`docs/114` qualifies this section.** Firm size passes a goodness-of-fit
+> test in 64 of 100 seeds but **loses to a lognormal in 51 and beats it in
+> zero**, and its exponent drifts from 1.084 to 1.406 as the sample grows.
+> "The model generates Zipf's law of firm size" is not established by this
+> evidence. The recession result below is *strengthened* there: against a
+> geometric — the right null for whole-year durations — λ = 1.165 against
+> Wright's 1.22, not rejected.
 
 Facts 2, 3, 6 and 7 are qualitative in the paper and qualitative here:
 
@@ -142,9 +150,6 @@ is far finer than the exponent's confidence interval and moving it did
 not move the answer, but it is an approximation and it is recorded here
 rather than buried.
 
-The KS goodness-of-fit test with a synthetic bootstrap — CSN's step for
-asking whether a power law is the right family at all, not just what its
-exponent is — is **not** implemented. The KS distances are reported
-(0.0304 for firm size) but not converted to p-values. That is the
-remaining piece, and the honest statement today is that we have fitted
-power laws without testing whether power laws fit.
+~~The KS goodness-of-fit test with a synthetic bootstrap is not
+implemented.~~ **Done in `docs/113`/`docs/114`**, and it changed the
+reading: see the note in §4. The `x_min` grid cap above stands.

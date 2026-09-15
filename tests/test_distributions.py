@@ -205,3 +205,48 @@ class TheExponentialGoodnessOfFitTest(unittest.TestCase):
 
     def test_too_little_data_is_none(self):
         self.assertIsNone(D.exponential_goodness_of_fit([1.0, 2.0]))
+
+
+class TheGeometricGoodnessOfFitTest(unittest.TestCase):
+    """docs/114 section 4: the right null for integer durations."""
+
+    @staticmethod
+    def _geometric(rng, q, count):
+        return [
+            1 + int(math.log(1.0 - rng.random()) / math.log(q))
+            for _ in range(count)
+        ]
+
+    def test_true_geometric_data_is_not_rejected(self):
+        rng = random.Random(5)
+        result = D.geometric_goodness_of_fit(
+            self._geometric(rng, 0.31, 481), synthetics=400, seed=2
+        )
+        self.assertGreater(result["p"], 0.1)
+
+    def test_the_statistic_is_small_on_true_data(self):
+        # The regression this pins: carrying the continuous statistic's
+        # left-limit term onto a discrete support compares F(1) against an
+        # empirical zero and reported KS 0.6881 for data drawn from the
+        # very distribution being fitted (docs/114 section 4).
+        rng = random.Random(5)
+        result = D.geometric_goodness_of_fit(
+            self._geometric(rng, 0.31, 481), synthetics=100, seed=2
+        )
+        self.assertLess(result["ks"], 0.05)
+
+    def test_a_uniform_sample_is_rejected(self):
+        rng = random.Random(5)
+        values = [1 + int(rng.random() * 5) for _ in range(481)]
+        result = D.geometric_goodness_of_fit(values, synthetics=400, seed=2)
+        self.assertLessEqual(result["p"], 0.1)
+
+    def test_the_decay_rate_is_reported(self):
+        rng = random.Random(5)
+        result = D.geometric_goodness_of_fit(
+            self._geometric(rng, 0.31, 2000), synthetics=50, seed=2
+        )
+        # lambda = -ln(1 - p) for the fitted success probability.
+        self.assertAlmostEqual(
+            result["lambda"], -math.log(1.0 - result["p_success"]), places=9
+        )
