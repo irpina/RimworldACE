@@ -33,6 +33,7 @@ per employment, and §2.6 defends the simplification.
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -41,6 +42,56 @@ from typing import Dict, List, Optional, Set, Tuple
 #: unemployed carry it; what separates them is whether anyone carries
 #: *their* index.
 NO_EMPLOYER = None
+
+
+@dataclass
+class History:
+    """What Wright's seven measures need, recorded as the run goes.
+
+    The instrument was a state machine with no memory; four of the seven
+    facts are about events over time (docs/111 section 1).  Firm sizes
+    are pooled across every month, which is what his section 3.2 does --
+    "data collected over 15 simulated years" -- and what makes the
+    exponent an estimate rather than a snapshot.
+    """
+
+    #: Fact 1, every firm's size at every month end, pooled.
+    firm_sizes: List[int] = field(default_factory=list)
+    #: Fact 4, one count per month.
+    demises_per_month: List[int] = field(default_factory=list)
+    #: Facts 3 and 5, one gross M1 total per year.
+    gdp: List[float] = field(default_factory=list)
+    #: Fact 2, log size ratios, one per trading firm per year.
+    firm_growth: List[float] = field(default_factory=list)
+    #: Fact 6, one income per actor per year.
+    incomes: List[float] = field(default_factory=list)
+    #: Fact 7, one rate per firm trading at each year close.
+    profit_rates: List[float] = field(default_factory=list)
+    #: The shares, yearly.
+    wage_shares: List[float] = field(default_factory=list)
+
+    def gdp_growth(self) -> List[float]:
+        """Log GDP growth, ``ln(X_t / X_{t-1})``."""
+        return [
+            math.log(self.gdp[i] / self.gdp[i - 1])
+            for i in range(1, len(self.gdp))
+            if self.gdp[i] > 0.0 and self.gdp[i - 1] > 0.0
+        ]
+
+    def recessions(self) -> List[int]:
+        """Durations in years.  Wright: a recession begins when
+        ``X_t/X_{t-1} < 1`` and ends when ``X_{t+k}/X_{t+k-1} >= 1``."""
+        durations: List[int] = []
+        running = 0
+        for i in range(1, len(self.gdp)):
+            if self.gdp[i] < self.gdp[i - 1]:
+                running += 1
+            elif running:
+                durations.append(running)
+                running = 0
+        if running:
+            durations.append(running)
+        return durations
 
 
 @dataclass
@@ -68,6 +119,12 @@ class Economy:
     wages_paid: List[float] = field(default_factory=list)
     revenue: List[float] = field(default_factory=list)
 
+    #: Whether to record the history Wright's seven measures need
+    #: (docs/111).  Off by default: recording allocates and appends but
+    #: never touches the RNG, so a recorded run and an unrecorded one
+    #: follow identical trajectories.
+    record: bool = False
+
     def __post_init__(self) -> None:
         if not self.wage_min <= self.wage_max:
             raise ValueError("wage_min must not exceed wage_max")
@@ -81,6 +138,18 @@ class Economy:
         self._staff: Dict[int, Set[int]] = {}
         self.wages_paid = [0.0] * self.actors
         self.revenue = [0.0] * self.actors
+        #: Gross M1 receipts for the year, *before* wages.  Facts 3 and 7
+        #: need revenue gross; ``revenue`` above is already net of the
+        #: wage bill because ``_pay`` subtracts from it (docs/111 s2).
+        self.year_gross = [0.0] * self.actors
+        self.year_wages_out = [0.0] * self.actors
+        self.year_wages_in = [0.0] * self.actors
+        #: Demises in the month in progress: firms that fired everybody.
+        self.month_demises = 0
+        self.months_elapsed = 0
+        self.history = History() if self.record else None
+        self._traded_this_year: Set[int] = set()
+        self._previous_year_sizes: Dict[int, int] = {}
 
     @property
     def average_wage(self) -> float:
@@ -223,6 +292,7 @@ class Economy:
         owner = self.employer[a] if self.employer[a] is not None else a
         self.money[owner] += drawn
         self.revenue[owner] += drawn
+        self.year_gross[owner] += drawn
 
     def _fire(self, a: int) -> None:
         """F1(a), the one deterministic rule.
@@ -250,8 +320,14 @@ class Economy:
         if surplus <= 0:
             return
         doomed = self.rng.sample(sorted(staff), surplus)
+        emptied = surplus == len(staff)
         for worker in doomed:
             self._detach(worker)
+        if emptied:
+            # Wright: "A firm demise occurs when a firm fires all its
+            # employees" -- so a firm that loses its last employee to a
+            # rival's H1 poach is not a demise (docs/111 section 2).
+            self.month_demises += 1
 
     def _pay(self, a: int) -> None:
         """W1(a).  "For each actor c in a's employee set" -- so wages are
@@ -279,6 +355,8 @@ class Economy:
             self.money[c] += due
             self.wages_paid[c] += due
             self.revenue[a] -= due
+            self.year_wages_out[a] += due
+            self.year_wages_in[c] += due
 
     def step(self) -> None:
         """SR1, in the paper's order: select, hire, spend, sample, fire,
@@ -296,8 +374,79 @@ class Economy:
         paid once per month"."""
         self.wages_paid = [0.0] * self.actors
         self.revenue = [0.0] * self.actors
+        self.month_demises = 0
         for _ in range(self.actors):
             self.step()
+        self.months_elapsed += 1
+        if self.history is not None:
+            self._observe_month()
+
+    def start_recording(self) -> None:
+        """Begin a fresh history at a year boundary (docs/111).
+
+        Wright pools firm sizes over "15 simulated years", which is a
+        window on a model already in its stationary state -- so the
+        harness runs a burn-in with recording off and calls this before
+        the measured window.  The year accumulators are cleared so the
+        first recorded year is a whole one.
+        """
+        self.record = True
+        self.history = History()
+        self.months_elapsed = 0
+        self.month_demises = 0
+        self._traded_this_year = set()
+        self._previous_year_sizes = {}
+        self.year_gross = [0.0] * self.actors
+        self.year_wages_out = [0.0] * self.actors
+        self.year_wages_in = [0.0] * self.actors
+
+    def _observe_month(self) -> None:
+        """Record the month, and close the year every twelfth (docs/111)."""
+        history = self.history
+        sizes = {owner: len(staff) for owner, staff in self._staff.items() if staff}
+        history.firm_sizes.extend(sizes.values())
+        history.demises_per_month.append(self.month_demises)
+        self._traded_this_year.update(sizes)
+        if self.months_elapsed % 12:
+            return
+
+        # Fact 3: GDP is the year's total M1 receipts, gross.
+        gross = sum(self.year_gross)
+        history.gdp.append(gross)
+
+        # Fact 7: the profit rate of each firm trading at the close.
+        for owner in sorted(sizes):
+            wages = self.year_wages_out[owner]
+            if wages > 0.0:
+                history.profit_rates.append(
+                    100.0 * (self.year_gross[owner] / wages - 1.0)
+                )
+
+        # Fact 2: growth for every firm that traded at some point, with
+        # Wright's convention that a firm entering or leaving counts one.
+        for owner in sorted(self._traded_this_year):
+            now = sizes.get(owner, 1)
+            before = self._previous_year_sizes.get(owner, 1)
+            if before > 0 and now > 0:
+                history.firm_growth.append(math.log(now / before))
+
+        # Fact 6: each actor's income for the year, wages plus profit.
+        for actor in range(self.actors):
+            income = self.year_wages_in[actor] + (
+                self.year_gross[actor] - self.year_wages_out[actor]
+            )
+            history.incomes.append(income)
+
+        # The shares, on the same yearly basis as Wright's figure 7.
+        wage_total = sum(self.year_wages_in)
+        if gross > 0.0:
+            history.wage_shares.append(wage_total / gross)
+
+        self._previous_year_sizes = dict(sizes)
+        self._traded_this_year = set()
+        self.year_gross = [0.0] * self.actors
+        self.year_wages_out = [0.0] * self.actors
+        self.year_wages_in = [0.0] * self.actors
 
     def year(self) -> None:
         """Rule 1Y: twelve months, the accounting period."""
