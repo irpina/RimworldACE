@@ -163,6 +163,12 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
         first = regions[0]
         authored = sum(base * first.prices[name]
                        for name, base in first.base_daily_demand.items())
+        if first.cash <= 0.0:
+            # Seeding the purses took the whole fund (docs/135 sweep A):
+            # a refusal of the same kind as a payroll it cannot cover.
+            raise RuntimeError(
+                f"region {first.name!r} has no silver left after seeding purses"
+            )
         economy.fund_spending_rate = authored / first.cash
     return economy
 
@@ -197,11 +203,12 @@ def measure_ours(seed, **knobs):
     """Our model, through the identical instrument.  A run the model
     refuses (payroll it cannot cover) is returned as a record with
     ``error`` set and nothing else, so a sweep can score the refusal."""
-    economy = build_ours(seed, **knobs)
     try:
+        economy = build_ours(seed, **knobs)
         economy.step(MONTH * BURN_IN_MONTHS)
     except RuntimeError as failure:
-        return {"model": "ours", "seed": seed, "error": str(failure), "day": economy.day}
+        return {"model": "ours", "seed": seed, "error": str(failure),
+                "day": getattr(economy, "day", 0) if "economy" in locals() else 0}
     labor_pool = LABOR_POOL_PER_DEMAND * knobs.get("demand", DEMAND)
 
     def totals():
