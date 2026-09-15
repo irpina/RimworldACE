@@ -1,267 +1,289 @@
-"""Wright's social-architecture model, as an instrument for docking.
+"""Wright's Social Relations model, transcribed from the paper.
 
 Ian Wright, *The social architecture of capitalism*, Physica A **346**
-(2005) 589-620.  This module exists to audit our own model's *wiring*
-against his (``docs/97``), not to become part of it.  It imports nothing
-from :mod:`economy_lab.model` and nothing outside the standard library,
-and no rule here can reach the laboratory's behaviour.
+(2005) 589-620 (arXiv:cond-mat/0401053v2).  This module exists to audit
+our own model's *wiring* against his (``docs/97``), not to become part of
+it.  It imports nothing from :mod:`economy_lab.model` and nothing outside
+the standard library, and no rule here can reach the laboratory's
+behaviour.
 
-**This is a reconstruction, not a transcription.**  ``docs/97`` section 0
-grades what could be obtained: the ontology, the three parameters, the
-nine rules' *names* and their order are corroborated across sources; the
-exact body of each rule is **not**, because every full-text route was
-blocked by the egress proxy.  The bodies below are the most natural
-reading of the corroborated description, and they are marked
-``RECONSTRUCTED`` where that is so.  Until the paper is read, results from
-this module are evidence about *an SA-family model*, and become evidence
-about *Wright's* model only once each body is checked.  No exponent from
-here may be reported as agreeing with Wright before then.
+**This is now a transcription, not a reconstruction.**  ``docs/97`` §0
+graded the rule bodies *unobtained* and the first version of this module
+guessed them; ``docs/100`` records the six places the guess was wrong and
+what each cost.  The bodies below are the paper's, and each carries the
+rule's own label so it can be checked line by line against §2 of the
+paper.
 
-Money is integer coins throughout.  Every rule is a transfer of coins
-between two accounts, so conservation is exact rather than approximate --
-which is the point of a model whose whole content is who may take money
-from whom.
+Wright's ontology, from §2:
+
+* ``m[i]`` -- actor *i*'s money, a **real** number in coins.  The total is
+  a constant ``M``; with the market pool ``V`` holding what has been spent
+  and not yet earned, ``sum(m) + V == M`` at every step.
+* ``employer[i]`` -- the integer employer index ``e_i``, with
+  ``0 <= e_i <= N`` and ``e_i != i``.  Here ``None`` stands for the
+  paper's ``0``.
+* The three classes are **derived**, never assigned: a capitalist has
+  employees and no employer, a worker has an employer, an unemployed
+  actor has neither.
+
+Wages are drawn from the *discrete* interval ``[wage_min, wage_max]``
+afresh at every payment -- the paper is explicit that wages are not fixed
+per employment, and §2.6 defends the simplification.
 """
 
 from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
-#: An actor's employer index means: ``None`` -- unemployed; ``i`` itself --
-#: the owner of a firm; any other ``j`` -- an employee of ``j``.
-UNEMPLOYED = None
+#: The paper's ``e_i = 0``: no employer.  Both capitalists and the
+#: unemployed carry it; what separates them is whether anyone carries
+#: *their* index.
+NO_EMPLOYER = None
 
 
 @dataclass
 class Economy:
-    """N actors, M coins, and a wage interval.  Wright's three parameters.
+    """The SR model: ``N`` actors, ``M`` coins, and a wage interval.
 
-    ``seed`` makes a run reproducible; the model is stochastic by design,
-    so a run is a draw and a *result* is a property of many draws or of a
-    long one.
+    Wright's three parameters, at the paper's reported values -- "In all
+    reported results, N = 1000 and M = 100000 ... the wage interval is set
+    to omega = [10, 90]" (§3), so the average wealth is 100 coins and the
+    average wage 50, half the mean wealth.
     """
 
     actors: int = 1000
-    coins: int = 100_000
-    wage_max: int = 100
+    coins: float = 100_000.0
+    wage_min: int = 10
+    wage_max: int = 90
     seed: int = 0
 
-    #: Which actors may be drawn as the hirer (``docs/98`` section 3).
-    #: ``"owners"`` -- only an actor who could own a firm, i.e. an employer
-    #: or an unemployed actor.  Attachment is then proportional to the
-    #: owner's wealth alone, which grows about linearly with firm size.
-    #: ``"all"`` -- employees too, so a firm is drawn in proportion to its
-    #: size *and* its owner's wealth.  That is super-linear preferential
-    #: attachment, and it does not produce a power law; it produces a
-    #: monopoly.  Which one Wright intends is **unobtained**.
-    candidate_pool: str = "owners"
-
-    #: What the firing rule tests the wage bill against (``docs/98`` s.3).
-    #: ``"revenue"`` -- the firm's takings over the trailing month, which
-    #: is the corroborated wording ("if *current revenues* do not cover
-    #: the expected wage bill").  ``"funds"`` -- the owner's whole purse,
-    #: which lets an owner who has accumulated one buffer indefinitely and
-    #: sends the model to monopoly.
-    firing_test: str = "revenue"
-
-    money: List[int] = field(default_factory=list)
+    money: List[float] = field(default_factory=list)
     employer: List[Optional[int]] = field(default_factory=list)
-    wage: List[int] = field(default_factory=list)
-    market: int = 0
+    market: float = 0.0
     steps: int = 0
 
     #: Flows for the month in progress, reset by :meth:`month`.
-    wages_paid: List[int] = field(default_factory=list)
-    profit: List[int] = field(default_factory=list)
+    wages_paid: List[float] = field(default_factory=list)
+    revenue: List[float] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        if not self.wage_min <= self.wage_max:
+            raise ValueError("wage_min must not exceed wage_max")
         self.rng = random.Random(self.seed)
-        share = self.coins // self.actors
+        # SR1: "Allocate M/N coins to each of the N actors.  Set e_i = 0
+        # for all i (i.e. all actors are initially unemployed)."
+        share = self.coins / self.actors
         self.money = [share] * self.actors
-        # Any remainder from the division sits in the market pool rather
-        # than being silently lost, so `total_coins` is exactly `coins`.
-        self.market = self.coins - share * self.actors
-        self.employer = [UNEMPLOYED] * self.actors
-        self.wage = [0] * self.actors
-        self.wages_paid = [0] * self.actors
-        self.profit = [0] * self.actors
-        self._staff: Dict[int, set] = {}
-        self.revenue = [0] * self.actors
+        self.employer = [NO_EMPLOYER] * self.actors
+        self.market = 0.0
+        self._staff: Dict[int, Set[int]] = {}
+        self.wages_paid = [0.0] * self.actors
+        self.revenue = [0.0] * self.actors
+
+    @property
+    def average_wage(self) -> float:
+        """``<w> = (w_a + w_b) / 2``."""
+        return (self.wage_min + self.wage_max) / 2.0
 
     # ------------------------------------------------------------ state
 
-    def total_coins(self) -> int:
-        """Every coin in the model.  Invariant under every rule."""
+    def total_coins(self) -> float:
+        """``sum(m) + V``.  Invariant at ``M`` under every rule."""
         return sum(self.money) + self.market
 
     def employees(self, owner: int) -> List[int]:
-        return list(self._staff.get(owner, ()))
+        return sorted(self._staff.get(owner, ()))
 
     def _attach(self, worker: int, owner: int) -> None:
         self.employer[worker] = owner
-        if worker != owner:
-            self._staff.setdefault(owner, set()).add(worker)
+        self._staff.setdefault(owner, set()).add(worker)
 
     def _detach(self, worker: int) -> None:
         owner = self.employer[worker]
-        if owner is not None and owner != worker:
+        if owner is not None:
             staff = self._staff.get(owner)
             if staff is not None:
                 staff.discard(worker)
-        self.employer[worker] = UNEMPLOYED
-        self.wage[worker] = 0
+                if not staff:
+                    # "existing firms may cease trading when all employees
+                    # are fired and the capitalist owner enters the
+                    # unemployed class" -- which here is automatic: an
+                    # actor with no employees and no employer is in U.
+                    del self._staff[owner]
+        self.employer[worker] = NO_EMPLOYER
+
+    def is_capitalist(self, i: int) -> bool:
+        """``C = {x : W_x != {} and e_x = 0}``."""
+        return bool(self._staff.get(i)) and self.employer[i] is None
+
+    def is_worker(self, i: int) -> bool:
+        """``W = {x : W_x = {} and e_x != 0}``."""
+        return self.employer[i] is not None
+
+    def is_unemployed(self, i: int) -> bool:
+        """``U = {x : W_x = {} and e_x = 0}``."""
+        return self.employer[i] is None and not self._staff.get(i)
 
     def firm_sizes(self) -> List[int]:
-        """Employees plus owner, for every firm currently trading."""
-        counts: Dict[int, int] = {}
-        for i, e in enumerate(self.employer):
-            if e is not None:
-                counts[e] = counts.get(e, 0) + 1
-        return sorted(counts.values(), reverse=True)
-
-    def check_staff_index(self) -> bool:
-        """The maintained index agrees with a scan of ``employer``."""
-        scanned: Dict[int, set] = {}
-        for i, e in enumerate(self.employer):
-            if e is not None and e != i:
-                scanned.setdefault(e, set()).add(i)
-        live = {k: v for k, v in self._staff.items() if v}
-        return live == scanned
+        """Employees per trading firm.  The paper counts the employees;
+        the owner is a capitalist, not an employee."""
+        return sorted(
+            (len(s) for s in self._staff.values() if s), reverse=True
+        )
 
     def classes(self) -> Tuple[int, int, int]:
-        """``(employers, employees, unemployed)`` -- emergent, not assigned."""
-        owners = {e for i, e in enumerate(self.employer) if e is not None}
-        employers = len(owners)
-        employed = sum(
-            1
-            for i, e in enumerate(self.employer)
-            if e is not None and i not in owners
-        )
-        return employers, employed, self.actors - employers - employed
+        """``(capitalists, workers, unemployed)`` -- derived, not assigned."""
+        capitalists = sum(1 for s in self._staff.values() if s)
+        workers = sum(1 for e in self.employer if e is not None)
+        return capitalists, workers, self.actors - capitalists - workers
 
     def unemployment_rate(self) -> float:
         return self.classes()[2] / self.actors
 
+    def check_staff_index(self) -> bool:
+        """The maintained index agrees with a scan of ``employer``."""
+        scanned: Dict[int, Set[int]] = {}
+        for i, e in enumerate(self.employer):
+            if e is not None:
+                scanned.setdefault(e, set()).add(i)
+        return {k: v for k, v in self._staff.items() if v} == scanned
+
     # ------------------------------------------------------------ rules
 
-    def _hire(self, a: int) -> None:
-        """H1 -- RECONSTRUCTED.
+    def _select(self) -> int:
+        """S1: "Randomly select an actor a from the set A according to a
+        uniform distribution." """
+        return self.rng.randrange(self.actors)
 
-        An unemployed actor looks for work.  The hirer is drawn from every
-        actor able to advance a wage, with probability proportional to the
-        money it holds -- which is what makes a large firm more likely to
-        grow than a small one, and is the candidate mechanism for the
-        power-law firm size.  If the actor drawn is itself unemployed, a
-        new firm is born; this is the "with lower probability, two
-        unemployed actors form a small firm" branch, and it falls out of
-        the same draw rather than needing a rule of its own.
+    def _hire(self, a: int) -> None:
+        """H1(a).
+
+        (a) ``H = {x : e_x = 0} = C u U`` -- the non-workers.  ``a``
+            itself is excluded: the state constraint ``e_i != i`` forbids
+            self-employment, and §2.4 says so in words.
+        (b) ``P(c) = m_c / sum(m_x for x in H)`` -- weighted by wealth,
+            "a stochastic bias that represents the tendency of firm growth
+            to depend on accumulation of capital out of current profits".
+        (c) **The threshold is tested after the draw, not before it.**
+            If the actor drawn cannot cover the average wage, no hire
+            happens this step -- the vacancy is not passed to someone who
+            can. Filtering first instead is ``docs/100``'s error 1.
         """
-        if self.employer[a] is not None:
+        if not self.is_unemployed(a):
             return
-        # "All employers hire if they have sufficient ex ante funds to
-        # pay the average wage" -- the mean of the interval, not its top.
-        # Against `wage_max` the model deadlocks at a symmetric start:
-        # every actor holds exactly the mean and nobody clears the bar.
-        threshold = self.wage_max / 2.0
-        if self.candidate_pool == "owners":
-            pool = (
-                c
-                for c in range(self.actors)
-                if self.employer[c] is None or self.employer[c] == c
-            )
-        elif self.candidate_pool == "all":
-            pool = range(self.actors)
-        else:
-            raise ValueError(f"unknown candidate_pool {self.candidate_pool!r}")
         candidates = [
-            c for c in pool if c != a and self.money[c] > threshold
+            x
+            for x in range(self.actors)
+            if x != a and self.employer[x] is None
         ]
         if not candidates:
             return
-        weights = [self.money[c] for c in candidates]
-        hirer = self.rng.choices(candidates, weights=weights, k=1)[0]
-        if self.employer[hirer] is None:
-            # A new firm: the hirer becomes its owner.
-            self._attach(hirer, hirer)
-        # If the actor drawn is somebody's employee, its employer hires.
-        owner = self.employer[hirer]
-        self._attach(a, owner)
-        self.wage[a] = self.rng.randint(1, self.wage_max)
+        weights = [self.money[x] for x in candidates]
+        if sum(weights) <= 0.0:
+            return
+        c = self.rng.choices(candidates, weights=weights, k=1)[0]
+        if self.money[c] > self.average_wage:
+            self._attach(a, c)
 
     def _spend(self, a: int) -> None:
-        """E1 -- RECONSTRUCTED.  Money leaves an actor for the common pool
-        of latent demand.  Nobody spends *at* anybody: what a firm earns
-        is not what its own customers paid it, which is the model's way of
-        saying that a sale is social before it is bilateral."""
-        if self.money[a] <= 0:
+        """E1(a).
+
+        (1) "Randomly select a consumer actor **b from the set A - {a}**"
+            -- the spender is *not* the active actor.  Spending from ``a``
+            instead is ``docs/100``'s error 2.
+        (2) ``m ~ U[0, m_b]``.
+        (3) ``m_b -= m; V += m``.
+        """
+        if self.actors < 2:
             return
-        spend = self.rng.randint(1, self.money[a])
-        self.money[a] -= spend
+        b = self.rng.randrange(self.actors - 1)
+        if b >= a:
+            b += 1
+        if self.money[b] <= 0.0:
+            return
+        spend = self.rng.uniform(0.0, self.money[b])
+        self.money[b] -= spend
         self.market += spend
 
     def _sample(self, a: int) -> None:
-        """M1 -- RECONSTRUCTED.  An actor in a firm draws revenue from the
-        pool to its owner, bounded by what the pool happens to hold.  This
-        is the sense in which an employee "adds value": the firm's income
-        scales with how many actors draw for it, and is a *draw* rather
-        than a certainty."""
-        owner = self.employer[a]
-        if owner is None or self.market <= 0:
+        """M1(a).  "If a is not unemployed": draw ``m ~ U[0, V]`` and
+        transfer it to the firm's owner -- to ``e_a`` if ``a`` is an
+        employee, to ``a`` itself if ``a`` is a capitalist.
+
+        A firm therefore samples the market once per member per month on
+        average, which is the model's "weak formulation of the law of
+        value": revenue is statistically linear in labour expended.
+        """
+        if self.is_unemployed(a) or self.market <= 0.0:
             return
-        sample = self.rng.randint(1, self.market)
-        self.market -= sample
-        self.money[owner] += sample
-        self.profit[owner] += sample
-        self.revenue[owner] += sample
+        drawn = self.rng.uniform(0.0, self.market)
+        self.market -= drawn
+        owner = self.employer[a] if self.employer[a] is not None else a
+        self.money[owner] += drawn
+        self.revenue[owner] += drawn
 
     def _fire(self, a: int) -> None:
-        """F1 -- RECONSTRUCTED.  The solvency constraint, and the whole
-        reason firm death is endogenous here: an owner whose funds do not
-        cover the wage bill sheds employees until they do, and an owner
-        with nobody left stops trading.
+        """F1(a), the one deterministic rule.
 
-        This is the rule ``docs/97`` A3 says our lab has no counterpart
-        for."""
-        owner = self.employer[a]
-        if owner is None:
+        ``u = max(|W_a| - floor(m_a / <w>), 0)``, then ``u`` employees
+        chosen uniformly are released.
+
+        **The test is against ``m_a``, the firm's money holdings** -- what
+        it has, not what it earned this month. The paper's prose in §2.7
+        says "if current revenues do not cover the expected wage bill",
+        and that loose sentence is what every secondary source quotes; the
+        formal rule is the floor above. Testing against trailing revenue
+        instead is ``docs/100``'s error 3, and it was chosen in `docs/98`
+        because it reproduced Wright's *results* -- from the wrong rule.
+
+        Note also that the bill is reckoned at the **average** wage, not
+        at what these particular employees will be paid: wages are redrawn
+        at every payment, so there is no such thing as their wage.
+        """
+        staff = self._staff.get(a)
+        if not staff or self.employer[a] is not None:
             return
-        staff = self.employees(owner)
-        staff.sort()
-        if self.firing_test == "revenue":
-            available = self.revenue[owner]
-        elif self.firing_test == "funds":
-            available = self.money[owner]
-        else:
-            raise ValueError(f"unknown firing_test {self.firing_test!r}")
-        while staff and available < sum(self.wage[i] for i in staff):
-            fired = staff.pop(self.rng.randrange(len(staff)))
-            self._detach(fired)
-        if not staff:
-            # The firm ceases trading; its owner rejoins the unemployed.
-            self.employer[owner] = UNEMPLOYED
-            self._staff.pop(owner, None)
+        affordable = int(self.money[a] // self.average_wage)
+        surplus = len(staff) - affordable
+        if surplus <= 0:
+            return
+        doomed = self.rng.sample(sorted(staff), surplus)
+        for worker in doomed:
+            self._detach(worker)
 
     def _pay(self, a: int) -> None:
-        """W1 -- RECONSTRUCTED.  The owner advances the wage out of its own
-        funds.  A month is N steps and each actor is selected about once,
-        so a wage is paid about once a month."""
-        owner = self.employer[a]
-        if owner is None or owner == a:
+        """W1(a).  "For each actor c in a's employee set" -- so wages are
+        paid when the **employer** is the active actor, and the whole
+        payroll goes out at once. Paying each employee on its own
+        activation instead is ``docs/100``'s error 4.
+
+        Each wage is drawn afresh from the discrete interval
+        ``[w_a, w_b]``; if the employer cannot cover it, the wage is drawn
+        from ``[0, m_a]`` and partial payment is made rather than none.
+        """
+        staff = self._staff.get(a)
+        if not staff:
             return
-        due = self.wage[a]
-        if due <= 0 or self.money[owner] < due:
-            return
-        self.money[owner] -= due
-        self.money[a] += due
-        self.wages_paid[a] += due
-        self.profit[owner] -= due
+        for c in sorted(staff):
+            due = float(self.rng.randint(self.wage_min, self.wage_max))
+            if self.money[a] < due:
+                cap = int(self.money[a])
+                due = float(self.rng.randint(0, cap)) if cap >= 0 else 0.0
+                if due > self.money[a]:
+                    due = self.money[a]
+            if due <= 0.0:
+                continue
+            self.money[a] -= due
+            self.money[c] += due
+            self.wages_paid[c] += due
+            self.revenue[a] -= due
 
     def step(self) -> None:
-        """One application of the simulation rule, in Wright's order:
-        select, hire, spend, sample, fire, pay."""
-        a = self.rng.randrange(self.actors)
+        """SR1, in the paper's order: select, hire, spend, sample, fire,
+        pay."""
+        a = self._select()
         self._hire(a)
         self._spend(a)
         self._sample(a)
@@ -270,12 +292,17 @@ class Economy:
         self.steps += 1
 
     def month(self) -> None:
-        """N applications of the rule (Wright's definition of a month)."""
-        self.wages_paid = [0] * self.actors
-        self.profit = [0] * self.actors
-        self.revenue = [0] * self.actors
+        """Rule 1M: N applications of SR1, "so that on average wages are
+        paid once per month"."""
+        self.wages_paid = [0.0] * self.actors
+        self.revenue = [0.0] * self.actors
         for _ in range(self.actors):
             self.step()
+
+    def year(self) -> None:
+        """Rule 1Y: twelve months, the accounting period."""
+        for _ in range(12):
+            self.month()
 
     def run(self, months: int) -> None:
         for _ in range(months):
@@ -283,12 +310,22 @@ class Economy:
 
     # -------------------------------------------------------- readings
 
-    def incomes(self) -> List[int]:
-        """The month's income per actor: wages for employees, the residual
-        of draws over the wage bill for owners."""
+    def incomes(self) -> List[float]:
+        """The month's income per actor: wages for workers, revenue net of
+        the wage bill for capitalists.  §3: "wage income (from rule W1)
+        and capitalist income (from rule M1) are counted as income"."""
         return [
-            self.wages_paid[i] + self.profit[i] for i in range(self.actors)
+            self.wages_paid[i] + self.revenue[i] for i in range(self.actors)
         ]
+
+    def wage_share(self) -> Optional[float]:
+        """Wages over national income for the month -- the reading
+        ``docs/99`` shows our own model cannot move for quantity
+        reasons."""
+        total = sum(self.incomes())
+        if total <= 0.0:
+            return None
+        return sum(self.wages_paid) / total
 
 
 # ------------------------------------------------------------ statistics
@@ -318,12 +355,7 @@ def top_share(values: List[float], fraction: float = 0.1) -> float:
 
 
 def hill(values: List[float], tail: float = 0.1) -> Optional[float]:
-    """Hill estimator of the Pareto tail index over the top ``tail``.
-
-    Returned as a bare number.  ``docs/97`` section 0 forbids reporting it
-    as agreeing with Wright's exponent until the paper is read; it is here
-    to say whether a tail is heavy at all, not to match a figure.
-    """
+    """Hill estimator of the Pareto tail index over the top ``tail``."""
     import math
 
     xs = sorted((v for v in values if v > 0.0), reverse=True)

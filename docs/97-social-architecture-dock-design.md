@@ -14,6 +14,12 @@ already found one divergence: our producers cannot fail from the wage
 side, because `_pay_wages` tops up from the regional fund any purse that
 cannot pay.**
 
+**Closed by `docs/100`.** §0's **unobtained** row is closed: the paper
+was supplied and the rule bodies are now transcribed. Six of them were
+guessed wrong, and §0's own warning — that results from a reconstruction
+are evidence about an SA-family model and not about Wright's — was
+correct and was not heeded strongly enough in `docs/98` §3.
+
 **Corrected by `docs/98`.** The headline's second sentence overstated the
 finding. The fund's top-up branch is real, but measurement shows it is
 **never taken**: `fund_wage_support` totals 1e-13 across every committed

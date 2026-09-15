@@ -5,6 +5,14 @@ two failed, one passed by half, and one of the failures corrects
 `docs/97`'s own headline. **After `docs/99`: six passed, two failed** —
 see the banner below.
 
+**Corrected by `docs/100`.** §3 of this document is **refuted**. The
+paper arrived; Wright's rule F1 fires against the firm's *money
+holdings*, which is the rule §3 rejected, and his model is stationary
+with a persistent reserve army. The rule §3 adopted — firing against
+trailing revenue — collapses the transcription to 27 firms and 50%
+unemployment. "One rule decides whether a capitalist economy has a
+reserve army at all" is **withdrawn**. §2's lab-side audit is unaffected.
+
 **Corrected by `docs/99`.** The headline below is **wrong**. The wage
 share does move — 4.2% of its level over a demand boom — and the
 measurement that said otherwise was taken on four scenarios where
@@ -41,7 +49,7 @@ more honest finding than the design document asserted.
 | 3 | A3 fails: 0 deaths by wage bill, exits positive | **pass** |
 | 4 | A5 fails: `labor_pool` is `inf` in every scenario | **fail** — it is `1.0` |
 | 5 | A6 holds: shares sum to 1 *and* fluctuate ≥1% | ~~**half**~~ → **pass** (`docs/99`) |
-| 6 | SA reference reproduces facts 1 and 6 | **pass**, after three failed reconstructions |
+| 6 | SA reference reproduces facts 1 and 6 | **pass** — re-established on the paper's own rules (`docs/100`) |
 | 7 | SA self-organises into three classes, employers <20% | **pass** |
 | 8 | SA conserves money to the bit | **pass** |
 | 9 | `baseline` reports 322 metrics unchanged | **pass** |
@@ -156,6 +164,12 @@ business cycle, such as it is, is a cycle in *quantities* with a frozen
 distribution. Wright's is a cycle in the distribution itself.
 
 ## 3. The instrument, and three failed reconstructions
+
+> **Refuted by `docs/100`.** Six rule bodies were wrong, not three, and
+> the one this section settles on — firing against trailing revenue — is
+> not Wright's. Kept as written so the error stays legible; read
+> `docs/100` §2 for the six, and §4 for which of them did the damage
+> (none alone: the monopoly needed the whole broken combination).
 
 `economy_lab/social_architecture.py`: Wright's model, stdlib only,
 integer coins, deterministic under a seed, importing nothing from
