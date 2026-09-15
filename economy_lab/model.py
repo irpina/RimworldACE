@@ -809,6 +809,13 @@ class Ledger:
     liquidity_curtailment: Dict[str, float] = field(default_factory=dict)
     fund_wage_support: Dict[str, float] = field(default_factory=dict)
     bankruptcies: List[Tuple[int, str, str]] = field(default_factory=list)
+    #: Money wage share (docs/126), by region.  Silver credited to
+    #: producers for sales, and silver producers paid other sellers for
+    #: inputs and plant matter.  Wages over the difference is Wright's
+    #: wage share on a value-added basis.  Observational; only booked
+    #: where producers hold cash, so empty in the default model.
+    sales_receipts: Dict[str, float] = field(default_factory=dict)
+    producer_purchases: Dict[str, float] = field(default_factory=dict)
     #: Worker mobility (docs/106): net worker-days a region's labor pool
     #: gained (positive) or lost (negative) to the other regions, summed
     #: over the run.  Observational; empty unless the rule is on.  The
@@ -3885,11 +3892,12 @@ class Economy:
                 paid = units * share * producer.posted_price
                 producer.cash += paid
                 credited += paid
-            return credited
-        for producer, share in sellers:
-            paid = amount * share
-            producer.cash += paid
-            credited += paid
+        else:
+            for producer, share in sellers:
+                paid = amount * share
+                producer.cash += paid
+                credited += paid
+        Ledger.add(self.ledger.sales_receipts, region.name, credited)
         return credited
 
     def _pay_for_draws(
@@ -3919,6 +3927,7 @@ class Economy:
                         units=runs * per_run,
                     )
                     producer.cash -= credited
+                    Ledger.add(self.ledger.producer_purchases, region.name, credited)
             bill = producer.process.capital_bill_per_capacity()
             if not bill or producer.capacity_per_day <= EPSILON:
                 continue
@@ -3943,6 +3952,7 @@ class Economy:
                     region, name, amount, shares, buyer_is_fund=False, units=taken
                 )
                 producer.cash -= credited
+                Ledger.add(self.ledger.producer_purchases, region.name, credited)
             if paid_fraction < 1.0:
                 producer.replacement_supplied = min(
                     producer.replacement_supplied, paid_fraction
@@ -4329,6 +4339,7 @@ class Economy:
                 seller.sales_today += take
                 if not own_stock:
                     seller.cash += cost
+                    Ledger.add(self.ledger.sales_receipts, region.name, cost)
                 if have - take <= EPSILON and units - bought - take > EPSILON:
                     # Sold out with the buyer still wanting more.
                     seller.sellouts_today += units - bought - take
@@ -4342,6 +4353,8 @@ class Economy:
             if not own_stock:
                 payer.cash -= cost
                 paid += cost
+                if payer is not region:
+                    Ledger.add(self.ledger.producer_purchases, region.name, cost)
             bought += take
             remaining -= take
         return bought, paid

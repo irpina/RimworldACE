@@ -31,8 +31,17 @@ WINDOW_MONTHS = 24
 #: docs/124 §3, each justified there by a measurement made at design time.
 COMMODITIES = 200
 REGIONS = 2
-LABOR_POOL = 400.0
+#: docs/126 §1: final demand per deep commodity.  At the generator's
+#: shipped 1.0 the median producer needs 0.019 of a worker, and the
+#: one-worker quantum floors 326 of 400 producers to nothing on day one.
+#: At 200 the median needs ~3.7 whole workers.  Silver endowments and the
+#: labour pool scale with it -- money is nominal, and the pool-to-demand
+#: ratio is what docs/124 §3 chose.
+DEMAND = 200.0
+LABOR_POOL_PER_DEMAND = 400.0
 CASH_MULTIPLIER = 10.0
+PURSE_FLOOR_PER_DEMAND = 50.0
+BASKET_FRACTION = 0.02
 #: Investment is slowed almost to a stop.  Measured during design: at the
 #: shipped 15-day interval the regions spend 15.7M silver on construction
 #: and cannot make payroll by day ~250.  Cash is *conserved* throughout
@@ -62,6 +71,13 @@ def facts(record):
         "gdp_kurtosis": D.excess_kurtosis(gdp_growth) if len(gdp_growth) > 3 else None,
         "demise_rate": record["demise_rate"],
         "wage_share": st.mean(record["wage_shares"]) if record["wage_shares"] else None,
+        # docs/126 §2: wages over value added, Wright's basis.  For the
+        # SA model this is the same series as ``wage_share``.
+        "money_wage_share": (st.mean(record["money_wage_shares"])
+                             if record.get("money_wage_shares") else None),
+        "gross_wage_share": (st.mean(record["gross_wage_shares"])
+                             if record.get("gross_wage_shares") else None),
+        "growth_std": st.pstdev(growth) if len(growth) > 1 else None,
         "profit_skew": (D.skewness(record["profit_rates"])
                         if len(record["profit_rates"]) > 3 else None),
         "unemployment": record.get("unemployment"),
@@ -93,27 +109,37 @@ def measure_sa(seed, beta=1.0):
         "gdp": history.gdp,
         "demise_rate": st.mean(history.demises_per_month) / max(1, len(economy.firm_sizes())),
         "wage_shares": history.wage_shares,
+        "money_wage_shares": history.wage_shares,
+        "gross_wage_shares": history.wage_shares,
         "profit_rates": history.profit_rates,
         "unemployment": economy.unemployment_rate(),
     }
 
 
-def build_ours(seed):
-    """Our laboratory at a size where a distribution exists (docs/124 §3)."""
+def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
+               quantum=1.0):
+    """Our laboratory at a size where a distribution exists (docs/124 §3),
+    rescaled so that most producers can employ a whole worker (docs/126).
+
+    The knobs are the design's experiments: ``demand`` is prediction 1,
+    ``quantum`` prediction 2, ``basket_fraction`` predictions 3 and 4.
+    """
     base = synthetic_economy(commodities=COMMODITIES, regions=REGIONS,
+                             daily_demand=demand, basket_fraction=basket_fraction,
                              record_history=False, seed=seed)
     regions = list(base.regions.values())
     for region in regions:
-        region.labor_pool = LABOR_POOL
-        region.cash *= CASH_MULTIPLIER
+        region.labor_pool = LABOR_POOL_PER_DEMAND * demand
+        region.cash *= CASH_MULTIPLIER * demand
+        region.worker_cash *= demand
         for producer in region.producers:
-            producer.cash = max(producer.cash, 50.0)
+            producer.cash = max(producer.cash, PURSE_FLOOR_PER_DEMAND * demand)
     return Economy(
         list(base.commodities.values()), regions, base.routes,
         record_history=False,
         producer_cash=True,
         posted_prices=True,
-        producer_employment_quantum=1.0,
+        producer_employment_quantum=quantum,
         investment_interval_days=INVESTMENT_INTERVAL,
     )
 
@@ -134,10 +160,19 @@ def employment(economy):
     return out
 
 
-def measure_ours(seed):
+def money_totals(economy):
+    """Wages paid, sales receipts and producer purchases, all silver."""
+    ledger = economy.ledger
+    return (sum(ledger.wages_paid.values()),
+            sum(ledger.sales_receipts.values()),
+            sum(ledger.producer_purchases.values()))
+
+
+def measure_ours(seed, **knobs):
     """Our model, through the identical instrument."""
-    economy = build_ours(seed)
+    economy = build_ours(seed, **knobs)
     economy.step(MONTH * BURN_IN_MONTHS)
+    labor_pool = LABOR_POOL_PER_DEMAND * knobs.get("demand", DEMAND)
 
     def totals():
         living = sum(economy.ledger.living_labor.values())
@@ -146,8 +181,10 @@ def measure_ours(seed):
         return living, necessary, value
 
     sizes, growth, gdp, shares, profits = [], [], [], [], []
+    money_shares, gross_shares = [], []
     previous_sizes = employment(economy)
     last_living, last_necessary, last_value = totals()
+    last_wages, last_receipts, last_purchases = money_totals(economy)
     deaths_at_start = len(economy.ledger.bankruptcies)
     active_seen = []
 
@@ -162,6 +199,14 @@ def measure_ours(seed):
         if living - last_living > 0:
             shares.append((necessary - last_necessary) / (living - last_living))
         last_living, last_necessary, last_value = living, necessary, value
+        wages, receipts, purchases = money_totals(economy)
+        d_wages, d_receipts = wages - last_wages, receipts - last_receipts
+        d_added = d_receipts - (purchases - last_purchases)
+        if d_added > 0:
+            money_shares.append(d_wages / d_added)
+        if d_receipts > 0:
+            gross_shares.append(d_wages / d_receipts)
+        last_wages, last_receipts, last_purchases = wages, receipts, purchases
         rate = economy.value_rate_of_profit()
         if rate is not None:
             profits.append(rate)
@@ -178,9 +223,13 @@ def measure_ours(seed):
         "gdp": gdp,
         "demise_rate": (deaths / WINDOW_MONTHS) / max(1.0, mean_active),
         "wage_shares": shares,
+        "money_wage_shares": money_shares,
+        "gross_wage_shares": gross_shares,
         "profit_rates": profits,
-        "unemployment": max(0.0, 1.0 - employed / (LABOR_POOL * REGIONS)),
+        "unemployment": max(0.0, 1.0 - employed / (labor_pool * REGIONS)),
         "capacity_rank": capacity_correlation(economy, previous_sizes),
+        "employing": len(previous_sizes),
+        "bankruptcies": deaths,
     }
 
 
