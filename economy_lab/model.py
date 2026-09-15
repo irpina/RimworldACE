@@ -854,6 +854,7 @@ class Economy:
         buffer_refill_horizon_days: float = 60.0,
         labor_value_per_tick: float = 11.4 / 720.0,
         employment_quantum: float = 2.0 ** -20,
+        producer_employment_quantum: float = 0.0,
         labor_value_tolerance: float = 1e-12,
         labor_value_max_iterations: int = 1000,
         competitive_price_intensity: float = 0.5,
@@ -908,6 +909,15 @@ class Economy:
         self.full_utilization_price_ratio = full_utilization_price_ratio
         self.labor_value_per_tick = labor_value_per_tick
         self.employment_quantum = employment_quantum
+        if producer_employment_quantum < 0.0:
+            raise ValueError(
+                "producer_employment_quantum must be non-negative"
+            )
+        #: The smallest employable unit of labor at a *producer*, in
+        #: worker-days (docs/102).  Zero is off, and off is the default:
+        #: the rule changes a committed scenario's outcome, so it is
+        #: gated like every other market rule here.
+        self.producer_employment_quantum = producer_employment_quantum
         self.labor_value_tolerance = labor_value_tolerance
         self.labor_value_max_iterations = labor_value_max_iterations
         if competitive_price_intensity < 0.0:
@@ -2456,6 +2466,10 @@ class Economy:
                     if per_run <= EPSILON:
                         continue
                     affordable = max(0.0, spendable) / per_run
+                    if self.producer_employment_quantum > 0.0:
+                        affordable = self._quantize_employment(
+                            p, region, affordable
+                        )
                     if affordable < wanted:
                         Ledger.add(
                             self.ledger.liquidity_curtailment,
@@ -3638,6 +3652,30 @@ class Economy:
             producer.process.input_cost_per_run(region.prices)
             + producer.process.direct_labor * wage_per_tick
         )
+
+    def _quantize_employment(
+        self, producer: Producer, region: Region, runs: float
+    ) -> float:
+        """Floor a run count onto whole units of employment (docs/102).
+
+        Wright's F1 fires down to ``floor(m_a / <w>)`` *whole workers*, so
+        a firm that cannot afford one employs none and ceases trading.
+        Our labor is a continuous flow, and ``docs/101`` measured what
+        that costs: a drained purse buys proportionally fewer runs, whose
+        sales refill it to sustain exactly those runs, so the producer
+        converges to a fixed point and the bankruptcy branch is never
+        reached.  This is the floor, and it is the only difference.
+
+        A process with no direct labor is returned untouched: it employs
+        nobody, and a rule about employment must not destroy it.
+        """
+        labor = producer.process.direct_labor
+        if labor <= EPSILON:
+            return runs
+        quantum = self.producer_employment_quantum
+        worker_days = runs * labor / region.ticks_per_worker_day
+        floored = floor(worker_days / quantum) * quantum
+        return floored * region.ticks_per_worker_day / labor
 
     def _plant_matter_cost(self, producer: Producer, region: Region) -> float:
         """Silver a day's plant replacement costs: the bill at regional

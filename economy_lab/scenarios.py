@@ -125,6 +125,11 @@ class ScenarioParameters:
     worker_initial_cash_days: float = 30.0
     labor_value_per_tick: float = 11.4 / 720.0
     employment_quantum: float = 2.0 ** -20
+    #: The smallest employable unit of labor at a producer, in
+    #: worker-days (docs/102).  Zero is off.  There is no defensible
+    #: single value at the laboratory's scale -- Dust Basin employs 0.318
+    #: worker-days in total -- so it is swept rather than set.
+    producer_employment_quantum: float = 0.0
     subsistence_loss_fraction: float = 0.70
 
     # --- wages off the value of labor-power (docs/46) -----------------------
@@ -1091,6 +1096,7 @@ def seeded_two_region_economy(
         buffer_refill_horizon_days=parameters.buffer_refill_horizon_days,
         labor_value_per_tick=parameters.labor_value_per_tick,
         employment_quantum=parameters.employment_quantum,
+        producer_employment_quantum=parameters.producer_employment_quantum,
         labor_value_tolerance=parameters.labor_value_tolerance,
         labor_value_max_iterations=parameters.labor_value_max_iterations,
         competitive_price_intensity=parameters.competitive_price_intensity,
