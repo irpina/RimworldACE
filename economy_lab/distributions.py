@@ -238,6 +238,65 @@ def _ks_distance_sampled(
     return worst
 
 
+def ols_histogram_fit(
+    values: Sequence[float],
+    *,
+    min_count: int = 1,
+    x_min: float = 1.0,
+) -> Optional[dict]:
+    """**Wright's own estimator**: OLS on a log-log histogram (docs/124).
+
+    His Fig. 2 caption: *"an ordinary least squares regression of the
+    data"* on a *"histogram of firm sizes by employees in log-log scale
+    with a constant bin size of 1"*, fitted to ``P(x) = x ** -(alpha+1)``.
+    So the regression slope is ``-(alpha + 1)`` and ``alpha`` is already
+    in his convention -- no :func:`to_wright` conversion applies.
+
+    This is **not** the estimator :func:`power_law_fit` uses, and
+    ``docs/123`` §3 is the reason it exists: comparing our MLE against
+    his reported number was comparing two different instruments, and the
+    gap it appeared to show was not established.  Clauset, Shalizi and
+    Newman (2009) §3.1 show this method is biased by the sparse bins in
+    the upper tail, where counts of 1 and 2 dominate the regression while
+    carrying almost no information.  ``min_count`` drops bins below a
+    threshold, which is the usual mitigation and which his caption does
+    not mention either way.
+
+    Returns ``None`` when fewer than three bins survive, since a slope
+    through two points is not a fit.
+    """
+    counts: Dict[int, int] = {}
+    for value in values:
+        size = int(round(value))
+        if size >= x_min:
+            counts[size] = counts.get(size, 0) + 1
+    points = [(size, count) for size, count in sorted(counts.items())
+              if count >= min_count]
+    if len(points) < 3:
+        return None
+    xs = [math.log(size) for size, _ in points]
+    ys = [math.log(count) for _, count in points]
+    n = len(xs)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    denominator = sum((x - mean_x) ** 2 for x in xs)
+    if denominator <= 0.0:
+        return None
+    slope = sum((x - mean_x) * (y - mean_y)
+                for x, y in zip(xs, ys)) / denominator
+    intercept = mean_y - slope * mean_x
+    residuals = sum((y - (intercept + slope * x)) ** 2
+                    for x, y in zip(xs, ys))
+    total = sum((y - mean_y) ** 2 for y in ys)
+    return {
+        "alpha_wright": -slope - 1.0,
+        "slope": slope,
+        "bins": n,
+        "min_count": min_count,
+        "r_squared": 1.0 - residuals / total if total > 0 else None,
+    }
+
+
 def bootstrap_alpha(
     values: Sequence[float],
     *,
