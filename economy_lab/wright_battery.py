@@ -123,7 +123,7 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                quantum=1.0, basket_in_demand=True, producers_per_commodity=1,
                fund_spending=False, accumulate=False, retention_rate=0.5,
                cash_multiplier=CASH_MULTIPLIER, cost_spread=0.1,
-               construction_cost_multiplier=60.0):
+               construction_cost_multiplier=60.0, investment=True):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -142,7 +142,11 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
     for region in regions:
         region.labor_pool = LABOR_POOL_PER_DEMAND * demand
         region.cash *= cash_multiplier * demand
-        region.worker_cash *= demand
+        # docs/137 §2: the workers' seed scales with the fund's, so that
+        # a smaller fund does not leave a quarter of the money stock in
+        # a purse that only ever buys the basket.  At the shipped
+        # multiplier the factor is exactly one.
+        region.worker_cash *= demand * (cash_multiplier / CASH_MULTIPLIER)
         for producer in region.producers:
             producer.cash = max(producer.cash, PURSE_FLOOR_PER_DEMAND * demand)
     economy = Economy(
@@ -151,7 +155,9 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
         producer_cash=True,
         posted_prices=True,
         producer_employment_quantum=quantum,
-        investment_interval_days=INVESTMENT_INTERVAL,
+        # docs/137 §2: with the fund small, an investment event scales to
+        # the fund and empties it; Wright's model has no investment.
+        investment_interval_days=INVESTMENT_INTERVAL if investment else 10 ** 6,
         accumulate=accumulate,
         retention_rate=retention_rate,
         construction_cost_multiplier=construction_cost_multiplier,
@@ -391,7 +397,7 @@ def main(argv):
         key, value = arg.split("=", 1)
         if key == "producers_per_commodity":
             knobs[key] = int(value)
-        elif key in ("fund_spending", "accumulate"):
+        elif key in ("fund_spending", "accumulate", "investment"):
             knobs[key] = value.lower() in ("1", "true", "on", "yes")
         else:
             knobs[key] = float(value)
