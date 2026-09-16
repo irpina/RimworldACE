@@ -89,6 +89,16 @@ def structural():
           "identical", "identical" if first.money == second.money else "DIFFERS",
           first.money == second.money, "docs/111")
 
+    # Our own laboratory with the two Wright rules on (docs/132): the
+    # docking of docs/136 rests on this circuit closing.
+    from economy_lab import wright_battery as wb
+    ours = wb.build_ours(1, demand=1.0, fund_spending=True, accumulate=True)
+    ours.step(60)
+    residual = abs(ours.cash_balance()) / ours.ledger.initial_cash
+    check("our lab conserves silver with the two Wright rules on",
+          "< 1e-9 of the money stock", f"{residual:.2e}", residual < 1e-9,
+          "docs/133 P2")
+
 
 def instruments():
     section("2. INSTRUMENT -- estimators recover known answers")
@@ -220,7 +230,7 @@ def main(argv):
     full = "--full" in argv
     started = time.time()
     print("=" * WIDTH)
-    print("VERIFYING THE WRIGHT WORK (docs/111-121)".center(WIDTH))
+    print("VERIFYING THE WRIGHT WORK (docs/111-138)".center(WIDTH))
     print("=" * WIDTH)
     print("\nNo third-party dependencies. Everything below is recomputed now")
     print("and compared against the figure the cited document claims.")
