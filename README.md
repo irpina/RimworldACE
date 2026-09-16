@@ -17,9 +17,10 @@ Three things, in the order they were built:
 ## Verifying the Wright results
 
 The economy laboratory includes a reimplementation of Ian Wright's
-*Social Architecture of Capitalism* and a series of measurements against
-it (`docs/111`-`docs/121`). To check that work rather than take it on
-trust:
+*Social Architecture of Capitalism*, a series of measurements against
+it (`docs/111`-`docs/123`), and the docking of our own model with his
+(`docs/124`-`docs/140`; the memo is `docs/140`). To check that work
+rather than take it on trust:
 
     python -m economy_lab.verify_wright     # ~60s, no dependencies
 
