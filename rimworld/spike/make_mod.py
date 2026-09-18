@@ -29,8 +29,10 @@ TICKS_PER_SECOND = 60.0
 # ones with no headroom.
 PLACES = 6
 NEWLINE = chr(10)
-OUT_DIR = os.path.join("mod", "Patches")
-TABLE_DIR = os.path.join("mod", "Defs", "LaborContent")
+# The mod lives beside this spike directory, at rimworld/mod/.
+MOD_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "mod")
+OUT_DIR = os.path.join(MOD_ROOT, "Patches")
+TABLE_DIR = os.path.join(MOD_ROOT, "Defs", "LaborContent")
 CSV = os.path.join("out", "embodied_labor.csv")
 
 EXPANSIONS = ("Royalty", "Ideology", "Biotech", "Anomaly", "Odyssey")

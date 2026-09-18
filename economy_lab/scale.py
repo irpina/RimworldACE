@@ -5,7 +5,7 @@ carried through three roadmaps. The laboratory is six commodities and two
 regions; RimWorld is 653 producible defs and roughly a hundred settlements.
 
 The commodity population is the real one — names, embodied labor and market
-values come from `out/embodied_labor.csv`, the closed analysis's solve. The
+values come from `economy_lab/data/embodied_labor.csv`, the closed analysis's solve. The
 input *edges* are synthetic but shape-preserving: the committed data has no
 `costList` graph, and the scale question is about shape and size rather than
 about which particular def feeds which. See `docs/32-scale-test-design.md`.
@@ -26,7 +26,9 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from .model import Commodity, Economy, Process, Producer, Region, Route
 
 
-POPULATION = Path(__file__).resolve().parents[1] / "out" / "embodied_labor.csv"
+#: The closed analysis's solve (rimworld/spike/solver.py), frozen here so
+#: the laboratory owns its own input; the fixtures pin what it produces.
+POPULATION = Path(__file__).with_name("data") / "embodied_labor.csv"
 
 #: Fraction of a commodity's reference price that its inputs cost. Chosen so
 #: every generated producer is viable at reference prices; RimWorld's own

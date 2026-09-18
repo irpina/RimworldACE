@@ -1,12 +1,12 @@
 __pycache__/
 *.pyc
-economy_mod/Source/**/bin/
-economy_mod/Source/**/obj/
-mod/Source/**/bin/
-mod/Source/**/obj/
-mod/Source/__pycache__/
+rimworld/economy_mod/Source/**/bin/
+rimworld/economy_mod/Source/**/obj/
+rimworld/mod/Source/**/bin/
+rimworld/mod/Source/**/obj/
+rimworld/mod/Source/__pycache__/
 
 # cli_reader.py needs pefile, which Homebrew's Python refuses to install
-# into (PEP 668). The macOS toolchain notes in economy_mod/README.md build
+# into (PEP 668). The macOS toolchain notes in rimworld/economy_mod/README.md build
 # this venv; nothing else in the project has a dependency.
 .venv/

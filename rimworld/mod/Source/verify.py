@@ -18,12 +18,12 @@ install. Three things matter and all three have burned us or nearly have:
    in a string arrives in the assembly as `Â·`. This is not hypothetical
    — it happened, and it is why the source writes `\\u00B7`.
 
-Run via `sh mod/Source/build.sh`, or directly.
+Run via `sh rimworld/mod/Source/build.sh`, or directly.
 """
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "spike"))
 
 from cli_reader import Assembly  # noqa: E402
 

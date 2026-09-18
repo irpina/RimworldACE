@@ -27,6 +27,7 @@ from .scenarios import capital_goods, equilibrium, technique_change
 
 DEFAULT_DIR = (
     Path(__file__).resolve().parents[1]
+    / "rimworld"
     / "economy_mod"
     / "Source"
     / "Fixtures"

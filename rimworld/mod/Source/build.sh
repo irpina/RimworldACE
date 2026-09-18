@@ -18,7 +18,8 @@
 # The source stays at C# 5 (LangVersion 5 in the csproj) so a Windows
 # machine with no SDK can still build it the old way.
 #
-# Usage:  sh mod/Source/build.sh  [path to RimWorld]
+# Usage:  sh rimworld/mod/Source/build.sh  [path to RimWorld]
+# ROOT below is rimworld/, the directory holding mod/ and spike/.
 set -e
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

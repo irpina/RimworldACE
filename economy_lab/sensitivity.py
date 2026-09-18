@@ -299,7 +299,7 @@ def ranking_text(rows: List[Dict[str, object]]) -> str:
     lines.extend(
         [
             "",
-            "Scale metrics read out/embodied_labor.csv rather than a scenario,",
+            "Scale metrics read economy_lab/data/embodied_labor.csv rather than a scenario,",
             "so they are parameter-independent by construction.  Their zeros",
             "in this sweep are structural and are not evidence about any",
             "parameter.",

@@ -5,7 +5,7 @@ Each fixture is a real economy, stopped at a day, with everything
 it, and the values it then computes from two starting iterates.  The C#
 solver is checked against these to the bit.
 
-    python -m economy_lab.fixtures            # writes economy_mod/Source/Fixtures/labor_values/
+    python -m economy_lab.fixtures            # writes rimworld/economy_mod/Source/Fixtures/labor_values/
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .scenarios import capital_goods, equilibrium, technique_change
 
 DEFAULT_DIR = (
     Path(__file__).resolve().parents[1]
+    / "rimworld"
     / "economy_mod"
     / "Source"
     / "Fixtures"

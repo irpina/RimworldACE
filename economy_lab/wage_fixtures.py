@@ -13,7 +13,7 @@ the expected answer and the inputs it was given written into the fixture.
 Deriving the *inputs* is allowed; deriving the *expected output* is not,
 which is what keeps a fixture from being a formula written twice.
 
-    python -m economy_lab.wage_fixtures     # writes economy_mod/Source/Fixtures/wages/
+    python -m economy_lab.wage_fixtures     # writes rimworld/economy_mod/Source/Fixtures/wages/
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from .scenarios import boom_reversal, capital_goods, demand_boom, equilibrium
 
 DEFAULT_DIR = (
     Path(__file__).resolve().parents[1]
+    / "rimworld"
     / "economy_mod"
     / "Source"
     / "Fixtures"

@@ -88,7 +88,7 @@ class ScenarioParameters:
     # --- accounted input-output production ---------------------------------
     # Reference prices are RimWorld MarketValue; masses are the Mass stat;
     # leaves-per-yayo is Yayo's costList. Direct labor is work-ticks from
-    # out/embodied_labor.csv. The chemfuel input ratios are stylized.
+    # economy_lab/data/embodied_labor.csv. The chemfuel input ratios are stylized.
     leaves_reference_price: float = 1.9
     chemfuel_reference_price: float = 2.3
     leaves_per_yayo: float = 8.0

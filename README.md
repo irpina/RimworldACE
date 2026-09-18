@@ -1,26 +1,30 @@
-# SNLT — research spike
+# RimworldACE — an economy laboratory
 
-Labor-time accounting against RimWorld 1.6.4871 rev590 (Core + Royalty,
-Ideology, Biotech, Anomaly, Odyssey — all installed).
+A dependency-free, deterministic simulation of a small commodity economy,
+built to make economic rules falsifiable before they go anywhere near a
+game. Producers buy inputs, hire workers, make goods, post prices and sell
+them; workers spend wages on a subsistence basket; every unit of material,
+silver and labor value is booked in a ledger that closes to floating-point
+zero. Alongside the model runs a from-the-paper reimplementation of Ian
+Wright's *Social Architecture of Capitalism*, a stochastic model of a
+capitalist economy that reproduces seven empirical regularities of real
+ones. The laboratory has been **docked** with it: the same measuring
+instrument, run on both models, gives the same answers wherever a
+deterministic economy can be expected to share them, and the differences
+are documented rather than tuned away (`docs/136`–`docs/140`).
 
-Three things, in the order they were built:
-
-1. **A research spike** into RimWorld's two unreconciled value systems.
-   Closed; see the headline findings below.
-2. **Labor Content** — the smallest mod that puts that result in front of a
-   player. Two read-only info-card stats. No gameplay change, no Harmony,
-   no compiled code.
-3. **An economy laboratory** — a dependency-free deterministic simulation
-   where economic rules are made falsifiable before any game-runtime work.
-   This is where the project is currently active.
+The project began as a labor-time analysis of the game RimWorld and a
+small mod that displays the result. That work is closed and kept, working,
+under [`rimworld/`](rimworld/README.md). The laboratory is where the
+project is active, and a future game mod will be built from it rather than
+the other way round.
 
 ## Verifying the Wright results
 
-The economy laboratory includes a reimplementation of Ian Wright's
-*Social Architecture of Capitalism*, a series of measurements against
-it (`docs/111`-`docs/123`), and the docking of our own model with his
-(`docs/124`-`docs/140`; the memo is `docs/140`). To check that work
-rather than take it on trust:
+The laboratory includes the Wright reimplementation, a series of
+measurements against it (`docs/111`–`docs/123`), and the docking of our own
+model with his (`docs/124`–`docs/140`; the memo is `docs/140`). To check
+that work rather than take it on trust:
 
     python -m economy_lab.verify_wright     # ~60s, no dependencies
 
@@ -29,233 +33,16 @@ document claims; a FAIL means a document is wrong. `docs/122` gives the
 rest of the audit trail, including where a skeptical reader should push
 hardest.
 
-## What happened to the original plan
+## Layout
 
-The brief proposed building an input-output graph from `DefDatabase<RecipeDef>`
-and solving for embodied labor by iteration. Two findings redirected it before
-any solver was written:
-
-1. **The recipe graph has three production paths, not one.** `RecipeDef` is a
-   minority mechanism.
-2. **RimWorld already computes market value from ingredients plus work.** For
-   most fabricated goods, "does price track labor content" is true by
-   construction. Running our own Leontief solve against those numbers would
-   have rediscovered the game's own formula and reported it as a finding.
-
-Revised scope, at your direction: extract the formula, then test the authored
-primitives (the only genuinely empirical question), then list the overrides.
-
-## Headline findings
-
-**1. A 13.8× seam inside `BaseMarketValue`.** The two unreconciled value
-systems are not `workAmount` versus `BaseMarketValue`, as the brief assumed.
-They are *extraction labor versus fabrication labor*, priced several times
-apart inside `BaseMarketValue` itself — 14.0× under OLS in levels, 3–4× under
-relative or log weighting (see `robustness.py`). With embodied labor solved independently of
-price, a single-rate model fits at R² 0.816; splitting labor by origin fits at
-**R² 0.948** — extraction at **94.8 silver/work-hour**, fabrication at
-**6.8**. RimWorld computes a good's price as authored input prices plus one
-hardcoded constant times the final step's work, and those authored prices
-embed an implicit labor rate an order of magnitude above that constant. In
-play: an hour at a workbench adds ~7 silver, an hour at a mining face ~95.
-
-**2. Butchery has an unbounded body-size gradient.**
-`RecipeDef.WorkAmountTotal` returns a flat `workAmount`, and
-`ButcherCorpseFlesh` declares **450 ticks for any carcass** — a chicken and a
-thrumbo cost the same labor — while yields scale linearly with body size.
-Labor efficiency therefore rises without bound in body size and nothing in the
-pricing pushes back. Grazed megafauna are the most value-dense labor in the
-game: `Leather_AlphaThrumbo` implies **100,000 silver/work-hour**, and the
-`Leathers` category median is 3,167.
-
-**3. A 293× husbandry spread.** Grazing and hay-feeding are genuinely
-different economies. Median spread across the 66 animals with both paths is
-9×, but `Meat_Thrumbo` costs 0.63 ticks/unit grazed and **182.89 hay-fed**.
-Pasture access, not animal choice, is what decides whether livestock is nearly
-free or expensive.
-
-**4. Gold: the cleanest statement that RimWorld prices scarcity, not work.**
-`MineableSteel`, `MineableSilver`, `MineableJade` and `MineableGold` are
-defined with *identical* extraction parameters — 1500 hit points, natural
-rock, yield 40, so 47.5 ticks per unit — and priced **1.9 / 1.0 / 5.0 /
-10.0**. Identical labor, 10× price spread. Gold's price per unit of extraction
-labor is **58.5×** what the game pays for fabrication labor, while steel,
-plasteel and uranium cluster tightly at 10–13×. Where labor is meant to
-matter, it is encoded in mineable hit points; where scarcity is meant to
-matter, that dial is simply ignored.
-
-## Results
-
-| doc | question |
+| path | |
 |---|---|
-| [01-formula.md](docs/01-formula.md) | What is RimWorld's value formula, exactly? |
-| [02-primitives.md](docs/02-primitives.md) | Do authored prices track extraction labor? |
-| [03-overrides.md](docs/03-overrides.md) | Where did a human override the formula? |
-| [04-endogenous-rate.md](docs/04-endogenous-rate.md) | What labor rate does the price structure actually imply? |
-| [05-animals.md](docs/05-animals.md) | What is meat and leather worth in labor? |
-
-**The formula.** Value = transmitted input value + `0.0036` silver per tick of
-work, divided by yield, with an authored `MarketValue` short-circuiting the
-whole thing. That coefficient is exactly **9 silver per work-hour**. It is a
-price-of-production model with a fixed wage, not a labor theory of value —
-same arithmetic, but labor's price is exogenous and value originates in
-authored primitives rather than in labor.
-
-**The primitives.** Split cleanly in two. Industrial staples (steel, plasteel,
-uranium, wood, cloth) are priced labor-proportionally within a 1.48× spread,
-with labor encoded as mineable hit points. Luxury and rarity-gated goods are
-not: **steel, silver, jade and gold are mined from rock with identical hit
-points and identical yield, and priced 1.9 / 1.0 / 5.0 / 10.0.** Same labor,
-10× price spread. Gold breaks as predicted; plasteel does not — it is one of
-the most labor-consistent materials in the game.
-
-**The overrides.** 49 defs (not 25 — the first count missed `ParentName`
-inheritance). 34 marked up, 12 down, 3 at parity. Every drug in the game is
-marked up; Anomaly serums carry 10–11× markups. The dominant pattern is
-flattening a category to one round number — all seven shell types cost 55
-against computed costs from 18.75 to 92.50.
-
-**The endogenous rate.** With embodied labor solved independently of price
-(653 defs, seeded at extraction, no market value anywhere in the derivation),
-a single-rate model fits at R² 0.816. Splitting labor by origin fits at
-**R² 0.948**: extraction labor is priced at **94.8 silver/work-hour**,
-fabrication labor at **6.8** — a **14.0× gap** in levels, narrowing to 3–4×
-under relative or log weighting. Implied rates fall monotonically across five
-buckets as a good's fabrication share rises (114.6 → 24.2 silver/hr, animal
-products excluded). There is no single rate.
-
-Two independent checks landed. The regression was never given RimWorld's
-hardcoded `0.0036` fabrication constant and recovered **0.00263** — within
-30%, a sanity check on the chain rather than an exact recovery. And the
-extraction rate of 94.8/hr matches the **101/hr** estimated separately in
-`02-primitives.md` from 30 hand-authored prices — agreement within 5% from
-different data by a different method.
-
-**The one line to carry forward:** the two unreconciled value systems are not
-`workAmount` versus `BaseMarketValue`. They are **extraction labor versus
-fabrication labor, priced several times apart inside `BaseMarketValue`
-itself** — 14× across the game's total value, 3–4× across a typical good. In
-RimWorld, crafting pays poorly either way.
-
-## Structural note
-
-Any labor ledger must walk all three production paths:
-
-1. **Explicit `RecipeDef`** — 118 in Core.
-2. **`ThingDef.recipeMaker`** — 93 in Core, synthesized at load by
-   `RecipeDefGenerator`. Absent from XML on disk; present in `DefDatabase`
-   at runtime.
-3. **`costList`/`costStuffCount` + `WorkToBuild`** — buildings, which have no
-   recipe at all.
-
-Buildings having `WorkToBuild` and no recipe means **fixed capital is
-structurally distinct in the data**, and RimWorld's own formula transfers no
-value from it — a workbench contributes nothing to what it produces. All
-constant capital is circulating.
-
-## Code
-
-| file | |
-|---|---|
-| `cli_reader.py` | ECMA-335 metadata + IL reader, written from scratch on `pefile`. No decompiler was installed; this reads `Assembly-CSharp.dll` directly. |
-| `dump_method.py` | `python dump_method.py "Type::Method"` — disassembles by name. |
-| `defs.py` | Def loader with `ParentName` inheritance resolved (recursive merge by element name, as `XmlInheritance` does). |
-| `value_model.py` | Transcription of `CalculatedBaseMarketValue`. Reproduces the worked assault-rifle example (482) exactly. |
-| `primitives.py` | Extraction labor per unit → `out/primitives.csv`. `BYPRODUCT` controls mining-spoil treatment. |
-| `analyze_primitives.py` | Correlations, implemented inline — no new dependencies. |
-| `overrides.py` | Authored vs computed → `out/overrides.csv`. |
-| `solver.py` | Embodied-labor solve seeded at extraction, non-circular → `out/embodied_labor.csv`. Min-cost hyperpath; `SCAVENGING` is the documented swap point. |
-| `animals.py` | Generated meat defs, butchery yields, husbandry labor. `APPORTION` splits a carcass between meat and leather. |
-| `validate_animals.py` | Diffs our animal model against RimWorld's own dev-mode export in `data/`. Currently 100% on meat, body size and nutrition. |
-| `validate_recipes.py` | Diffs `value_model.py` against the game's Recipes table. Caught the ingredient-count bug. |
-| `validate_prices.py` | Diffs base and calculated market values against the game's Acquisition table: 92/92 and 33/33. Caught the inherited `roundToFiveOver`. |
-| `rate_test.py` | Single- vs two-rate fits, gradient by fabrication share, residuals. |
-| `robustness.py` | Estimator sensitivity (levels / relative / log), the bucket table with and without animal products, and plant-labor sensitivity. |
-
-Only dependency is `pefile`, which was already installed. Nothing was
-downloaded.
-
-```bash
-python primitives.py && python analyze_primitives.py && python overrides.py && python solver.py && python rate_test.py
-```
-
-## Known gaps
-
-Of the 1285 defs with no embodied-labor value, most are not economic goods at
-all — ~435 motes/projectiles, races, standing plants, uncraftable natural or
-ancient buildings, unfinished-thing stubs. The real remainder:
-
-- **Meat and leather are now incorporated** (see `05-animals.md`); eggs, milk
-  and wool are not. Hunting is deliberately not modelled — its labor is combat
-  time, which is not a def field.
-- **Trade- and quest-only goods (~91 blocked)** — Shard, subcores, signal and
-  nanostructuring chips, Gravcore, Neutroamine, ShuttleEngine. These are not a
-  gap so much as a category: RimWorld's high-tech tier is *acquired*, not
-  produced, and has no labor content by any honest accounting.
-- Deep drilling and alternative extraction paths not enumerated.
-- Stone is now incorporated (chunks → blocks); see `BYPRODUCT` in
-  `primitives.py` for the joint-production treatment and its justification.
-- `value_model.py` is validated against one worked example and internal
-  consistency, not against a running game.
-
-## The mod
-
-`mod/` — a labor ledger. Two read-only stats on the info card of every
-producible thing: labor embodied in it, split extraction vs fabrication.
-No gameplay change.
-
-**No Harmony, no gameplay change, no save impact.** Two `StatDef`s plus
-generated `PatchOperationConditional` patches writing a precomputed value onto
-each def — 543 defs across six files, 548 `<Operation>` elements once the five
-`PatchOperationFindMod` wrappers on the expansion files are counted.
-
-One small assembly, and one only. `StatWorker_LaborContent` overrides a single
-virtual method to render each value in every unit that says something, because
-`StatDef.formatString` takes exactly one value and embodied labor spans five
-orders of magnitude — no single unit reads well at both ends:
-
-| def | fabrication labor |
-|---|---|
-| `Steel` | 0 |
-| `MealSimple` | 5 work-s · 300 ticks |
-| `Apparel_Parka` | 3.2 in-game h · 133 work-s · 8,000 ticks |
-
-The built DLL binds to exactly two RimWorld symbols, and `formatString` and
-`toStringStyle` stay in the defs so the stat still renders if the worker ever
-fails to load.
-
-| | |
-|---|---|
-| defs patched | 543 |
-| take `<match>` (def has `statBases`) | 446 |
-| take `<nomatch>` (no `statBases`) | 97 |
-| unresolved xpaths | 0 |
-| skipped | 104 generated meat defs — no XML node exists to patch |
-
-Values are stored in work-seconds (ticks ÷ 60, RimWorld's own work unit per
-`GenText.ToStringWorkAmount`), ranging 0.008 to 6736. `toStringStyle` is
-`FloatMaxTwo` rather than `WorkAmount` because the latter ceils, which would
-flatten every animal product to "1".
-
-```bash
-python solver.py && python make_mod.py && sh mod/Source/build.sh
-```
-
-The build uses the `csc.exe` Windows already ships rather than the .NET SDK,
-which constrains the source to C# 5. Then copy `mod/` into `RimWorld/Mods/`
-and enable it.
-
-Known limits, both now cheap to fix given the assembly exists:
-
-- meat defs are generated at load, so no patch can reach them — a short
-  `StaticConstructorOnStartup` away;
-- the stat is **stuff-independent**: a plasteel knife and a wooden knife
-  report the same labor content, because `statBases` has no notion of stuff,
-  while Market Value and Work to Make on the same card do vary. 176 of 653
-  defs (27%) are stuffable. Fixing it means computing at request time from
-  `req.Thing.Stuff`.
-
-Values are also static, so they do not respond to mods that change recipes.
+| `economy_lab/` | The model (`model.py`), its scenarios, the scale ladder, the sensitivity sweep, the Wright reimplementation (`social_architecture.py`), the shared measuring instrument (`wright_battery.py`), the verifier, and the frozen behavioral baseline |
+| `economy_lab/data/embodied_labor.csv` | The closed 653-def embodied-labor solve the lab seeds its population from |
+| `tests/` | Acceptance and invariant tests, including the pinned fixtures the C# port is verified against |
+| `docs/` | Every design and results document, numbered in the order it was written. `01`–`05` belong to the RimWorld spike; everything from `06` on is the laboratory, the port, or the docking |
+| `rimworld/` | Everything that touches the game: the research spike, the Labor Content mod, and the Stage 1 runtime shell with its C# port. See [`rimworld/README.md`](rimworld/README.md) |
+| `HANDOFF.md` | The running project handoff: decisions made, what not to re-derive, what is next |
 
 ## The economy laboratory
 
@@ -298,11 +85,11 @@ number: **labor value, market price, surplus value, and rent.** Money profit
 is not surplus value — a commodity can contain surplus labor and fail to
 realize it in a glut.
 
-### Three results worth reading
+### Five results worth reading
 
 **1. The endogenous value solve reproduces the closed analysis.** Values
-solved from the lab's own process graph agree with `solver.py`'s independent
-653-def result exactly for the two commodities with no modelled inputs
+solved from the lab's own process graph agree with the spike's independent
+653-def solve (`rimworld/spike/solver.py`) exactly for the two commodities with no modelled inputs
 (chemfuel 25 ticks, meals 305), and are high on the two downstream ones by
 *precisely* the one link the design documents flagged as stylized — 1.25
 ticks on psychoid leaves, 15.00 on yayo. No other discrepancy. That is the
@@ -326,7 +113,7 @@ authored price for a meal is 15 silver. Inputs, wages, and the depreciation
 of a real `ElectricStove` account for 0.39 of it; the other **two-thirds of
 the price is a wedge the model cannot attribute** to anything. Fixed
 capital — implemented from the game's own building costs, repairing an
-omission `FINDINGS.md` found in vanilla — explains 0.05%. This is the same
+omission `rimworld/spike/FINDINGS.md` found in vanilla — explains 0.05%. This is the same
 seam the research spike found from the outside: authored prices embed a
 labor rate far above what the model pays. Every sector performs surplus
 labor at the same rate, 38.3, but realizes wildly different amounts of it
@@ -359,7 +146,7 @@ feeds 39.3 workers**, so necessary labor is 3.6% of the day and no defensible
 bundle changes that by an order of magnitude. The rate of surplus value this
 project reports is not a calibration artifact. It is the game's.
 
-**4. Two numbers that were not rates of profit, and now are.** The price
+**5. Two numbers that were not rates of profit, and now are.** The price
 system charged profit against a single day's flow while the model held twenty
 days of stock, and the value ledger divided surplus by capital *consumed*
 rather than capital *advanced*. Both are fixed: the uniform rate is 1.17 per
@@ -399,10 +186,26 @@ results document scoring the predictions afterward.
 | [42](docs/42-absolute-rent-design.md) · [43](docs/43-absolute-rent-results.md) | Absolute rent: Marx's condition holds exactly without fixed capital, and breaks with it |
 | [45](docs/45-sensitivity-sweep-results.md) | The sensitivity sweep, re-run: three defects that produced false answers, and what actually matters |
 
+The laboratory's later arcs, each again as a design document with numbered
+two-sided predictions followed by a results document that scores them:
+
+| docs | arc |
+|---|---|
+| [46](docs/46-wage-deviation-design.md)–[52](docs/52-habituation-results.md) | Wages that deviate from the value of labor-power; the lab viewer; habituation |
+| [55](docs/55-producer-cash-design.md)–[71](docs/71-the-churn-results.md) | Producer cash, posted prices, procurement, entry on margin, exit on return, the exit floor, sellout after the draw, the churn |
+| [53](docs/53-stage1-value-solve-port-design.md)–[54](docs/54-stage1-value-solve-port-results.md), [72](docs/72-stage1-wage-port-design.md)–[96](docs/96-a-review-pass.md) | The C# port of the value, wage, bargaining and price solves, verified to the bit against fixtures the lab writes (the code is under `rimworld/economy_mod/`) |
+| [97](docs/97-social-architecture-dock-design.md)–[110](docs/110-the-ablation-grid-results.md) | Docking with Wright's *Social Architecture of Capitalism*: the reference implementation, the producer quantum, the first endogenous firm death, worker mobility, the ablation grid |
+| [111](docs/111-fitting-wright-design.md)–[123](docs/123-scrutiny-of-the-wright-work.md) | Fitting Wright's seven facts, goodness of fit, the M1 ablation, the size-exponent sweep, and how to check none of it is fabricated |
+| [124](docs/124-wrights-battery-on-our-model-design.md)–[139](docs/139-the-docking-battery-corrected-results.md) | Wright's battery run on our model: a staple sector that feeds its workers, several firms per commodity, endogenous demand and accumulation, the parameter sweeps, and the docking battery |
+| **[140](docs/140-what-we-would-put-to-ian-wright.md)** | **The memo: what we would put to Ian Wright** |
+
 ### Running it
 
+No dependencies beyond the Python standard library. Everything is
+deterministic; a run's history is bit-identical across machines.
+
 ```bash
-python -m unittest discover -s tests      # 183 acceptance and invariant tests
+python -m unittest discover -s tests      # ~480 acceptance and invariant tests
 python -m economy_lab all                 # every scenario, as JSON
 python -m economy_lab technique-change    # relative surplus value
 python -m economy_lab cost-competition    # undercutting, and its price effect
@@ -411,22 +214,11 @@ python -m economy_lab perishable-meals    # differential turnover: meals rot
 python -m economy_lab capital-goods       # Department I: the machines are produced
 python -m economy_lab capacity-exit       # competition for survival, not only for orders
 python -m economy_lab recreation-basket   # the workers' basket holds the workers' product
-python -m economy_lab.baseline            # 189 frozen metrics vs current
+python -m economy_lab.baseline            # 322 frozen metrics vs current
 python -m economy_lab.scale --sweep       # the size ladder, 6 to 6,470 producers
 ```
 
-`behavior_baseline.json` freezes 189 behavioral metrics. The baseline reporter
+`behavior_baseline.json` freezes 322 behavioral metrics. The baseline reporter
 is deliberately a *report*, not a pass/fail test — the invariant tests protect
 correctness, while the reporter makes every behavioral change visible and
 forces it to be explained before the reference is rewritten.
-
-## The runtime shell
-
-`economy_mod/` — a read-only RimWorld 1.6 mod that is currently a shell, not
-an economy. It persists a world component on a daily tick, observes generated
-settlements, and shows them in a read-only tab that states explicitly that
-vanilla prices are unchanged. No Harmony, no gameplay mutation.
-
-It deliberately does not run the Stage 0 model. Nothing claiming to be a
-production economy goes into a save until the laboratory's material circuit is
-credible.

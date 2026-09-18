@@ -8,11 +8,12 @@ import pathlib
 import re
 import sys
 
-sys.path.insert(0, ".")
-from cli_reader import Assembly
+HERE = pathlib.Path(__file__).resolve()
+sys.path.insert(0, str(HERE.parents[2] / "spike"))
+from cli_reader import Assembly  # noqa: E402
 
 NL = chr(10)
-asm = Assembly(r"mod\Assemblies\SocialProduction.LaborContent.dll")
+asm = Assembly(str(HERE.parents[1] / "Assemblies" / "SocialProduction.LaborContent.dll"))
 asm._build_owner_maps()
 surface = sorted(
     "{}.{}".format(asm.string(r["Namespace"]), asm.string(r["Name"]))
@@ -23,7 +24,7 @@ print("measured surface ({}):".format(len(surface)))
 for name in surface:
     print("   " + name)
 
-p = pathlib.Path("mod/Source/verify.py")
+p = HERE.with_name("verify.py")
 text = p.read_text(encoding="utf-8")
 block = "    expected = [" + NL
 for name in surface:
