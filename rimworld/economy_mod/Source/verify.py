@@ -51,6 +51,10 @@ CORE_REQUIRED_TYPES = (
     "SocialProduction.Economy.Core.SelfCheckReport",
     "SocialProduction.Economy.Core.TickBudget",
     "SocialProduction.Economy.Core.CompensatedSum",
+    # The docked economy the component runs (docs/141, docs/143).
+    "SocialProduction.Economy.Core.Model.DockedDay",
+    "SocialProduction.Economy.Core.Model.EconomyState",
+    "SocialProduction.Economy.Core.Model.SaveText",
 )
 
 REQUIRED_TYPES = (

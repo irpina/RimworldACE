@@ -165,23 +165,33 @@ dotnet run --project Source/Economy.Core.Check
 dotnet run --project Source/Economy.Drive
 ```
 
-The first checks all five ported slices against the laboratory's
-committed fixtures — the value solve, the basket and the wage, the
-reserve army and habituation, the regional price update, the wage-cost
-refresh — and then the properties of the parts that have no fixtures:
-`StateCodec`, `DayScheduler`, `WealthCoupling`, `SelfCheck` and
-`TickBudget`. It ends with `ALL PORT CHECKS PASSED` or a non-zero exit
-code naming what failed.
+The first checks the five ported solvers against the laboratory's
+committed fixtures, then the docked economy of `docs/141`: the full-state
+JSON round trip, every phase of the docked day on four real days, whole
+runs of up to 180 days, the generator building each run's start state
+from its seed (`docs/141` slice 2), and the game's save format
+(`docs/143`), including a run saved and reloaded after every phase. All
+of it is to the bit. It also rewrites `Source/Fixtures/saves/`, the
+laboratory's end states in the save format, for the second command. It
+ends with `ALL PORT CHECKS PASSED` or a non-zero exit code naming what
+failed.
 
-The second drives `EconomyWorldComponent` through a fresh world, a day
-passing, a save and reload, a mid-day save resumed, and a pre-schema-3
-save upgraded — against `Source/Economy.Facade`, which is the RimWorld
-surface read out of the last real build and **never shipped**.
+The second runs under **Mono**, the game's runtime. It drives
+`EconomyWorldComponent` through a fresh world, a day passing, a save and
+reload, a mid-day save resumed, a pre-schema-4 save upgraded, a
+three-faction world running the docked economy, the same world saved and
+reloaded after every tick, and the docked day against the laboratory's
+end states. It compiles against `Source/Economy.Facade`, which is the
+RimWorld surface read out of the last real build and **never shipped**.
 
-Regenerate the fixtures with `python -m economy_lab.fixtures`,
-`.wage_fixtures`, `.bargaining_fixtures`, `.price_fixtures` and
-`.wage_cost_fixtures` when the model moves; `tests/test_port_fixtures.py`
-fails when they are stale.
+Regenerate the fixtures with **`python3.12`**, never an older
+interpreter: CPython 3.12 made `sum()` of floats compensated, the port
+matches 3.12, and every fixture writer refuses to run under 3.11. The
+writers are `economy_lab.fixtures`, `.wage_fixtures`,
+`.bargaining_fixtures`, `.price_fixtures`, `.wage_cost_fixtures`,
+`.state_fixtures`, `.phase_fixtures` and `.run_fixtures`; the generated
+C# comes from `.state_codegen` and `.population_codegen`.
+`tests/test_port_fixtures.py` fails when the fixtures are stale.
 
 ## Verifying the built assemblies
 
