@@ -47,6 +47,7 @@ namespace SocialProduction.Economy.Core.Model
                 { "_consume", Consume },
                 { "_workers_consume", WorkersConsume },
                 { "_update_prices", UpdatePrices },
+                { "_dispatch_arbitrage", DispatchArbitrage },
                 { "_settle_purses", SettlePurses },
                 { "_update_expectations", UpdateExpectations },
             };
