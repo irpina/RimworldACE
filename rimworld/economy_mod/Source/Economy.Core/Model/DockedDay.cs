@@ -43,6 +43,7 @@ namespace SocialProduction.Economy.Core.Model
                 { "_arrive_shipments", ArriveShipments },
                 { "_complete_projects", CompleteProjects },
                 { "_track_differential_rent", TrackDifferentialRent },
+                { "_refresh_throughput", RefreshThroughput },
                 { "_update_expectations", UpdateExpectations },
             };
 

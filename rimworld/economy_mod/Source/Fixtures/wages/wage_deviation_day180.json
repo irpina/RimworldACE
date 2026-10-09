@@ -14,7 +14,7 @@
   "labor_values": [
    [
     "yayo",
-    735.9749515277776
+    735.9749515277778
    ],
    [
     "psychoid_leaves",
@@ -22,7 +22,7 @@
    ],
    [
     "chemfuel",
-    25.044852430555554
+    25.044852430555558
    ],
    [
     "meals",
@@ -57,11 +57,11 @@
     "prices": [
      [
       "yayo",
-      24.912360780727862
+      24.91236078072786
      ],
      [
       "psychoid_leaves",
-      2.596887312375719
+      2.5968873123757192
      ],
      [
       "chemfuel",
@@ -73,7 +73,7 @@
      ],
      [
       "garments",
-      88.33016582665763
+      88.33016582665765
      ],
      [
       "herbal_medicine",
@@ -167,7 +167,7 @@
     "labor_by_producer": [
      {
       "producer": "Dust cooperative",
-      "ticks": 2674.827122394745
+      "ticks": 2674.827122394744
      },
      {
       "producer": "Dust psychoid fields",
@@ -175,7 +175,7 @@
      },
      {
       "producer": "Dust refinery",
-      "ticks": 155.78571428571425
+      "ticks": 155.78571428571428
      },
      {
       "producer": "Dust provisioners",
@@ -191,19 +191,19 @@
      },
      {
       "producer": "entrant-Dust Basin-yayo-75",
-      "ticks": 402.7922349861284
+      "ticks": 402.79223498612816
      },
      {
       "producer": "entrant-Dust Basin-yayo-90",
-      "ticks": 206.53859432042557
+      "ticks": 206.53859432042552
      },
      {
       "producer": "entrant-Dust Basin-yayo-105",
-      "ticks": 107.98785998591005
+      "ticks": 107.98785998591003
      },
      {
       "producer": "entrant-Dust Basin-yayo-120",
-      "ticks": 76.57103934085714
+      "ticks": 76.57103934085711
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-120",
@@ -222,7 +222,7 @@
       "ticks": 5.122679919370576
      }
     ],
-    "labor_performed": 8413.131279412053
+    "labor_performed": 8413.131279412051
    },
    "worker_days_earned": 0.35054683685302734,
    "before": {

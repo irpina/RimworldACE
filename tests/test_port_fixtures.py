@@ -9,6 +9,16 @@ and re-run the C# harness, in that order.
 import json
 import unittest
 
+from economy_lab.interpreter import sums_compensated
+
+#: The fixtures are written by a compensating sum() (docs/142).  Under an
+#: interpreter without one, every comparison below differs in the last
+#: bits for that reason alone, so they are skipped and the one test in
+#: InterpreterTests fails instead, naming the cause.
+WRONG_SUM = unittest.skipUnless(
+    sums_compensated(),
+    "this interpreter's sum() does not compensate; see InterpreterTests")
+
 from economy_lab import (
     bargaining_fixtures,
     fixtures,
@@ -18,6 +28,7 @@ from economy_lab import (
 )
 
 
+@WRONG_SUM
 class PortFixtureTests(unittest.TestCase):
     def test_the_committed_fixtures_are_current(self):
         for name, document in fixtures.build_all().items():
@@ -50,6 +61,7 @@ class PortFixtureTests(unittest.TestCase):
                 )
 
 
+@WRONG_SUM
 class WageFixtureTests(unittest.TestCase):
     def test_the_committed_wage_fixtures_are_current(self):
         for name, document in wage_fixtures.build_all().items():
@@ -164,6 +176,7 @@ class WageFixtureTests(unittest.TestCase):
         )
 
 
+@WRONG_SUM
 class BargainingFixtureTests(unittest.TestCase):
     def test_the_committed_bargaining_fixtures_are_current(self):
         for name, document in bargaining_fixtures.build_all().items():
@@ -229,6 +242,7 @@ class BargainingFixtureTests(unittest.TestCase):
         self.assertEqual((region.wage_premium, region.habitual_scale), before)
 
 
+@WRONG_SUM
 class PriceFixtureTests(unittest.TestCase):
     def test_the_committed_price_fixtures_are_current(self):
         for name, document in price_fixtures.build_all().items():
@@ -298,6 +312,7 @@ class PriceFixtureTests(unittest.TestCase):
         )
 
 
+@WRONG_SUM
 class WageCostFixtureTests(unittest.TestCase):
     def test_the_committed_wage_cost_fixtures_are_current(self):
         for name, document in wage_cost_fixtures.build_all().items():
@@ -348,6 +363,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@WRONG_SUM
 class StateFixtureTests(unittest.TestCase):
     """docs/141 slice 1: the full-state fixtures the C# state model reads."""
 
@@ -361,3 +377,13 @@ class StateFixtureTests(unittest.TestCase):
                                 f"{path} is missing; run python -m economy_lab.state_fixtures")
                 self.assertEqual(path.read_text(encoding="utf-8"), text,
                                  "stale; run python -m economy_lab.state_fixtures")
+
+
+class InterpreterTests(unittest.TestCase):
+    def test_the_interpreter_sums_as_the_fixtures_assume(self):
+        self.assertTrue(
+            sums_compensated(),
+            "This interpreter's sum() does not compensate (CPython before 3.12). "
+            "The port's fixtures and the C# port both follow 3.12's compensated "
+            "sum(), so the fixture tests are skipped here; run the suite with "
+            "python3.12 or later (docs/142).")

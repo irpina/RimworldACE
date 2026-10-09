@@ -14,7 +14,7 @@
   "labor_values": [
    [
     "yayo",
-    735.9749515277779
+    735.974951527778
    ],
    [
     "psychoid_leaves",
@@ -22,7 +22,7 @@
    ],
    [
     "chemfuel",
-    25.044852430555558
+    25.044852430555554
    ],
    [
     "meals",
@@ -30,11 +30,11 @@
    ],
    [
     "garments",
-    1643.5992214285714
+    1643.5992214285716
    ],
    [
     "herbal_medicine",
-    400.01944444444445
+    400.0194444444445
    ]
   ],
   "regions": [
@@ -57,7 +57,7 @@
     "prices": [
      [
       "yayo",
-      20.783771272962305
+      20.7837712729623
      ],
      [
       "psychoid_leaves",
@@ -86,7 +86,7 @@
     "worker_days_earned": 0.31713390350341797,
     "ticks_per_worker_day": 24000.0,
     "cash": 94132.94879847197,
-    "worker_cash": 1258.9640260049216
+    "worker_cash": 1258.9640260049212
    },
    {
     "name": "Green River",
@@ -175,19 +175,19 @@
      },
      {
       "producer": "Dust refinery",
-      "ticks": 132.296233436121
+      "ticks": 132.29623343612107
      },
      {
       "producer": "Dust provisioners",
-      "ticks": 196.86536102123824
+      "ticks": 196.86536102123833
      },
      {
       "producer": "Dust tailors",
-      "ticks": 65.3528452570504
+      "ticks": 65.35284525705043
      },
      {
       "producer": "Dust herbalists",
-      "ticks": 16.13650500174084
+      "ticks": 16.136505001740847
      },
      {
       "producer": "entrant-Dust Basin-yayo-75",
@@ -195,15 +195,15 @@
      },
      {
       "producer": "entrant-Dust Basin-yayo-90",
-      "ticks": 206.79436489554945
+      "ticks": 206.79436489554942
      },
      {
       "producer": "entrant-Dust Basin-yayo-105",
-      "ticks": 108.12158858586432
+      "ticks": 108.12158858586434
      },
      {
       "producer": "entrant-Dust Basin-yayo-120",
-      "ticks": 76.66586238753509
+      "ticks": 76.66586238753507
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-120",
@@ -211,7 +211,7 @@
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-120",
-      "ticks": 3.854187936870642
+      "ticks": 3.8541879368706433
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-135",
@@ -219,7 +219,7 @@
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-135",
-      "ticks": 4.35055772471963
+      "ticks": 4.350557724719632
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-150",
@@ -227,30 +227,30 @@
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-150",
-      "ticks": 3.2309382586589024
+      "ticks": 3.230938258658906
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-165",
-      "ticks": 173.49703991250763
+      "ticks": 173.49703991250752
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-165",
-      "ticks": 6.677660789010092
+      "ticks": 6.677660789010094
      },
      {
       "producer": "entrant-Dust Basin-psychoid_leaves-180",
-      "ticks": 138.75755257528863
+      "ticks": 138.7575525752885
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-180",
-      "ticks": 9.386653797251437
+      "ticks": 9.386653797251448
      },
      {
       "producer": "entrant-Dust Basin-chemfuel-195",
-      "ticks": 10.617098612982154
+      "ticks": 10.617098612982167
      }
     ],
-    "labor_performed": 7611.227324704632
+    "labor_performed": 7611.2273247046305
    },
    "worker_days_earned": 0.31713390350341797,
    "before": {
@@ -259,8 +259,8 @@
     "necessary_labor": 67761.39965397932,
     "wage_deviation_labor": 108.21357935688862,
     "wage_premium_paid": 24.50645914033666,
-    "wages_paid": 3334.3600064427887,
-    "worker_cash": 1258.9640260049216
+    "wages_paid": 3334.360006442789,
+    "worker_cash": 1258.9640260049212
    },
    "after": {
     "cash": 94119.66611416591,
@@ -268,8 +268,8 @@
     "necessary_labor": 68042.21679113491,
     "wage_deviation_labor": 101.3550351142637,
     "wage_premium_paid": 24.470907645201773,
-    "wages_paid": 3347.642690748852,
-    "worker_cash": 1272.246710310985
+    "wages_paid": 3347.6426907488526,
+    "worker_cash": 1272.2467103109846
    }
   },
   {

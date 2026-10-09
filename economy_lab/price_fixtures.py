@@ -126,6 +126,9 @@ def write_all(directory: Path) -> List[Path]:
 
 
 def main() -> None:
+    from .interpreter import require_compensated_sum
+
+    require_compensated_sum()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=DEFAULT_DIR)
     args = parser.parse_args()

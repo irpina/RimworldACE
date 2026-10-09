@@ -112,6 +112,9 @@ def documents():
 
 
 def main() -> None:
+    from .interpreter import require_compensated_sum
+
+    require_compensated_sum()
     DIRECTORY.mkdir(parents=True, exist_ok=True)
     for name, data in documents().items():
         (DIRECTORY / name).write_bytes(data)

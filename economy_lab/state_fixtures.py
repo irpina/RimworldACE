@@ -41,6 +41,9 @@ def texts():
 
 
 def main() -> None:
+    from .interpreter import require_compensated_sum
+
+    require_compensated_sum()
     DIRECTORY.mkdir(parents=True, exist_ok=True)
     for name, text in texts().items():
         (DIRECTORY / name).write_text(text, encoding="utf-8")
