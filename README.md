@@ -200,6 +200,7 @@ two-sided predictions followed by a results document that scores them:
 | **[140](docs/140-what-we-would-put-to-ian-wright.md)** | **The memo: what we would put to Ian Wright** |
 | [141](docs/141-the-mod-design.md)–[142](docs/142-the-mod-results.md) | The mod: the docked economy ported to C#, bit-exact; the game's shape measured, and the full population refused |
 | [143](docs/143-wiring-the-day-design.md)–[144](docs/144-wiring-the-day-results.md) | The docked day wired into the world: a save format, a three-faction world under Mono, bit-identical to the lab |
+| [145](docs/145-scaling-the-stocks-design.md)–[146](docs/146-scaling-the-stocks-results.md) | The fund, workers' cash and labour pool scaled with authored demand; re-docked at 647 commodities: docks on money, cost ranking, GDP and demises; fails on growth kurtosis, a staple-driven wage share and a 23% lower employing share; the game keeps 200 |
 
 ### Running it
 
