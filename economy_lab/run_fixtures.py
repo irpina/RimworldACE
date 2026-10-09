@@ -5,12 +5,15 @@
 
 Each file is gzip-compressed JSON (fixed mtime)::
 
-    {"case": ..., "days": n, "start": state, "end": state}
+    {"case": ..., "seed": s, "regions": r, "commodities": c,
+     "days": n, "start": state, "end": state}
 
 The port runs ``n`` whole days from ``start`` and must arrive at ``end``
 to the bit.  ``battery_r2_day30`` is the docking battery's own size (200
 commodities, two regions, 1,600 producers) and doubles as the timing
-case for docs/141 prediction 10.
+case for docs/141 prediction 10.  ``seed``, ``regions`` and
+``commodities`` are ``build_ours``'s arguments, so the port's generator
+(slice 2) can be checked against ``start``.
 """
 from __future__ import annotations
 
@@ -54,7 +57,8 @@ def documents(timings=None):
             producers = sum(len(r.producers) for r in economy.regions.values())
             timings[stem] = ((time.perf_counter() - began) / days, producers)
         out[f"{stem}.json.gz"] = _compress(
-            {"case": stem, "days": days, "start": start, "end": encode(economy)})
+            {"case": stem, "seed": seed, "regions": regions,
+             "commodities": commodities, "days": days, "start": start, "end": encode(economy)})
     return out
 
 

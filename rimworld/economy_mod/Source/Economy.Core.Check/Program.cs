@@ -137,8 +137,13 @@ namespace SocialProduction.Economy.Check
             int runCode = RunCheck.Run(
                 Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "runs"));
 
+            // The docked generator: each run's start state, built from its
+            // seed and size (docs/141 slice 2).
+            int buildCode = BuildCheck.Run(
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "runs"));
+
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode, runCode };
+            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode, runCode, buildCode };
             foreach (int code in codes)
             {
                 if (code != 0)

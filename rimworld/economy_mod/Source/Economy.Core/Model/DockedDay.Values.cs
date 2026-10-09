@@ -13,6 +13,13 @@ namespace SocialProduction.Economy.Core.Model
         /// </summary>
         public static void UpdateLaborValues(EconomyState e)
         {
+            UpdateLaborValues(e, false);
+        }
+
+        /// <summary><c>use_capacity</c> seeds the constructor's first solve
+        /// from installed capacity instead of realized runs.</summary>
+        internal static void UpdateLaborValues(EconomyState e, bool useCapacity)
+        {
             LaborValueProblem problem = new LaborValueProblem();
             problem.Tolerance = e.LaborValueTolerance;
             problem.MaxIterations = e.LaborValueMaxIterations;
@@ -29,7 +36,10 @@ namespace SocialProduction.Economy.Core.Model
                 problem.Regions.Add(region.Name);
                 foreach (Producer producer in region.Producers)
                 {
-                    if (!producer.Active || producer.LastRuns <= Epsilon)
+                    double weight = useCapacity
+                        ? Lab.RunsFor(producer.Process, producer.CapacityPerDay)
+                        : producer.LastRuns;
+                    if (!producer.Active || weight <= Epsilon)
                     {
                         continue;
                     }
@@ -42,7 +52,7 @@ namespace SocialProduction.Economy.Core.Model
                     Contributor contributor = new Contributor();
                     contributor.Region = region.Name;
                     contributor.Producer = producer.Name;
-                    contributor.Runs = producer.LastRuns;
+                    contributor.Runs = weight;
                     contributor.Process = spec;
                     problem.Contributors.Add(contributor);
                 }

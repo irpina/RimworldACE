@@ -13,7 +13,7 @@ namespace SocialProduction.Economy.Core.Model
                 {
                     string name = e.Commodities.KeyAt(c);
                     double cost;
-                    bool produced = SectorUnitCost(region, name, out cost);
+                    bool produced = SectorUnitCost(region, name, false, out cost);
                     double seed;
                     bool seeded = region.SeedUnitCost.TryGetValue(name, out seed);
                     if (!produced || !seeded || seed <= Epsilon)
@@ -26,9 +26,9 @@ namespace SocialProduction.Economy.Core.Model
             }
         }
 
-        /// <summary><c>_sector_unit_cost</c> from realized runs; false is the
+        /// <summary><c>_sector_unit_cost</c>, from realized runs or, seeding, capacity; false is the
         /// laboratory's <c>None</c>, nobody produced.</summary>
-        private static bool SectorUnitCost(Region region, string commodity, out double cost)
+        internal static bool SectorUnitCost(Region region, string commodity, bool useCapacity, out double cost)
         {
             double totalCost = 0.0;
             double totalOutput = 0.0;
@@ -38,7 +38,9 @@ namespace SocialProduction.Economy.Core.Model
                 {
                     continue;
                 }
-                double runs = producer.LastRuns;
+                double runs = useCapacity
+                    ? Lab.RunsFor(producer.Process, producer.CapacityPerDay)
+                    : producer.LastRuns;
                 if (runs <= Epsilon)
                 {
                     continue;
