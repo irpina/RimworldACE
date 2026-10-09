@@ -41,6 +41,9 @@ namespace SocialProduction.Economy
                 inRect, ref y, "Day in progress",
                 economy == null ? "Unavailable" : economy.DayProgress);
             DrawRow(
+                inRect, ref y, "Docked economy",
+                economy == null ? "Unavailable" : economy.EconomyStatus);
+            DrawRow(
                 inRect, ref y, "Economy state saved",
                 economy == null ? "Unavailable" : economy.PersistedState);
             DrawRow(
@@ -73,8 +76,7 @@ namespace SocialProduction.Economy
             else
             {
                 DrawRow(inRect, ref y, "Value, price, surplus, rent",
-                    "not yet: the model is ported and checked, "
-                    + "and not yet wired to the world (docs/94)");
+                    "after the economy's first day (docs/143)");
             }
 
             y += 12f;

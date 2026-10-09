@@ -86,6 +86,7 @@ namespace SocialProduction.Economy.Check
                     JsonElement root = document.RootElement;
                     string name = root.GetProperty("case").GetString();
                     int days = root.GetProperty("days").GetInt32();
+                    WriteMonoFixture(Path.Combine(fixtures, "saves"), root);
                     EconomyState state = StateJson.Read(root.GetProperty("start"));
                     string text = SaveText.Write(state);
                     int bytes = Encoding.UTF8.GetByteCount(text);
@@ -123,6 +124,29 @@ namespace SocialProduction.Economy.Check
             }
             Console.WriteLine(failures == 0 ? "the save format carries the state to the bit" : failures + " save check(s) failed");
             return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// The laboratory's end state in the save format, for the Mono drive
+        /// (docs/143 prediction 4), which has no JSON reader: a header line
+        /// of the build arguments and the day count, then the state. Derived
+        /// from the run fixtures and rewritten on every run, so it cannot go
+        /// stale; gzip without a timestamp, so an unchanged state is an
+        /// unchanged file.
+        /// </summary>
+        private static void WriteMonoFixture(string directory, JsonElement root)
+        {
+            Directory.CreateDirectory(directory);
+            string name = root.GetProperty("case").GetString();
+            string header = name + " " + root.GetProperty("seed").GetInt64() + " " + root.GetProperty("regions").GetInt32()
+                + " " + root.GetProperty("commodities").GetInt32() + " " + root.GetProperty("days").GetInt32();
+            string body = header + "\n" + SaveText.Write(StateJson.Read(root.GetProperty("end")));
+            using (FileStream raw = File.Create(Path.Combine(directory, name + ".end.save.gz")))
+            using (GZipStream gzip = new GZipStream(raw, CompressionLevel.Optimal))
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(body);
+                gzip.Write(bytes, 0, bytes.Length);
+            }
         }
 
         private static string RoundTrip(string json)

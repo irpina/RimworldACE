@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using RimWorld.Planet;
 using SocialProduction.Economy.Core;
+using SocialProduction.Economy.Core.Model;
 using Verse;
 
 namespace SocialProduction.Economy
@@ -11,11 +12,19 @@ namespace SocialProduction.Economy
         private const int TicksPerDay = 60000;
 
         /// <summary>
-        /// Schema 2 is the profiles-only shell. Economy state is schema 3
-        /// (docs/80 section 2): a schema-2 save must load with no economy
-        /// rather than read its fields as something they are not.
+        /// Schema 2 is the profiles-only shell and schema 3 the snapshot of
+        /// docs/80. Schema 4 carries the whole docked economy (docs/143):
+        /// an older save loads with no economy and builds one, rather than
+        /// read its fields as something they are not.
         /// </summary>
-        private const int SaveSchemaVersion = StateCodec.SchemaVersion;
+        private const int SaveSchemaVersion = SaveText.Schema;
+
+        /// <summary>
+        /// The docked economy's size: the battery's 200 commodities, the
+        /// size that docked. The laboratory refuses the full population
+        /// until its fund scales with the economy (docs/142, docs/143 s2).
+        /// </summary>
+        private const int Commodities = 200;
 
         /// <summary>
         /// Phases run per tick. A count, not a duration, because the
@@ -55,6 +64,16 @@ namespace SocialProduction.Economy
         private int dayCursor;
 
         private DayScheduler scheduler;
+
+        /// <summary>
+        /// The docked economy (docs/141), live. Persisted through
+        /// <see cref="economyState"/> in the save format of docs/143, and
+        /// built on the first day the world has a faction region.
+        /// </summary>
+        private EconomyState economy;
+
+        /// <summary>Why the economy is not running, when it should be.</summary>
+        private string economyFailure;
 
         /// <summary>
         /// What the mod found when it checked itself, on load (docs/88).
@@ -141,6 +160,40 @@ namespace SocialProduction.Economy
             string.IsNullOrEmpty(economyState)
                 ? "none yet (schema " + schemaVersion + ")"
                 : economyState.Length + " chars, bit-exact encoding";
+
+        /// <summary>The docked economy in one line, for the tab.</summary>
+        public string EconomyStatus
+        {
+            get
+            {
+                if (economyFailure != null)
+                {
+                    return "stopped: " + economyFailure;
+                }
+                if (economy == null)
+                {
+                    return regionCount == 0
+                        ? "waiting for a faction region"
+                        : "built at the start of the next day";
+                }
+                int producers = 0;
+                int active = 0;
+                for (int r = 0; r < economy.Regions.Count; r++)
+                {
+                    foreach (Producer producer in economy.Regions.ValueAt(r).Producers)
+                    {
+                        producers++;
+                        if (producer.Active && producer.LastRuns > 0.0)
+                        {
+                            active++;
+                        }
+                    }
+                }
+                return "day " + economy.Day + ", " + economy.Regions.Count + " regions, "
+                    + economy.Commodities.Count + " commodities, "
+                    + active + " of " + producers + " producers working";
+            }
+        }
 
         public override void FinalizeInit(bool fromLoad)
         {
@@ -320,9 +373,9 @@ namespace SocialProduction.Economy
             selfCheck = new SelfCheckReport();
             selfCheck.Expect(
                 "save schema",
-                StateCodec.SchemaVersion.ToString(),
+                SaveText.Schema.ToString(),
                 schemaVersion.ToString(),
-                "schema 3 carries economy state; 2 and below do not");
+                "schema 4 carries the docked economy; 3 and below do not");
 
             if (!fromLoad)
             {
@@ -335,7 +388,7 @@ namespace SocialProduction.Economy
             }
             else
             {
-                bool upgraded = schemaOnLoad >= 0 && schemaOnLoad < StateCodec.SchemaVersion;
+                bool upgraded = schemaOnLoad >= 0 && schemaOnLoad < SaveText.Schema;
 
                 // A save with no profiles node -- schema 1, or a world
                 // saved before any were derived -- has nothing to compare
@@ -377,7 +430,7 @@ namespace SocialProduction.Economy
                         resumeCheck.Observed = "cursor " + dayCursor;
                         resumeCheck.Verdict = dayCursor == 0
                             ? CheckVerdict.Passed : CheckVerdict.Failed;
-                        resumeCheck.Note = "a pre-schema-3 save carries no day to resume";
+                        resumeCheck.Note = "a pre-schema-4 save carries no day to resume";
                     }
                     else
                     {
@@ -400,13 +453,28 @@ namespace SocialProduction.Economy
                         "old save loads clean",
                         "no economy state",
                         economyState.Length == 0 ? "no economy state" : "state present",
-                        "a schema-" + schemaOnLoad + " save must not be read as schema 3");
+                        "a schema-" + schemaOnLoad + " save must not be read as schema 4");
                 }
                 else
                 {
                     selfCheck.Add("old save loads clean", "no economy state",
                         "save was already schema " + schemaOnLoad, CheckVerdict.Skipped);
                 }
+            }
+
+            if (economyFailure != null)
+            {
+                selfCheck.Add("docked economy", "running", economyFailure, CheckVerdict.Failed,
+                    "the economy stopped rather than run a model that did not dock");
+            }
+            else if (economy == null)
+            {
+                selfCheck.Add("docked economy", "running",
+                    regionCount == 0 ? "no faction region yet" : "not built yet", CheckVerdict.Skipped);
+            }
+            else
+            {
+                selfCheck.Add("docked economy", "running", EconomyStatus, CheckVerdict.Passed);
             }
 
             if (phaseMillis.Count > 0)
@@ -460,22 +528,134 @@ namespace SocialProduction.Economy
             dayCursor = 0;
         }
 
+        /// <summary>
+        /// The day: the profiles, then the economy's own phases in the
+        /// laboratory's order (docs/143 s2). The list is the same whether
+        /// or not the economy exists yet, so a save taken mid-day resumes
+        /// at the same phase: the build phase does nothing once built, and
+        /// the docked phases do nothing until it has.
+        /// </summary>
         private List<IDayPhase> BuildPhases()
         {
-            // One placeholder phase so the scheduler always has work and
-            // the cursor means something. Replaced by the ported solvers
-            // when the component carries an EconomySnapshot.
             List<IDayPhase> phases = new List<IDayPhase>();
             phases.Add(new DayPhase("profiles", delegate
             {
                 Adopt(ProfileBuilder.Build());
             }));
+            phases.Add(new DayPhase("economy", delegate
+            {
+                EnsureEconomy();
+            }));
+            foreach (DockedDay.Phase docked in DockedDay.Order)
+            {
+                System.Action<EconomyState> run = docked.Run;
+                phases.Add(new DayPhase(docked.Name, delegate
+                {
+                    if (economy != null && economyFailure == null)
+                    {
+                        run(economy);
+                    }
+                }));
+            }
             return phases;
+        }
+
+        /// <summary>
+        /// Build the docked economy once the world has a faction region,
+        /// and refuse a day the docked configuration does not cover
+        /// (docs/141 s2). A refusal stops the economy and says why; it
+        /// never runs a different model.
+        /// </summary>
+        private void EnsureEconomy()
+        {
+            if (economyFailure != null)
+            {
+                return;
+            }
+            try
+            {
+                if (economy == null)
+                {
+                    if (regionCount == 0)
+                    {
+                        return;
+                    }
+                    int seed = Find.World != null && Find.World.info != null
+                        ? Find.World.info.persistentRandomValue
+                        : 0;
+                    economy = DockedDay.Build(seed, Commodities, regionCount);
+                    Log.Message("[Social Production: Economy] Built the docked economy: "
+                        + regionCount + " regions, " + Commodities + " commodities, seed " + seed + ".");
+                }
+                DockedDay.Refuse(economy);
+            }
+            catch (System.Exception failure)
+            {
+                economyFailure = failure.GetType().Name + ": " + failure.Message;
+                Log.Error("[Social Production: Economy] The docked economy stopped: " + economyFailure);
+            }
+        }
+
+        /// <summary>What the tab shows: each region's consumer goods, in
+        /// units a player has (docs/94).</summary>
+        private void RefreshReadouts()
+        {
+            readouts = new List<RegionReadout>();
+            if (economy == null)
+            {
+                return;
+            }
+            Dictionary<string, double> values = ToDictionary(economy.LaborValues);
+            for (int r = 0; r < economy.Regions.Count; r++)
+            {
+                Region region = economy.Regions.ValueAt(r);
+                Dictionary<string, double> prices = new Dictionary<string, double>();
+                for (int i = 0; i < region.BaseDailyDemand.Count; i++)
+                {
+                    string name = region.BaseDailyDemand.KeyAt(i);
+                    prices[name] = region.Prices.Get(name, 0.0);
+                }
+                for (int i = 0; i < region.SubsistenceBasket.Count; i++)
+                {
+                    string name = region.SubsistenceBasket.KeyAt(i);
+                    prices[name] = region.Prices.Get(name, 0.0);
+                }
+                Dictionary<string, double> output = new Dictionary<string, double>();
+                foreach (Producer producer in region.Producers)
+                {
+                    double before;
+                    output.TryGetValue(producer.Commodity, out before);
+                    output[producer.Commodity] = before
+                        + producer.LastRuns * producer.Process.Outputs.Get(producer.Commodity, 0.0);
+                }
+                double living = economy.Ledger.LivingLabor.Get(region.Name, 0.0);
+                double necessary = economy.Ledger.NecessaryLabor.Get(region.Name, 0.0);
+                readouts.Add(EconomyReadout.Build(
+                    region.Name, values, prices, new Dictionary<string, double>(), output,
+                    region.TicksPerWorkerDay, Lab.WageRate(region), necessary, living - necessary,
+                    region.WorkerDaysEarned));
+            }
+        }
+
+        private static Dictionary<string, double> ToDictionary(OrderedMap<double> map)
+        {
+            Dictionary<string, double> copy = new Dictionary<string, double>();
+            for (int i = 0; i < map.Count; i++)
+            {
+                copy[map.KeyAt(i)] = map.ValueAt(i);
+            }
+            return copy;
         }
 
         public override void ExposeData()
         {
             base.ExposeData();
+            if (Scribe.mode == LoadSaveMode.Saving)
+            {
+                // The whole economy as one string, in the format of
+                // docs/143: doubles as their bits, never as decimal.
+                economyState = economy == null ? "" : SaveText.Write(economy);
+            }
             Scribe_Values.Look(ref schemaVersion, "schemaVersion", SaveSchemaVersion);
             Scribe_Values.Look(ref completedDays, "completedDays", 0);
             Scribe_Values.Look(ref lastProcessedTick, "lastProcessedTick", -1);
@@ -503,21 +683,38 @@ namespace SocialProduction.Economy
                 {
                     economyState = "";
                 }
-                if (schemaVersion < StateCodec.SchemaVersion)
+                if (schemaVersion < SaveText.Schema)
                 {
-                    // Schema 2 and earlier carry no economy. Start one
-                    // rather than read fields that are not there.
+                    // Schema 3 and earlier carry no docked economy. Start
+                    // one rather than read fields that are not there.
                     economyState = "";
                     dayCursor = 0;
-                    schemaVersion = StateCodec.SchemaVersion;
+                    schemaVersion = SaveText.Schema;
                 }
-                else if (dayCursor > 0)
+                else
                 {
-                    // A save taken mid-day resumes mid-day: the phases
-                    // already applied are not applied again (docs/83 s3).
-                    scheduler = new DayScheduler(BuildPhases());
-                    scheduler.ResumeAt(dayCursor);
+                    if (economyState.Length > 0)
+                    {
+                        try
+                        {
+                            economy = SaveText.Read(economyState);
+                        }
+                        catch (System.Exception failure)
+                        {
+                            economy = null;
+                            economyFailure = "the saved economy did not decode: " + failure.Message;
+                            Log.Error("[Social Production: Economy] " + economyFailure);
+                        }
+                    }
+                    if (dayCursor > 0)
+                    {
+                        // A save taken mid-day resumes mid-day: the phases
+                        // already applied are not applied again (docs/83 s3).
+                        scheduler = new DayScheduler(BuildPhases());
+                        scheduler.ResumeAt(dayCursor);
+                    }
                 }
+                RefreshReadouts();
             }
         }
 
@@ -525,6 +722,7 @@ namespace SocialProduction.Economy
         {
             completedDays++;
             Adopt(ProfileBuilder.Build());
+            RefreshReadouts();
         }
     }
 }

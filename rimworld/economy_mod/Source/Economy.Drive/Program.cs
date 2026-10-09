@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
 using System.Reflection;
+using System.Text;
 using SocialProduction.Economy;
 using SocialProduction.Economy.Core;
+using SocialProduction.Economy.Core.Model;
 using Verse;
 
 namespace SocialProduction.Economy.Drive
@@ -69,6 +74,62 @@ namespace SocialProduction.Economy.Drive
             return c;
         }
 
+        /// <summary>A world of twelve settlements in three factions, run for
+        /// some days a tick at a time; optionally saved and reloaded after
+        /// every tick.</summary>
+        static EconomyWorldComponent RunWorld(int days, bool hop)
+        {
+            FakeHost.Reset();
+            FakeHost.Populate(12);
+            EconomyWorldComponent c = New();
+            c.FinalizeInit(false);
+            for (int tick = 0; c.CompletedDays < days && tick < (days + 1) * 60000 + 100; tick++)
+            {
+                FakeHost.TicksGame = tick;
+                c.WorldComponentTick();
+                if (hop)
+                {
+                    Save(c);
+                    c = Load();
+                }
+                if (c.CompletedDays < days && tick > 50 && tick % 60000 > 50)
+                {
+                    // Nothing happens between a day's last phase and the
+                    // next day's start; skip to it.
+                    tick = (tick / 60000 + 1) * 60000 - 1;
+                }
+            }
+            return c;
+        }
+
+        /// <summary>The save fixtures, wherever this is run from.</summary>
+        static string FindSaves()
+        {
+            foreach (string start in new string[] { Directory.GetCurrentDirectory(), AppDomain.CurrentDomain.BaseDirectory })
+            {
+                for (DirectoryInfo at = new DirectoryInfo(start); at != null; at = at.Parent)
+                {
+                    foreach (string relative in new string[] {
+                        Path.Combine("Fixtures", "saves"),
+                        Path.Combine("Source", "Fixtures", "saves"),
+                        Path.Combine("rimworld", "economy_mod", "Source", "Fixtures", "saves") })
+                    {
+                        string candidate = Path.Combine(at.FullName, relative);
+                        if (Directory.Exists(candidate)) return candidate;
+                    }
+                }
+            }
+            return Path.Combine("Fixtures", "saves");
+        }
+
+        static string RuntimeName()
+        {
+            Type mono = Type.GetType("Mono.Runtime");
+            if (mono == null) return Environment.Version.ToString();
+            MethodInfo name = mono.GetMethod("GetDisplayName", BindingFlags.NonPublic | BindingFlags.Static);
+            return "Mono " + (name == null ? "" : name.Invoke(null, null));
+        }
+
         public static int Main(string[] args)
         {
             // --- 1. a fresh world -----------------------------------
@@ -92,7 +153,9 @@ namespace SocialProduction.Economy.Drive
 
             // --- 2. a day passes ------------------------------------
             int before = fresh.CompletedDays;
-            for (int tick = 0; tick <= 60000 + 10; tick++)
+            // A day is one phase a tick, so it ends a phase count after it
+            // begins: seventeen ticks now the economy's phases are wired.
+            for (int tick = 0; tick <= 60000 + 100; tick++)
             {
                 FakeHost.TicksGame = tick;
                 fresh.WorldComponentTick();
@@ -110,8 +173,8 @@ namespace SocialProduction.Economy.Drive
             Save(fresh);
             T(FakeHost.Has("schemaVersion") && FakeHost.Has("dayCursor"),
                 "the save carries neither schema nor cursor");
-            T((int)FakeHost.Peek("schemaVersion") == StateCodec.SchemaVersion,
-                "the save did not record schema 3");
+            T((int)FakeHost.Peek("schemaVersion") == SaveText.Schema,
+                "the save did not record schema 4");
             FakeHost.KeepSaveResetClock();
             EconomyWorldComponent reloaded = Load();
             T(VerdictOf(reloaded, "reload determinism") == CheckVerdict.Passed,
@@ -119,8 +182,8 @@ namespace SocialProduction.Economy.Drive
                 + VerdictOf(reloaded, "reload determinism"));
             T(VerdictOf(reloaded, "mid-day resume") != CheckVerdict.Skipped,
                 "a reloaded world skipped the resume check");
-            T((int)Field(reloaded, "schemaVersion") == StateCodec.SchemaVersion,
-                "the reloaded schema is not 3");
+            T((int)Field(reloaded, "schemaVersion") == SaveText.Schema,
+                "the reloaded schema is not 4");
             T(reloaded.CompletedDays == fresh.CompletedDays,
                 "completed days did not survive the reload");
             T(Report(reloaded).Passed,
@@ -183,7 +246,7 @@ namespace SocialProduction.Economy.Drive
                 "the resume check drifted as the day advanced: was '" + atLoad
                 + "', now '" + Describe(finished, "mid-day resume") + "'");
 
-            // --- 5. a pre-schema-3 save -----------------------------
+            // --- 5. a pre-schema-4 save -----------------------------
             FakeHost.Reset();
             EconomyWorldComponent old = New();
             old.FinalizeInit(false);
@@ -192,8 +255,8 @@ namespace SocialProduction.Economy.Drive
             FakeHost.Poke("economyState", "THIS SHOULD BE DISCARDED");
             FakeHost.Poke("dayCursor", 7);
             EconomyWorldComponent upgraded = Load();
-            T((int)Field(upgraded, "schemaVersion") == StateCodec.SchemaVersion,
-                "a schema-2 save did not upgrade to 3");
+            T((int)Field(upgraded, "schemaVersion") == SaveText.Schema,
+                "a schema-2 save did not upgrade to 4");
             T((string)Field(upgraded, "economyState") == "",
                 "a schema-2 save's economy state was not discarded: '"
                 + Field(upgraded, "economyState") + "'");
@@ -212,6 +275,67 @@ namespace SocialProduction.Economy.Drive
             T(Report(upgraded).Passed,
                 "a correctly upgraded schema-2 save did not report a pass");
 
+            // --- 6. a world with factions runs the docked economy ----
+            // docs/143: three faction regions, so the economy is built on
+            // the first day and runs one docked day a game day.
+            const int Days = 3;
+            EconomyWorldComponent plain = RunWorld(Days, false);
+            EconomyState lived = (EconomyState)Field(plain, "economy");
+            T(lived != null, "a world with factions built no economy: " + plain.EconomyStatus);
+            if (lived != null)
+            {
+                T(lived.Regions.Count == plain.RegionCount && lived.Regions.Count == 3,
+                    "the economy has " + lived.Regions.Count + " regions, the world " + plain.RegionCount);
+                T(lived.Day == Days, "the economy is on day " + lived.Day + " after " + Days + " game days");
+                EconomyState direct = DockedDay.Build(12345, 200, 3);
+                for (int d = 0; d < Days; d++) DockedDay.Run(direct);
+                T(SaveText.Write(direct) == SaveText.Write(lived),
+                    "the component's economy is not the docked economy run directly");
+                T(plain.Readouts.Count == 3, "the tab has " + plain.Readouts.Count + " region readouts");
+                T(VerdictOf(plain, "docked economy") == CheckVerdict.Passed,
+                    "the self-check did not pass the running economy: " + Describe(plain, "docked economy"));
+            }
+
+            // --- 7. saved and reloaded after every tick --------------
+            // docs/143 prediction 2, through the component: a save can
+            // land after any phase, and the economy must not notice.
+            EconomyWorldComponent hopped = RunWorld(Days, true);
+            EconomyState reborn = (EconomyState)Field(hopped, "economy");
+            T(reborn != null && lived != null && SaveText.Write(reborn) == SaveText.Write(lived),
+                "saving and loading after every tick changed the economy");
+            T(Report(hopped).Passed, "the hopped world's self-check did not pass: " + Report(hopped).Summary);
+
+            // --- 8. Mono against the laboratory ----------------------
+            // docs/143 predictions 4 and 5: the docked day under this
+            // runtime, from the seed, against the laboratory's end state.
+            string saves = args.Length > 0 ? args[0] : FindSaves();
+            string[] files = Directory.Exists(saves) ? Directory.GetFiles(saves, "*.end.save.gz") : new string[0];
+            Array.Sort(files, string.CompareOrdinal);
+            T(files.Length > 0, "no save fixtures in " + Path.GetFullPath(saves) + "; run Economy.Core.Check first");
+            List<string> runtime = new List<string>();
+            foreach (string file in files)
+            {
+                string body;
+                using (FileStream raw = File.OpenRead(file))
+                using (GZipStream gzip = new GZipStream(raw, CompressionMode.Decompress))
+                using (StreamReader reader = new StreamReader(gzip, Encoding.UTF8))
+                {
+                    body = reader.ReadToEnd();
+                }
+                int newline = body.IndexOf('\n');
+                string[] header = body.Substring(0, newline).Split(' ');
+                string expected = body.Substring(newline + 1);
+                EconomyState state = DockedDay.Build(long.Parse(header[1]), int.Parse(header[3]), int.Parse(header[2]));
+                int days = int.Parse(header[4]);
+                Stopwatch clock = Stopwatch.StartNew();
+                for (int d = 0; d < days; d++) DockedDay.Run(state);
+                clock.Stop();
+                bool same = SaveText.Write(state) == expected;
+                T(same, "under this runtime " + header[0] + " is not the laboratory's state");
+                runtime.Add((same ? "  PASS " : "  FAIL ") + header[0] + ": " + days + " days, "
+                    + (clock.Elapsed.TotalMilliseconds / days).ToString("0.00") + " ms a day");
+            }
+
             Console.WriteLine("checks " + checks + ", failures " + fails);
             foreach (string s in bad) Console.WriteLine("  " + s);
             Console.WriteLine();
@@ -219,6 +343,8 @@ namespace SocialProduction.Economy.Drive
             Console.Write(Report(fresh).Render());
             Console.WriteLine("--- the report a schema-2 save logs ---");
             Console.Write(Report(upgraded).Render());
+            Console.WriteLine("--- the docked day under this runtime (" + RuntimeName() + ") ---");
+            foreach (string line in runtime) Console.WriteLine(line);
             Console.WriteLine(fails == 0
                 ? "THE COMPONENT'S STATE MACHINE IS CORRECT AGAINST A DOCUMENTED HOST"
                 : "THE STATE MACHINE IS WRONG");
