@@ -44,6 +44,8 @@ namespace SocialProduction.Economy.Core.Model
                 { "_complete_projects", CompleteProjects },
                 { "_track_differential_rent", TrackDifferentialRent },
                 { "_refresh_throughput", RefreshThroughput },
+                { "_consume", Consume },
+                { "_workers_consume", WorkersConsume },
                 { "_update_prices", UpdatePrices },
                 { "_settle_purses", SettlePurses },
                 { "_update_expectations", UpdateExpectations },
