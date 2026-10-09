@@ -123,7 +123,8 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                quantum=1.0, basket_in_demand=True, producers_per_commodity=1,
                fund_spending=False, accumulate=False, retention_rate=0.5,
                cash_multiplier=CASH_MULTIPLIER, cost_spread=0.1,
-               construction_cost_multiplier=60.0, investment=True):
+               construction_cost_multiplier=60.0, investment=True,
+               commodities=COMMODITIES, regions=REGIONS):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -132,7 +133,7 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
     prediction 1, ``quantum`` its prediction 2, ``basket_fraction`` its 3
     and 4; ``basket_in_demand=False`` reproduces docs/127's spiral.
     """
-    base = synthetic_economy(commodities=COMMODITIES, regions=REGIONS,
+    base = synthetic_economy(commodities=commodities, regions=regions,
                              daily_demand=demand, basket_fraction=basket_fraction,
                              basket_in_demand=basket_in_demand,
                              producers_per_commodity=producers_per_commodity,
@@ -177,6 +178,23 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
             )
         economy.fund_spending_rate = authored / first.cash
     return economy
+
+
+#: The configuration docked with Wright in docs/138 and carried into the
+#: game by docs/141 §2: ``build_ours(seed, **DOCKED)``.
+DOCKED = dict(
+    demand=800.0,
+    basket_in_demand=True,
+    producers_per_commodity=4,
+    cost_spread=1.0,
+    fund_spending=True,
+    cash_multiplier=0.3,
+    accumulate=True,
+    retention_rate=0.5,
+    construction_cost_multiplier=20.0,
+    quantum=1.0,
+    investment=False,
+)
 
 
 def employment(economy):
@@ -396,6 +414,8 @@ def main(argv):
     for arg in argv[3:]:
         key, value = arg.split("=", 1)
         if key == "producers_per_commodity":
+            knobs[key] = int(value)
+        elif key in ("commodities", "regions"):
             knobs[key] = int(value)
         elif key in ("fund_spending", "accumulate", "investment"):
             knobs[key] = value.lower() in ("1", "true", "on", "yes")

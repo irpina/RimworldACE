@@ -346,3 +346,18 @@ class WageCostFixtureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StateFixtureTests(unittest.TestCase):
+    """docs/141 slice 1: the full-state fixtures the C# state model reads."""
+
+    def test_the_committed_state_fixtures_are_current(self):
+        from economy_lab import state_fixtures
+
+        for name, text in state_fixtures.texts().items():
+            with self.subTest(fixture=name):
+                path = state_fixtures.DIRECTORY / name
+                self.assertTrue(path.exists(),
+                                f"{path} is missing; run python -m economy_lab.state_fixtures")
+                self.assertEqual(path.read_text(encoding="utf-8"), text,
+                                 "stale; run python -m economy_lab.state_fixtures")

@@ -124,8 +124,12 @@ namespace SocialProduction.Economy.Check
             int coreCode = CoreSelfTest.Run(
                 Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures"));
 
+            // The full state, read and written back (docs/141 slice 1).
+            int stateCode = StateCheck.Run(
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "state"));
+
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode };
+            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode };
             foreach (int code in codes)
             {
                 if (code != 0)
