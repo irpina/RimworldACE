@@ -19,12 +19,12 @@ to install:
 5. The binding surface is exactly the expected set, so a RimWorld update can
    only break what is listed.
 
-Run via `python economy_mod/Source/verify.py` after building.
+Run via `python rimworld/economy_mod/Source/verify.py` after building.
 """
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "spike"))
 
 from cli_reader import Assembly  # noqa: E402
 

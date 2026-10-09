@@ -20,7 +20,7 @@ namespace SocialProduction.Economy.Check
         {
             string directory = args.Length > 0
                 ? args[0]
-                : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "labor_values");
+                : Path.Combine(FindRepositoryRoot(), "rimworld", "economy_mod", "Source", "Fixtures", "labor_values");
             string[] files = Directory.GetFiles(directory, "*.json");
             Array.Sort(files, string.CompareOrdinal);
             if (files.Length == 0)
@@ -105,24 +105,24 @@ namespace SocialProduction.Economy.Check
             // The wage relation (docs/72), against its own fixture set.
             string wageDirectory = args.Length > 1
                 ? args[1]
-                : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "wages");
+                : Path.Combine(FindRepositoryRoot(), "rimworld", "economy_mod", "Source", "Fixtures", "wages");
             int wageCode = WageCheck.Run(wageDirectory);
 
             // The bargaining rules (docs/74), against their own fixtures.
             string bargainingDirectory = args.Length > 2
                 ? args[2]
-                : Path.Combine(FindRepositoryRoot(), "economy_mod", "Source", "Fixtures", "bargaining");
+                : Path.Combine(FindRepositoryRoot(), "rimworld", "economy_mod", "Source", "Fixtures", "bargaining");
             int bargainingCode = BargainingCheck.Run(bargainingDirectory);
 
             // The price update and the wage-cost refresh (docs/77, docs/79).
             string repository = FindRepositoryRoot();
             int priceCode = PriceCheck.Run(
-                Path.Combine(repository, "economy_mod", "Source", "Fixtures", "prices"),
-                Path.Combine(repository, "economy_mod", "Source", "Fixtures", "wage_costs"));
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "prices"),
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "wage_costs"));
 
             // The parts with no fixtures: codec, scheduler, wealth, self-check.
             int coreCode = CoreSelfTest.Run(
-                Path.Combine(repository, "economy_mod", "Source", "Fixtures"));
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures"));
 
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
             int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode };
