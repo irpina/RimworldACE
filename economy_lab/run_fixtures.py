@@ -35,6 +35,8 @@ CASES = (
     ("docked_r3_day120", 5, 3, 24, 120),
     ("docked_c40_r2_day90", 0, 2, 40, 90),
     ("battery_r2_day30", 0, 2, 200, 30),
+    # docs/145: the full population, buildable once the stocks scale.
+    ("full_r2_day10", 0, 2, 647, 10),
 )
 
 

@@ -25,6 +25,9 @@ namespace SocialProduction.Economy.Core.Model
         private const int Neighbours = 3;
         private const double CapacityHeadroom = 1.25;
         private const double TargetInventoryDays = 20.0;
+        /// <summary><c>wright_battery.FUND_BASIS_COMMODITIES</c>: the size at
+        /// which the docking calibrated the stocks against the flow.</summary>
+        private const int FundBasisCommodities = 200;
 
         /// <summary>The docked economy for a seed, at a size.</summary>
         public static EconomyState Build(long seed, int commodities, int regions)
@@ -40,11 +43,20 @@ namespace SocialProduction.Economy.Core.Model
             first.RecordHistory = false;
             Construct(first, goods, built, routes);
 
+            // docs/145: the stocks keep the ratio to the authored flow that
+            // docked at 200 commodities; exactly one there.
+            Region head = built[0];
+            List<double> here = new List<double>();
+            for (int i = 0; i < head.BaseDailyDemand.Count; i++)
+            {
+                here.Add(head.BaseDailyDemand.ValueAt(i) * head.Prices[head.BaseDailyDemand.KeyAt(i)]);
+            }
+            double scale = Lab.Sum(here) / AuthoredValue(FundBasisCommodities);
             foreach (Region region in built)
             {
-                region.LaborPool = LaborPoolPerDemand * Demand;
-                region.Cash *= CashMultiplier * Demand;
-                region.WorkerCash *= Demand * (CashMultiplier / AuthoredCashMultiplier);
+                region.LaborPool = LaborPoolPerDemand * Demand * scale;
+                region.Cash *= CashMultiplier * Demand * scale;
+                region.WorkerCash *= Demand * (CashMultiplier / AuthoredCashMultiplier) * scale;
                 foreach (Producer producer in region.Producers)
                 {
                     producer.Cash = Lab.Max(producer.Cash, PurseFloorPerDemand * Demand);
@@ -76,6 +88,27 @@ namespace SocialProduction.Economy.Core.Model
             }
             e.FundSpendingRate = Lab.Sum(authored) / opening.Cash;
             return e;
+        }
+
+        /// <summary><c>wright_battery.authored_value</c>: the deepest
+        /// commodities' demand at reference prices, in population order.</summary>
+        private static double AuthoredValue(int commodities)
+        {
+            List<Population.Row> rows = Population.Sample(commodities);
+            int deepest = int.MinValue;
+            foreach (Population.Row row in rows)
+            {
+                deepest = Math.Max(deepest, row.Depth);
+            }
+            List<double> terms = new List<double>();
+            foreach (Population.Row row in rows)
+            {
+                if (row.Depth == deepest)
+                {
+                    terms.Add(Demand * row.Price);
+                }
+            }
+            return Lab.Sum(terms);
         }
 
         /// <summary><c>scale.synthetic_economy</c> up to the economy it
