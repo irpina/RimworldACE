@@ -6,7 +6,10 @@ whole 647-commodity population, and runs past thirty-six months. This
 records the docked economy month by month at those shapes, so that
 docs/141's predictions 1-6 can be scored before any of it is ported.
 
-    python -m economy_lab.game_shape out.json [seeds] [days]
+    python -m economy_lab.game_shape out.json [seeds] [days] [RxC,RxC...]
+
+The optional last argument replaces ``SHAPES``: ``2x647`` is two regions
+at 647 commodities (docs/145 prediction 11).
 """
 from __future__ import annotations
 
@@ -83,8 +86,11 @@ def main(argv):
     out = argv[1]
     seeds = int(argv[2]) if len(argv) > 2 else 3
     days = int(argv[3]) if len(argv) > 3 else DAYS
+    shapes = SHAPES
+    if len(argv) > 4:
+        shapes = tuple(tuple(int(n) for n in shape.split("x")) for shape in argv[4].split(","))
     # Largest first, so the pool is not left waiting on one long job.
-    jobs = sorted(((seed, r, c, days) for r, c in SHAPES for seed in range(seeds)),
+    jobs = sorted(((seed, r, c, days) for r, c in shapes for seed in range(seeds)),
                   key=lambda job: -job[1] * job[2])
     records = []
     with Pool(4) as pool:
