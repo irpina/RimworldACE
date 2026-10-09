@@ -54,18 +54,29 @@ namespace SocialProduction.Economy.Core.Model
         internal static Dictionary<string, List<Share>> SupplyShares(EconomyState e, Region region)
         {
             Dictionary<string, List<Share>> shares = new Dictionary<string, List<Share>>(System.StringComparer.Ordinal);
+            // One pass groups the active producers by commodity, each group
+            // in region order: the lists the laboratory's per-commodity
+            // scan builds, without scanning every producer per commodity.
+            Dictionary<string, List<Producer>> byCommodity = new Dictionary<string, List<Producer>>(System.StringComparer.Ordinal);
+            foreach (Producer p in region.Producers)
+            {
+                if (!p.Active)
+                {
+                    continue;
+                }
+                List<Producer> group;
+                if (!byCommodity.TryGetValue(p.Commodity, out group))
+                {
+                    group = new List<Producer>();
+                    byCommodity[p.Commodity] = group;
+                }
+                group.Add(p);
+            }
             for (int c = 0; c < e.Commodities.Count; c++)
             {
                 string name = e.Commodities.KeyAt(c);
-                List<Producer> producers = new List<Producer>();
-                foreach (Producer p in region.Producers)
-                {
-                    if (p.Active && p.Commodity == name)
-                    {
-                        producers.Add(p);
-                    }
-                }
-                if (producers.Count == 0)
+                List<Producer> producers;
+                if (!byCommodity.TryGetValue(name, out producers))
                 {
                     continue;
                 }

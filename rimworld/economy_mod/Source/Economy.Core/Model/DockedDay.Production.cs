@@ -344,91 +344,142 @@ namespace SocialProduction.Economy.Core.Model
             return floored * region.TicksPerWorkerDay / labor;
         }
 
-        /// <summary><c>_planned_runs</c>: the order-book fixed point.</summary>
+        /// <summary><c>_planned_runs</c>: the order-book fixed point.
+        ///
+        /// Transliterated, then arranged for speed without moving a bit:
+        /// everything the laboratory recomputes on each pass that does not
+        /// depend on the plan -- each good's own demand, the plant and
+        /// basket draws, the stock correction, the desired output, and in
+        /// <c>_allocate_orders</c> each producer's ceiling and cost weight --
+        /// is computed once, and the dicts are arrays indexed by commodity.
+        /// Every floating-point operation that remains happens in the
+        /// laboratory's order on the laboratory's operands.</summary>
         private static Dictionary<Producer, double> PlannedRuns(EconomyState e, Region region,
             OrderedMap<double> opening, List<Producer> active, Dictionary<Producer, double> desired)
         {
-            Dictionary<Producer, double> planned = new Dictionary<Producer, double>(desired);
-            List<KeyValuePair<string, List<Producer>>> grouped = GroupedByCommodity(active);
+            int goods = e.Commodities.Count;
+            Dictionary<string, int> index = new Dictionary<string, int>(goods, System.StringComparer.Ordinal);
+            for (int c = 0; c < goods; c++)
+            {
+                index[e.Commodities.KeyAt(c)] = c;
+            }
+            Dictionary<Producer, int> slot = new Dictionary<Producer, int>(active.Count);
+            for (int a = 0; a < active.Count; a++)
+            {
+                slot[active[a]] = a;
+            }
+
+            // Plan-independent terms, in the order the laboratory adds them.
+            double[] ownDemand = new double[goods];
+            for (int c = 0; c < goods; c++)
+            {
+                ownDemand[c] = Lab.DailyDemand(region, e.Commodities.ValueAt(c));
+            }
+            int[][] inputIndex = new int[active.Count][];
+            double[][] inputQuantity = new double[active.Count][];
+            for (int a = 0; a < active.Count; a++)
+            {
+                OrderedMap<double> inputs = active[a].Process.Inputs;
+                inputIndex[a] = new int[inputs.Count];
+                inputQuantity[a] = new double[inputs.Count];
+                for (int i = 0; i < inputs.Count; i++)
+                {
+                    inputIndex[a][i] = index[inputs.KeyAt(i)];
+                    inputQuantity[a][i] = inputs.ValueAt(i);
+                }
+            }
+            List<int> lateIndex = new List<int>();
+            List<double> lateAmount = new List<double>();
+            foreach (Producer producer in active)
+            {
+                double perCapacity = producer.CapacityPerDay / e.CapitalServiceLifeDays;
+                OrderedMap<double> bill = Lab.CapitalBillPerCapacity(producer.Process);
+                for (int i = 0; i < bill.Count; i++)
+                {
+                    int c;
+                    if (index.TryGetValue(bill.KeyAt(i), out c))
+                    {
+                        lateIndex.Add(c);
+                        lateAmount.Add(perCapacity * bill.ValueAt(i));
+                    }
+                }
+            }
+            foreach (string name in region.SubsistenceBasket.SortedKeys())
+            {
+                int c;
+                if (index.TryGetValue(name, out c))
+                {
+                    double quantity = region.SubsistenceBasket[name];
+                    if (region.HabitualScale != 1.0)
+                    {
+                        quantity = quantity * region.HabitualScale;
+                    }
+                    lateIndex.Add(c);
+                    lateAmount.Add(quantity * region.WorkerDaysDue);
+                }
+            }
             OrderedMap<double> throughput = e.Throughput[region.Name];
+            double[] correction = new double[goods];
+            for (int c = 0; c < goods; c++)
+            {
+                Commodity commodity = e.Commodities.ValueAt(c);
+                double target = throughput[commodity.Name] * commodity.TargetInventoryDays;
+                correction[c] = e.ReplenishmentRate * (target - opening.Get(commodity.Name, 0.0));
+            }
+            double[] desiredOutput = new double[goods];
+            foreach (Producer producer in active)
+            {
+                int c = index[producer.Commodity];
+                desiredOutput[c] = desiredOutput[c] + desired[producer] * producer.Process.Outputs[producer.Commodity];
+            }
+            List<OrderGroup> groups = OrderGroups(e, active, desired, desiredOutput, index, slot);
+
+            double[] planned = new double[active.Count];
+            for (int a = 0; a < active.Count; a++)
+            {
+                planned[a] = desired[active[a]];
+            }
+            double[] intended = new double[goods];
+            double[] requested = new double[goods];
             for (int iteration = 0; iteration < 1000; iteration++)
             {
-                OrderedMap<double> intended = new OrderedMap<double>();
-                for (int c = 0; c < e.Commodities.Count; c++)
+                Array.Copy(ownDemand, intended, goods);
+                for (int a = 0; a < active.Count; a++)
                 {
-                    intended[e.Commodities.KeyAt(c)] = Lab.DailyDemand(region, e.Commodities.ValueAt(c));
-                }
-                foreach (Producer producer in active)
-                {
-                    double runs = planned[producer];
-                    OrderedMap<double> inputs = producer.Process.Inputs;
-                    for (int i = 0; i < inputs.Count; i++)
+                    double runs = planned[a];
+                    int[] at = inputIndex[a];
+                    double[] quantity = inputQuantity[a];
+                    for (int i = 0; i < at.Length; i++)
                     {
-                        string name = inputs.KeyAt(i);
-                        intended[name] = intended[name] + runs * inputs.ValueAt(i);
+                        intended[at[i]] = intended[at[i]] + runs * quantity[i];
                     }
                 }
-                foreach (Producer producer in active)
+                for (int i = 0; i < lateIndex.Count; i++)
                 {
-                    double perCapacity = producer.CapacityPerDay / e.CapitalServiceLifeDays;
-                    OrderedMap<double> bill = Lab.CapitalBillPerCapacity(producer.Process);
-                    for (int i = 0; i < bill.Count; i++)
+                    intended[lateIndex[i]] = intended[lateIndex[i]] + lateAmount[i];
+                }
+                for (int c = 0; c < goods; c++)
+                {
+                    requested[c] = Lab.Max(0.0, intended[c] + correction[c]);
+                }
+                double[] revised = AllocateOrders(groups, requested, active.Count);
+                bool same = true;
+                for (int a = 0; a < active.Count; a++)
+                {
+                    if (planned[a] != revised[a])
                     {
-                        string name = bill.KeyAt(i);
-                        if (intended.ContainsKey(name))
-                        {
-                            intended[name] = intended[name] + perCapacity * bill.ValueAt(i);
-                        }
-                    }
-                }
-                foreach (string name in region.SubsistenceBasket.SortedKeys())
-                {
-                    if (intended.ContainsKey(name))
-                    {
-                        double quantity = region.SubsistenceBasket[name];
-                        if (region.HabitualScale != 1.0)
-                        {
-                            quantity = quantity * region.HabitualScale;
-                        }
-                        intended[name] = intended[name] + quantity * region.WorkerDaysDue;
-                    }
-                }
-                OrderedMap<double> requested = new OrderedMap<double>();
-                for (int c = 0; c < e.Commodities.Count; c++)
-                {
-                    Commodity commodity = e.Commodities.ValueAt(c);
-                    string name = commodity.Name;
-                    double target = throughput[name] * commodity.TargetInventoryDays;
-                    double correction = e.ReplenishmentRate * (target - opening.Get(name, 0.0));
-                    requested[name] = Lab.Max(0.0, intended[name] + correction);
-                }
-                OrderedMap<double> desiredOutput = new OrderedMap<double>();
-                for (int c = 0; c < e.Commodities.Count; c++)
-                {
-                    desiredOutput[e.Commodities.KeyAt(c)] = 0.0;
-                }
-                foreach (Producer producer in active)
-                {
-                    double units = producer.Process.Outputs[producer.Commodity];
-                    desiredOutput[producer.Commodity] = desiredOutput[producer.Commodity] + desired[producer] * units;
-                }
-                Dictionary<Producer, double> revised = AllocateOrders(e, region, desired, desiredOutput, requested, grouped);
-                bool same = revised.Count == planned.Count;
-                if (same)
-                {
-                    foreach (KeyValuePair<Producer, double> entry in revised)
-                    {
-                        double before;
-                        if (!planned.TryGetValue(entry.Key, out before) || before != entry.Value)
-                        {
-                            same = false;
-                            break;
-                        }
+                        same = false;
+                        break;
                     }
                 }
                 if (same)
                 {
-                    return revised;
+                    Dictionary<Producer, double> result = new Dictionary<Producer, double>(active.Count);
+                    for (int a = 0; a < active.Count; a++)
+                    {
+                        result[active[a]] = revised[a];
+                    }
+                    return result;
                 }
                 planned = revised;
             }
@@ -458,102 +509,144 @@ namespace SocialProduction.Economy.Core.Model
             return grouped;
         }
 
-        /// <summary><c>_allocate_orders</c>, posted-price weighting: the
-        /// order book goes to the producer asking less (docs/57).</summary>
-        private static Dictionary<Producer, double> AllocateOrders(EconomyState e, Region region,
-            Dictionary<Producer, double> desired, OrderedMap<double> desiredOutput,
-            OrderedMap<double> requestedOutput, List<KeyValuePair<string, List<Producer>>> grouped)
+        /// <summary>One contested sector of <c>_allocate_orders</c>, with
+        /// what does not change between passes of the fixed point.</summary>
+        private sealed class OrderGroup
+        {
+            public int Commodity;
+            public int[] Slots;
+            public double[] Units;
+            /// <summary>Null where the sector has no output to place: every
+            /// producer gets nothing, whatever is requested.</summary>
+            public double[] Ceilings;
+            public double[] Weights;
+            public double AvailableOutput;
+        }
+
+        private static List<OrderGroup> OrderGroups(EconomyState e, List<Producer> active,
+            Dictionary<Producer, double> desired, double[] desiredOutput,
+            Dictionary<string, int> index, Dictionary<Producer, int> slot)
         {
             double epsilonShare = e.CompetitiveShareElasticity;
-            Dictionary<Producer, double> revised = new Dictionary<Producer, double>();
-            foreach (KeyValuePair<string, List<Producer>> group in grouped)
+            List<OrderGroup> groups = new List<OrderGroup>();
+            foreach (KeyValuePair<string, List<Producer>> entry in GroupedByCommodity(active))
             {
-                string name = group.Key;
-                List<Producer> producers = group.Value;
-                double availableOutput = desiredOutput[name];
-                if (availableOutput <= Epsilon)
+                List<Producer> producers = entry.Value;
+                OrderGroup group = new OrderGroup();
+                group.Commodity = index[entry.Key];
+                group.Slots = new int[producers.Count];
+                group.Units = new double[producers.Count];
+                for (int i = 0; i < producers.Count; i++)
                 {
-                    foreach (Producer p in producers) { revised[p] = 0.0; }
-                    continue;
+                    group.Slots[i] = slot[producers[i]];
+                    group.Units[i] = producers[i].Process.Outputs[producers[i].Commodity];
                 }
-                double wanted = Lab.Min(requestedOutput[name], availableOutput);
-                if (wanted <= Epsilon)
+                group.AvailableOutput = desiredOutput[group.Commodity];
+                if (group.AvailableOutput > Epsilon)
                 {
-                    foreach (Producer p in producers) { revised[p] = 0.0; }
-                    continue;
-                }
-                Dictionary<Producer, double> ceilings = new Dictionary<Producer, double>();
-                foreach (Producer p in producers)
-                {
-                    ceilings[p] = desired[p] * p.Process.Outputs[p.Commodity];
-                }
-                Dictionary<Producer, double> weights = new Dictionary<Producer, double>();
-                if (epsilonShare <= 0.0)
-                {
-                    foreach (Producer p in producers) { weights[p] = ceilings[p]; }
-                }
-                else
-                {
-                    Dictionary<Producer, double> costs = new Dictionary<Producer, double>();
-                    double cheapest = 0.0;
+                    group.Ceilings = new double[producers.Count];
                     for (int i = 0; i < producers.Count; i++)
                     {
-                        Producer p = producers[i];
-                        double cost = Lab.Max(p.PostedPrice, Epsilon);
-                        costs[p] = cost;
-                        cheapest = i == 0 ? cost : Lab.Min(cheapest, cost);
+                        group.Ceilings[i] = desired[producers[i]] * producers[i].Process.Outputs[producers[i].Commodity];
                     }
-                    foreach (Producer p in producers)
+                    if (epsilonShare <= 0.0)
                     {
-                        weights[p] = ceilings[p] * Math.Pow(costs[p] / cheapest, -epsilonShare);
+                        group.Weights = group.Ceilings;
+                    }
+                    else
+                    {
+                        double[] costs = new double[producers.Count];
+                        double cheapest = 0.0;
+                        for (int i = 0; i < producers.Count; i++)
+                        {
+                            costs[i] = Lab.Max(producers[i].PostedPrice, Epsilon);
+                            cheapest = i == 0 ? costs[i] : Lab.Min(cheapest, costs[i]);
+                        }
+                        group.Weights = new double[producers.Count];
+                        for (int i = 0; i < producers.Count; i++)
+                        {
+                            group.Weights[i] = group.Ceilings[i] * Math.Pow(costs[i] / cheapest, -epsilonShare);
+                        }
                     }
                 }
-                Dictionary<Producer, double> allotted = new Dictionary<Producer, double>();
-                foreach (Producer p in producers) { allotted[p] = 0.0; }
-                double remaining = wanted;
-                List<Producer> open = new List<Producer>();
-                foreach (Producer p in producers)
+                groups.Add(group);
+            }
+            return groups;
+        }
+
+        /// <summary><c>_allocate_orders</c>, posted-price weighting: the
+        /// order book goes to the producer asking less (docs/57).</summary>
+        private static double[] AllocateOrders(List<OrderGroup> groups, double[] requestedOutput, int count)
+        {
+            double[] revised = new double[count];
+            List<int> open = new List<int>();
+            List<int> still = new List<int>();
+            List<double> openWeights = new List<double>();
+            foreach (OrderGroup group in groups)
+            {
+                int n = group.Slots.Length;
+                if (group.Ceilings == null)
                 {
-                    if (ceilings[p] > Epsilon) { open.Add(p); }
+                    continue; // revised is already zero
                 }
-                for (int round = 0; round < producers.Count + 1; round++)
+                double wanted = Lab.Min(requestedOutput[group.Commodity], group.AvailableOutput);
+                if (wanted <= Epsilon)
+                {
+                    continue;
+                }
+                double[] ceilings = group.Ceilings;
+                double[] weights = group.Weights;
+                double[] allotted = new double[n];
+                double remaining = wanted;
+                open.Clear();
+                for (int i = 0; i < n; i++)
+                {
+                    if (ceilings[i] > Epsilon) { open.Add(i); }
+                }
+                for (int round = 0; round < n + 1; round++)
                 {
                     if (remaining <= Epsilon || open.Count == 0)
                     {
                         break;
                     }
-                    List<double> openWeights = new List<double>(open.Count);
-                    foreach (Producer p in open) { openWeights.Add(weights[p]); }
+                    openWeights.Clear();
+                    foreach (int i in open) { openWeights.Add(weights[i]); }
                     double totalWeight = Lab.Sum(openWeights);
                     if (totalWeight <= Epsilon)
                     {
                         break;
                     }
-                    HashSet<Producer> capped = new HashSet<Producer>();
+                    still.Clear();
+                    bool anyCapped = false;
                     double placed = 0.0;
-                    foreach (Producer p in open)
+                    foreach (int i in open)
                     {
-                        double share = remaining * weights[p] / totalWeight;
-                        double room = ceilings[p] - allotted[p];
+                        double share = remaining * weights[i] / totalWeight;
+                        double room = ceilings[i] - allotted[i];
                         double take = Lab.Min(share, room);
-                        allotted[p] = allotted[p] + take;
+                        allotted[i] = allotted[i] + take;
                         placed += take;
                         if (room - take <= Epsilon)
                         {
-                            capped.Add(p);
+                            anyCapped = true;
+                        }
+                        else
+                        {
+                            still.Add(i);
                         }
                     }
                     remaining -= placed;
-                    if (capped.Count == 0)
+                    if (!anyCapped)
                     {
                         break;
                     }
-                    open = open.FindAll(delegate (Producer p) { return !capped.Contains(p); });
+                    List<int> swap = open;
+                    open = still;
+                    still = swap;
                 }
-                foreach (Producer producer in producers)
+                for (int i = 0; i < n; i++)
                 {
-                    double units = producer.Process.Outputs[producer.Commodity];
-                    revised[producer] = allotted[producer] / units;
+                    revised[group.Slots[i]] = allotted[i] / group.Units[i];
                 }
             }
             return revised;

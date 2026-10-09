@@ -2284,11 +2284,15 @@ deliberately.
    0.3027 and meals capacity stays at 0.42 against 1.66. Something else
    takes the meals plant.
 
-**One known failure that is not ours.** `tests/test_port_fixtures.py`
-`test_the_committed_fixtures_are_current` fails on `scale_647_day3` with
-a last-digit float difference. It predates this work and fails with every
-change stashed — a machine difference, not a model one. Regenerate it
-deliberately, on the machine that will keep it, or leave it.
+**One known failure that is not ours — since explained (2026-10-09).**
+`tests/test_port_fixtures.py` `test_the_committed_fixtures_are_current`
+failed on `scale_647_day3` with a last-digit float difference. It was not
+a machine difference but an **interpreter** one: CPython 3.12 made `sum()`
+of floats compensated (Neumaier) and 3.11's is naive, so a fixture written
+under one fails under the other. The fixtures are written under 3.12 (the
+port's `Lab.Sum` matches it), every fixture writer refuses to run under a
+naive `sum()` (`economy_lab/interpreter.py`), and the fixture tests skip
+under one with the reason stated. Regenerate with `python3.12 -m ...`.
 
 **Standing rules that applied throughout:** no dependencies; no change
 to default model behaviour (`python -m economy_lab.baseline` zero

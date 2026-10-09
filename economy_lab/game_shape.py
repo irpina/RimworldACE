@@ -86,11 +86,18 @@ def main(argv):
     # Largest first, so the pool is not left waiting on one long job.
     jobs = sorted(((seed, r, c, days) for r, c in SHAPES for seed in range(seeds)),
                   key=lambda job: -job[1] * job[2])
+    records = []
     with Pool(4) as pool:
-        records = pool.map(trajectory, jobs, chunksize=1)
-    with open(out, "w") as handle:
-        json.dump(records, handle)
-    print("records:", len(records))
+        # Written after every run, so a run that is stopped keeps what it had.
+        for record in pool.imap_unordered(trajectory, jobs, chunksize=1):
+            records.append(record)
+            records.sort(key=lambda r: (r["regions"], r["commodities"], r["seed"]))
+            with open(out, "w") as handle:
+                json.dump(records, handle)
+            print(f"{len(records)}/{len(jobs)}: seed {record['seed']}, "
+                  f"{record['regions']} regions, {record['commodities']} commodities, "
+                  f"{record.get('seconds', 0.0):.0f} s{', ' + record['error'] if 'error' in record else ''}",
+                  flush=True)
 
 
 if __name__ == "__main__":

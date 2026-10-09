@@ -202,7 +202,11 @@ two-sided predictions followed by a results document that scores them:
 ### Running it
 
 No dependencies beyond the Python standard library. Everything is
-deterministic; a run's history is bit-identical across machines.
+deterministic; a run's history is bit-identical across machines **for a
+given CPython minor version**. CPython 3.12 made `sum()` of floats
+compensated and 3.11's is naive, so the last bits differ between them.
+The C# port's fixtures are pinned to 3.12's: write them with
+`python3.12`, and the fixture tests skip under an older interpreter.
 
 ```bash
 python -m unittest discover -s tests      # ~480 acceptance and invariant tests

@@ -23,6 +23,24 @@ namespace SocialProduction.Economy.Core.Model
                     }
                 }
                 OrderedMap<double> throughput = e.Throughput[region.Name];
+                // Active producers by commodity, each in region order: one
+                // pass instead of a scan per commodity. Nothing below
+                // changes who is active.
+                Dictionary<string, List<Producer>> byCommodity = new Dictionary<string, List<Producer>>(System.StringComparer.Ordinal);
+                foreach (Producer p in region.Producers)
+                {
+                    if (!p.Active)
+                    {
+                        continue;
+                    }
+                    List<Producer> group;
+                    if (!byCommodity.TryGetValue(p.Commodity, out group))
+                    {
+                        group = new List<Producer>();
+                        byCommodity[p.Commodity] = group;
+                    }
+                    group.Add(p);
+                }
                 for (int c = 0; c < e.Commodities.Count; c++)
                 {
                     Commodity commodity = e.Commodities.ValueAt(c);
@@ -32,15 +50,8 @@ namespace SocialProduction.Economy.Core.Model
                     {
                         continue;
                     }
-                    List<Producer> producers = new List<Producer>();
-                    foreach (Producer p in region.Producers)
-                    {
-                        if (p.Active && p.Commodity == name)
-                        {
-                            producers.Add(p);
-                        }
-                    }
-                    if (producers.Count == 0)
+                    List<Producer> producers;
+                    if (!byCommodity.TryGetValue(name, out producers))
                     {
                         continue;
                     }
