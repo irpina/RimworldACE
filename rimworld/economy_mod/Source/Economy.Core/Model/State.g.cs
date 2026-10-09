@@ -27,13 +27,13 @@ namespace SocialProduction.Economy.Core.Model
         public string Name;
         public double ReferencePrice;
         public double LaborValue;
-        public double DemandElasticity;
-        public double TargetInventoryDays;
-        public double PriceAdjustmentSpeed;
-        public double InventoryPriceSensitivity;
-        public double MinimumPriceFactor;
-        public double MaximumPriceFactor;
-        public double MassPerUnit;
+        public double DemandElasticity = 0.8;
+        public double TargetInventoryDays = 30.0;
+        public double PriceAdjustmentSpeed = 0.2;
+        public double InventoryPriceSensitivity = 0.9;
+        public double MinimumPriceFactor = 0.1;
+        public double MaximumPriceFactor = 10.0;
+        public double MassPerUnit = 1.0;
     }
 
     /// <summary>The laboratory's <c>Process</c>, field for field.</summary>
@@ -42,15 +42,15 @@ namespace SocialProduction.Economy.Core.Model
         public string Name;
         public OrderedMap<double> Outputs = new OrderedMap<double>();
         public OrderedMap<double> Inputs = new OrderedMap<double>();
-        public double DirectLabor;
-        public double CapacityPerRun;
-        public double UnitOperatingCost;
-        public string Apportionment;
-        public double CapitalMoneyPerCapacity;
-        public double CapitalLaborPerCapacity;
+        public double DirectLabor = 0.0;
+        public double CapacityPerRun = 1.0;
+        public double UnitOperatingCost = 0.0;
+        public string Apportionment = "mass";
+        public double CapitalMoneyPerCapacity = 0.0;
+        public double CapitalLaborPerCapacity = 0.0;
         public OrderedMap<double> CapitalBill = new OrderedMap<double>();
-        public double CapitalConstructionLabor;
-        public double MachinesPerCapacity;
+        public double CapitalConstructionLabor = 0.0;
+        public double MachinesPerCapacity = 0.0;
     }
 
     /// <summary>The laboratory's <c>Producer</c>, field for field.</summary>
@@ -60,32 +60,32 @@ namespace SocialProduction.Economy.Core.Model
         public string Commodity;
         public double CapacityPerDay;
         public double UnitCost;
-        public double ZeroUtilizationPriceRatio;
-        public double FullUtilizationPriceRatio;
-        public bool Active;
-        public double OutputTotal;
-        public double Cash;
+        public double ZeroUtilizationPriceRatio = 0.7;
+        public double FullUtilizationPriceRatio = 1.05;
+        public bool Active = true;
+        public double OutputTotal = 0.0;
+        public double Cash = 0.0;
         public Process Process;
-        public double WageCostPerUnit;
-        public double LastRuns;
-        public double CapitalCostPerUnit;
-        public double CapitalLaborPerUnit;
-        public double ReplacementSupplied;
-        public double CashTarget;
-        public int LiquidityIdleDays;
-        public double DistributedTotal;
-        public double PostedPrice;
-        public double LastCost;
-        public double OrderFill;
-        public double Stock;
-        public double SalesToday;
-        public double SalesYesterday;
-        public double PendingOut;
-        public double SelloutsToday;
-        public double SelloutsYesterday;
-        public double LastCeiling;
-        public double ExpectedDemand;
-        public int BelowGoingDays;
+        public double WageCostPerUnit = 0.0;
+        public double LastRuns = 0.0;
+        public double CapitalCostPerUnit = 0.0;
+        public double CapitalLaborPerUnit = 0.0;
+        public double ReplacementSupplied = 1.0;
+        public double CashTarget = 0.0;
+        public int LiquidityIdleDays = 0;
+        public double DistributedTotal = 0.0;
+        public double PostedPrice = 0.0;
+        public double LastCost = 0.0;
+        public double OrderFill = 1.0;
+        public double Stock = 0.0;
+        public double SalesToday = 0.0;
+        public double SalesYesterday = 0.0;
+        public double PendingOut = 0.0;
+        public double SelloutsToday = 0.0;
+        public double SelloutsYesterday = 0.0;
+        public double LastCeiling = 0.0;
+        public double ExpectedDemand = 0.0;
+        public int BelowGoingDays = 0;
         public OrderedMap<double> InputsOnHand = new OrderedMap<double>();
     }
 
@@ -106,20 +106,20 @@ namespace SocialProduction.Economy.Core.Model
         public OrderedMap<double> SubsistenceBasket = new OrderedMap<double>();
         public OrderedMap<double> SeedUnitCost = new OrderedMap<double>();
         public OrderedMap<double> CostRatio = new OrderedMap<double>();
-        public double TicksPerWorkerDay;
-        public double CapitalServiceLifeDays;
-        public double LaborPool;
-        public double WorkerCash;
-        public double WorkerDaysDue;
-        public double WorkerDaysEarned;
-        public double WagePremium;
-        public double WagePremiumDue;
-        public double ReferenceEmploymentRate;
-        public double HabitualScale;
-        public double DemandScale;
+        public double TicksPerWorkerDay = 24000.0;
+        public double CapitalServiceLifeDays = 600.0;
+        public double LaborPool = double.PositiveInfinity;
+        public double WorkerCash = 0.0;
+        public double WorkerDaysDue = 0.0;
+        public double WorkerDaysEarned = 0.0;
+        public double WagePremium = 0.0;
+        public double WagePremiumDue = 0.0;
+        public double ReferenceEmploymentRate = 0.0;
+        public double HabitualScale = 1.0;
+        public double DemandScale = 1.0;
         public OrderedMap<double> MoneyDemand = new OrderedMap<double>();
         public OrderedMap<double> SpendingShares = new OrderedMap<double>();
-        public double AuthoredValue;
+        public double AuthoredValue = 0.0;
         public OrderedMap<double> FundStock = new OrderedMap<double>();
         public OrderedMap<double> FundPending = new OrderedMap<double>();
         public OrderedMap<double> FundPrice = new OrderedMap<double>();
@@ -135,7 +135,7 @@ namespace SocialProduction.Economy.Core.Model
         public double FreightPerUnit;
         public double CapacityPerDay;
         public int TravelDays;
-        public double RiskMarkup;
+        public double RiskMarkup = 0.0;
     }
 
     /// <summary>The laboratory's <c>Shipment</c>, field for field.</summary>
@@ -159,7 +159,7 @@ namespace SocialProduction.Economy.Core.Model
         public OrderedMap<double> Production = new OrderedMap<double>();
         public OrderedMap<double> Consumption = new OrderedMap<double>();
         public OrderedMap<double> IntermediateConsumption = new OrderedMap<double>();
-        public double InvestmentSpending;
+        public double InvestmentSpending = 0.0;
         public OrderedMap<double> ReserveDepletion = new OrderedMap<double>();
         public OrderedMap<double> DifferentialRent = new OrderedMap<double>();
         public OrderedMap<double> LivingLabor = new OrderedMap<double>();
@@ -178,8 +178,8 @@ namespace SocialProduction.Economy.Core.Model
         public OrderedMap<double> CapitalConstruction = new OrderedMap<double>();
         public OrderedMap<double> CapacityLost = new OrderedMap<double>();
         public OrderedMap<double> ConstructionLabor = new OrderedMap<double>();
-        public double TransportCash;
-        public double InitialCash;
+        public double TransportCash = 0.0;
+        public double InitialCash = 0.0;
         public OrderedMap<double> Distributions = new OrderedMap<double>();
         public OrderedMap<double> LiquidityCurtailment = new OrderedMap<double>();
         public OrderedMap<double> FundWageSupport = new OrderedMap<double>();
@@ -246,5 +246,60 @@ namespace SocialProduction.Economy.Core.Model
         public double ProductionPeriodDays;
         public bool RecordHistory;
         public int HistoryEvery;
+
+        /// <summary>Every setting <c>Economy.__init__</c> takes, at its default.</summary>
+        public void ApplyConstructorDefaults()
+        {
+            InputRationing = "proportional";
+            InvestmentIntervalDays = 15;
+            InvestmentLeadDays = 45;
+            InvestmentMarginThreshold = 0.18;
+            InvestmentFractionOfShortfall = 0.45;
+            UnmetDemandPricePressure = 2.0;
+            SpeculativeInventoryLimit = 0.5;
+            ExpectationAlpha = 0.05;
+            ReplenishmentRate = 0.1;
+            ConstructionCostMultiplier = 60.0;
+            MinInvestmentCapacity = 0.1;
+            BufferRefillHorizonDays = 60.0;
+            ZeroUtilizationPriceRatio = 0.7;
+            FullUtilizationPriceRatio = 1.05;
+            LaborValuePerTick = 0.015833333333333335;
+            EmploymentQuantum = 9.5367431640625e-07;
+            ProducerEmploymentQuantum = 0.0;
+            SalesFollowProduction = false;
+            LaborValueTolerance = 1e-12;
+            LaborValueMaxIterations = 1000;
+            CompetitivePriceIntensity = 0.5;
+            CompetitiveShareElasticity = 2.0;
+            CapitalServiceLifeDays = 600.0;
+            CapacityExit = false;
+            WageBargainingStrength = 0.0;
+            WageBargainingSpeed = 0.1;
+            WorkerMobilityStrength = 0.0;
+            HabituationSpeed = 0.0;
+            ProducerCash = false;
+            WorkingCapitalDays = 5.0;
+            BankruptcyIdleDays = 30;
+            PostedPrices = false;
+            PostedPriceSpeed = 0.02;
+            PostedShareGain = 1.0;
+            FundSpendingRate = 0.0;
+            Accumulate = false;
+            RetentionRate = 0.5;
+            Procurement = false;
+            GoingMargin = 0.5;
+            IdleCapacityGain = 1.0;
+            EntryOnMargin = false;
+            EntryGain = 0.05;
+            ExitOnReturn = false;
+            CapacityReserve = 0.1;
+            ExitGain = 1.0;
+            ProductionPriceTolerance = 1e-12;
+            ProductionPriceMaxIterations = 1000;
+            ProductionPeriodDays = 1.0;
+            RecordHistory = true;
+            HistoryEvery = 1;
+        }
     }
 }

@@ -18,6 +18,8 @@ the docked configuration carries none (docs/141 §2).
 from __future__ import annotations
 
 import dataclasses
+import inspect
+import math
 from pathlib import Path
 
 from . import model
@@ -59,6 +61,30 @@ def kind(annotation: str) -> tuple:
 def fields(cls):
     for field in dataclasses.fields(cls):
         yield field.name, field.type
+
+
+def literal(ctype: str, value) -> str:
+    """A C# literal for a Python default, exact: ``repr`` round-trips and
+    Roslyn parses decimal literals correctly rounded."""
+    if ctype == "double":
+        value = float(value)
+        if math.isinf(value):
+            return "double.PositiveInfinity" if value > 0 else "double.NegativeInfinity"
+        return repr(value)
+    if ctype == "int":
+        return str(int(value))
+    if ctype == "bool":
+        return "true" if value else "false"
+    if ctype == "string":
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    raise TypeError(ctype)
+
+
+def defaults(cls):
+    """Scalar defaults a dataclass declares, by field name."""
+    return {field.name: field.default for field in dataclasses.fields(cls)
+            if field.default is not dataclasses.MISSING
+            and isinstance(field.default, (bool, int, float, str))}
 
 
 READ_PRIM = {"double": "Num({e})", "int": "Int({e})", "bool": "{e}.GetBoolean()", "string": "Str({e})"}
@@ -131,7 +157,9 @@ def generate():
                 continue
             k = kind(annotation)
             if k[0] == "prim":
-                state.append(f"        public {k[1]} {member};")
+                initial = defaults(cls).get(field)
+                suffix = "" if initial is None else " = " + literal(k[1], initial)
+                state.append(f"        public {k[1]} {member}{suffix};")
                 read.append(f"            x.{member} = " + READ_PRIM[k[1]].format(e=el) + ";")
                 write.append("            " + WRITE_PRIM[k[1]].format(n=field, v=f"x.{member}"))
             elif k[0] == "nummap":
@@ -178,12 +206,23 @@ def generate():
             "            ExpectFields(e, \"economy\", ScalarFields);"]
     write = ["        private static void WriteScalars(Utf8JsonWriter w, EconomyState x)", "        {",
              "            w.WriteStartObject(\"economy\");"]
+    parameters = inspect.signature(model.Economy.__init__).parameters
+    constructor = []
     for field, value in scalars.items():
         ctype = {bool: "bool", int: "int", float: "double", str: "string"}[type(value)]
         member = pascal(field)
         state.append(f"        public {ctype} {member};")
+        parameter = parameters.get(field)
+        if parameter is not None and parameter.default is not inspect.Parameter.empty:
+            constructor.append(f"            {member} = {literal(ctype, parameter.default)};")
         read.append(f"            x.{member} = " + READ_PRIM[ctype].format(e=f"e.GetProperty(\"{field}\")") + ";")
         write.append("            " + WRITE_PRIM[ctype].format(n=field, v=f"x.{member}"))
+    state.append("")
+    state.append("        /// <summary>Every setting <c>Economy.__init__</c> takes, at its default.</summary>")
+    state.append("        public void ApplyConstructorDefaults()")
+    state.append("        {")
+    state.extend(constructor)
+    state.append("        }")
     state.append("    }")
     state.append("}")
     read.append("        }")
