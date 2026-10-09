@@ -22,7 +22,7 @@ from multiprocessing import Pool
 from economy_lab import distributions as D
 from economy_lab import social_architecture as sa
 from economy_lab.model import Economy
-from economy_lab.scale import synthetic_economy
+from economy_lab.scale import population, synthetic_economy
 
 MONTH = 30
 BURN_IN_MONTHS = 6
@@ -119,12 +119,29 @@ def measure_sa(seed, beta=1.0):
     }
 
 
+#: The size at which the docking calibrated the money stock against the
+#: flow (docs/137, docs/138): the battery's 200 commodities.  With
+#: ``scale_stocks`` the fund, the workers' seed and the labour pool keep
+#: that calibration's ratio to the authored final demand at any size
+#: (docs/145).
+FUND_BASIS_COMMODITIES = 200
+
+
+def authored_value(commodities, demand):
+    """The authored final demand's value a day at reference prices: each
+    deepest commodity's demand times its price, summed in population order,
+    exactly as ``build_ours`` reads it off the first region."""
+    rows = population(commodities)
+    deepest = max(row["depth"] for row in rows)
+    return sum(demand * row["price"] for row in rows if row["depth"] == deepest)
+
+
 def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                quantum=1.0, basket_in_demand=True, producers_per_commodity=1,
                fund_spending=False, accumulate=False, retention_rate=0.5,
                cash_multiplier=CASH_MULTIPLIER, cost_spread=0.1,
                construction_cost_multiplier=60.0, investment=True,
-               commodities=COMMODITIES, regions=REGIONS):
+               commodities=COMMODITIES, regions=REGIONS, scale_stocks=False):
     """Our laboratory at a size where a distribution exists (docs/124 §3),
     rescaled so that most producers can employ a whole worker (docs/126),
     with the staple sector sized to feed that workforce (docs/128).
@@ -132,6 +149,12 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
     The knobs are the designs' experiments: ``demand`` is docs/126
     prediction 1, ``quantum`` its prediction 2, ``basket_fraction`` its 3
     and 4; ``basket_in_demand=False`` reproduces docs/127's spiral.
+
+    ``scale_stocks`` (docs/145) multiplies the fund, the workers' seed and
+    the labour pool by the authored final demand's value against the
+    battery's, so the stocks keep the ratio to the flow the docking
+    calibrated at any number of commodities.  The factor is exactly one at
+    200.
     """
     base = synthetic_economy(commodities=commodities, regions=regions,
                              daily_demand=demand, basket_fraction=basket_fraction,
@@ -140,14 +163,20 @@ def build_ours(seed, *, demand=DEMAND, basket_fraction=BASKET_FRACTION,
                              cost_spread=cost_spread,
                              record_history=False, seed=seed)
     regions = list(base.regions.values())
+    scale = 1.0
+    if scale_stocks:
+        first = regions[0]
+        scale = (sum(amount * first.prices[name]
+                     for name, amount in first.base_daily_demand.items())
+                 / authored_value(FUND_BASIS_COMMODITIES, demand))
     for region in regions:
-        region.labor_pool = LABOR_POOL_PER_DEMAND * demand
-        region.cash *= cash_multiplier * demand
+        region.labor_pool = LABOR_POOL_PER_DEMAND * demand * scale
+        region.cash *= cash_multiplier * demand * scale
         # docs/137 §2: the workers' seed scales with the fund's, so that
         # a smaller fund does not leave a quarter of the money stock in
         # a purse that only ever buys the basket.  At the shipped
         # multiplier the factor is exactly one.
-        region.worker_cash *= demand * (cash_multiplier / CASH_MULTIPLIER)
+        region.worker_cash *= demand * (cash_multiplier / CASH_MULTIPLIER) * scale
         for producer in region.producers:
             producer.cash = max(producer.cash, PURSE_FLOOR_PER_DEMAND * demand)
     economy = Economy(
@@ -194,6 +223,7 @@ DOCKED = dict(
     construction_cost_multiplier=20.0,
     quantum=1.0,
     investment=False,
+    scale_stocks=True,
 )
 
 
@@ -233,7 +263,6 @@ def measure_ours(seed, **knobs):
     except RuntimeError as failure:
         return {"model": "ours", "seed": seed, "error": str(failure),
                 "day": getattr(economy, "day", 0) if "economy" in locals() else 0}
-    labor_pool = LABOR_POOL_PER_DEMAND * knobs.get("demand", DEMAND)
 
     def totals():
         living = sum(economy.ledger.living_labor.values())
@@ -297,7 +326,8 @@ def measure_ours(seed, **knobs):
         # docs/132 predictions 2 and 3.
         "cash_balance": economy.cash_balance() / money_stock,
         "fund_share": sum(r.cash for r in economy.regions.values()) / money_stock,
-        "unemployment": max(0.0, 1.0 - employed / (labor_pool * REGIONS)),
+        # The pool the economy has, not the default one (docs/145).
+        "unemployment": max(0.0, 1.0 - employed / sum(r.labor_pool for r in economy.regions.values())),
         "capacity_rank": capacity_correlation(economy, previous_sizes),
         "employing": len(previous_sizes),
         "bankruptcies": deaths,
@@ -417,7 +447,7 @@ def main(argv):
             knobs[key] = int(value)
         elif key in ("commodities", "regions"):
             knobs[key] = int(value)
-        elif key in ("fund_spending", "accumulate", "investment"):
+        elif key in ("fund_spending", "accumulate", "investment", "scale_stocks"):
             knobs[key] = value.lower() in ("1", "true", "on", "yes")
         else:
             knobs[key] = float(value)
