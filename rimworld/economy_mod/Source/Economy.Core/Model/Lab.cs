@@ -51,6 +51,73 @@ namespace SocialProduction.Economy.Core.Model
             return Sum(terms);
         }
 
+        /// <summary><c>share_of_cost</c>: mass apportionment (docs/08).</summary>
+        public static double ShareOfCost(Process p, string commodity, OrderedMap<Commodity> commodities)
+        {
+            if (!p.Outputs.ContainsKey(commodity))
+            {
+                return 0.0;
+            }
+            if (p.Outputs.Count == 1)
+            {
+                return 1.0;
+            }
+            if (p.Apportionment != "mass")
+            {
+                throw new System.ArgumentException("unknown apportionment rule '" + p.Apportionment + "'");
+            }
+            List<double> weights = new List<double>(p.Outputs.Count);
+            for (int i = 0; i < p.Outputs.Count; i++)
+            {
+                weights.Add(MassWeight(p, p.Outputs.KeyAt(i), commodities));
+            }
+            double total = Sum(weights);
+            if (total <= Epsilon)
+            {
+                return 1.0 / p.Outputs.Count;
+            }
+            return MassWeight(p, commodity, commodities) / total;
+        }
+
+        private static double MassWeight(Process p, string name, OrderedMap<Commodity> commodities)
+        {
+            Commodity good;
+            double mass = commodities.TryGetValue(name, out good) ? good.MassPerUnit : 1.0;
+            return mass * p.Outputs[name];
+        }
+
+        /// <summary><c>labor_per_unit</c>.</summary>
+        public static double LaborPerUnit(Process p, string commodity, OrderedMap<Commodity> commodities)
+        {
+            double units = p.Outputs.Get(commodity, 0.0);
+            if (units <= Epsilon)
+            {
+                return 0.0;
+            }
+            return p.DirectLabor * ShareOfCost(p, commodity, commodities) / units;
+        }
+
+        /// <summary><c>capital_consumed_per_unit</c> with both overrides passed.</summary>
+        public static void CapitalConsumedPerUnit(Process p, string commodity, double serviceLifeDays,
+            OrderedMap<Commodity> commodities, double moneyPerCapacity, double laborPerCapacity,
+            out double money, out double labor)
+        {
+            money = 0.0;
+            labor = 0.0;
+            if (serviceLifeDays <= Epsilon)
+            {
+                return;
+            }
+            double share = ShareOfCost(p, commodity, commodities);
+            double units = p.Outputs.Get(commodity, 0.0);
+            if (units <= Epsilon)
+            {
+                return;
+            }
+            money = moneyPerCapacity * share / serviceLifeDays;
+            labor = laborPerCapacity * share / serviceLifeDays;
+        }
+
         // ---- Producer --------------------------------------------------
 
         /// <summary><c>effective_unit_cost</c>.</summary>
@@ -63,6 +130,33 @@ namespace SocialProduction.Economy.Core.Model
                 return p.UnitCost + p.WageCostPerUnit;
             }
             return p.UnitCost + inputCost / outputPerRun + p.WageCostPerUnit;
+        }
+
+        /// <summary><c>utilization</c>, with today's prices passed.</summary>
+        public static double Utilization(Producer p, double price, OrderedMap<double> prices)
+        {
+            if (!p.Active || p.CapacityPerDay <= 0)
+            {
+                return 0.0;
+            }
+            double cost = EffectiveUnitCost(p, prices);
+            double ratio = price / Max(cost, Epsilon);
+            if (ratio <= p.ZeroUtilizationPriceRatio)
+            {
+                return 0.0;
+            }
+            if (ratio >= p.FullUtilizationPriceRatio)
+            {
+                return 1.0;
+            }
+            double span = p.FullUtilizationPriceRatio - p.ZeroUtilizationPriceRatio;
+            return (ratio - p.ZeroUtilizationPriceRatio) / Max(span, Epsilon);
+        }
+
+        /// <summary><c>desired_runs</c>.</summary>
+        public static double DesiredRuns(Producer p, double price, OrderedMap<double> prices)
+        {
+            return RunsFor(p.Process, p.CapacityPerDay) * Utilization(p, price, prices);
         }
 
         /// <summary>A copy of a map, as <c>dict(m)</c>.</summary>
