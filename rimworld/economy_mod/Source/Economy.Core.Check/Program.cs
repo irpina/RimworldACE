@@ -128,13 +128,17 @@ namespace SocialProduction.Economy.Check
             int stateCode = StateCheck.Run(
                 Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "state"));
 
-            // The docked day, phase by phase (docs/141 slices 3-7). Phases
-            // not yet ported are listed, not failed, until the day is whole.
+            // The docked day, phase by phase (docs/141 slices 3-7). Every
+            // phase is ported, so one the fixtures name and the port lacks fails.
             int phaseCode = PhaseCheck.Run(
-                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "phases"), false);
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "phases"), true);
+
+            // Whole days, back to back (docs/141 slice 8).
+            int runCode = RunCheck.Run(
+                Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "runs"));
 
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode };
+            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode, runCode };
             foreach (int code in codes)
             {
                 if (code != 0)

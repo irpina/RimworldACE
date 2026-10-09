@@ -56,6 +56,39 @@ namespace SocialProduction.Economy.Core.Model
             };
 
         /// <summary>
+        /// The day in <c>Economy.step</c>'s order. The investment branch
+        /// never runs: <see cref="Refuse"/> stops a day that would reach it.
+        /// <c>_record_history</c> is not carried (docs/141 s4).
+        /// </summary>
+        public static readonly Phase[] Order =
+        {
+            new Phase("begin", Begin),
+            new Phase("_migrate", Migrate),
+            new Phase("_arrive_shipments", ArriveShipments),
+            new Phase("_complete_projects", CompleteProjects),
+            new Phase("_refresh_throughput", RefreshThroughput),
+            new Phase("_produce", Produce),
+            new Phase("_update_labor_values", UpdateLaborValues),
+            new Phase("_update_cost_ratios", UpdateCostRatios),
+            new Phase("_track_differential_rent", TrackDifferentialRent),
+            new Phase("_consume", Consume),
+            new Phase("_workers_consume", WorkersConsume),
+            new Phase("_update_prices", UpdatePrices),
+            new Phase("_dispatch_arbitrage", DispatchArbitrage),
+            new Phase("_settle_purses", SettlePurses),
+            new Phase("_update_expectations", UpdateExpectations),
+        };
+
+        /// <summary>One whole day.</summary>
+        public static void Run(EconomyState e)
+        {
+            for (int i = 0; i < Order.Length; i++)
+            {
+                Order[i].Run(e);
+            }
+        }
+
+        /// <summary>
         /// docs/141 §2: the switches the docked configuration sets, and only
         /// those. Called before every day.
         /// </summary>
