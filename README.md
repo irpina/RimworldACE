@@ -198,6 +198,8 @@ two-sided predictions followed by a results document that scores them:
 | [111](docs/111-fitting-wright-design.md)–[123](docs/123-scrutiny-of-the-wright-work.md) | Fitting Wright's seven facts, goodness of fit, the M1 ablation, the size-exponent sweep, and how to check none of it is fabricated |
 | [124](docs/124-wrights-battery-on-our-model-design.md)–[139](docs/139-the-docking-battery-corrected-results.md) | Wright's battery run on our model: a staple sector that feeds its workers, several firms per commodity, endogenous demand and accumulation, the parameter sweeps, and the docking battery |
 | **[140](docs/140-what-we-would-put-to-ian-wright.md)** | **The memo: what we would put to Ian Wright** |
+| [141](docs/141-the-mod-design.md)–[142](docs/142-the-mod-results.md) | The mod: the docked economy ported to C#, bit-exact; the game's shape measured, and the full population refused |
+| [143](docs/143-wiring-the-day-design.md)–[144](docs/144-wiring-the-day-results.md) | The docked day wired into the world: a save format, a three-faction world under Mono, bit-identical to the lab |
 
 ### Running it
 
