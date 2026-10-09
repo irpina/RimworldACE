@@ -142,8 +142,11 @@ namespace SocialProduction.Economy.Check
             int buildCode = BuildCheck.Run(
                 Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures", "runs"));
 
+            // The game's save format (docs/143).
+            int saveCode = SaveCheck.Run(Path.Combine(repository, "rimworld", "economy_mod", "Source", "Fixtures"));
+
             int valueCode = withinTolerance ? (bitExact ? 0 : 1) : 3;
-            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode, runCode, buildCode };
+            int[] codes = { valueCode, wageCode, bargainingCode, priceCode, coreCode, stateCode, phaseCode, runCode, buildCode, saveCode };
             foreach (int code in codes)
             {
                 if (code != 0)
