@@ -40,6 +40,42 @@ namespace SocialProduction.Economy.Core.Model
             return bill;
         }
 
+        /// <summary><c>input_cost_per_run</c>: insertion order, CPython's sum.</summary>
+        public static double InputCostPerRun(Process p, OrderedMap<double> prices)
+        {
+            List<double> terms = new List<double>(p.Inputs.Count);
+            for (int i = 0; i < p.Inputs.Count; i++)
+            {
+                terms.Add(p.Inputs.ValueAt(i) * prices.Get(p.Inputs.KeyAt(i), 0.0));
+            }
+            return Sum(terms);
+        }
+
+        // ---- Producer --------------------------------------------------
+
+        /// <summary><c>effective_unit_cost</c>.</summary>
+        public static double EffectiveUnitCost(Producer p, OrderedMap<double> prices)
+        {
+            double inputCost = InputCostPerRun(p.Process, prices);
+            double outputPerRun = p.Process.Outputs.Get(p.Commodity, 0.0);
+            if (outputPerRun <= Epsilon)
+            {
+                return p.UnitCost + p.WageCostPerUnit;
+            }
+            return p.UnitCost + inputCost / outputPerRun + p.WageCostPerUnit;
+        }
+
+        /// <summary>A copy of a map, as <c>dict(m)</c>.</summary>
+        public static OrderedMap<double> Copy(OrderedMap<double> map)
+        {
+            OrderedMap<double> copy = new OrderedMap<double>();
+            for (int i = 0; i < map.Count; i++)
+            {
+                copy[map.KeyAt(i)] = map.ValueAt(i);
+            }
+            return copy;
+        }
+
         // ---- Region ----------------------------------------------------
 
         /// <summary><c>full_capacity_labor_ticks</c>.</summary>
