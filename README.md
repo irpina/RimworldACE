@@ -201,6 +201,8 @@ two-sided predictions followed by a results document that scores them:
 | [141](docs/141-the-mod-design.md)–[142](docs/142-the-mod-results.md) | The mod: the docked economy ported to C#, bit-exact; the game's shape measured, and the full population refused |
 | [143](docs/143-wiring-the-day-design.md)–[144](docs/144-wiring-the-day-results.md) | The docked day wired into the world: a save format, a three-faction world under Mono, bit-identical to the lab |
 | [145](docs/145-scaling-the-stocks-design.md)–[146](docs/146-scaling-the-stocks-results.md) | The fund, workers' cash and labour pool scaled with authored demand; re-docked at 647 commodities: docks on money, cost ranking, GDP and demises; fails on growth kurtosis, a staple-driven wage share and a 23% lower employing share; the game keeps 200 |
+| [147](docs/147-the-law-of-value-design.md)–[148](docs/148-the-law-of-value-results.md) | Can the lab demonstrate the labour theory of value? Not in the docked economy (its prices and values are RimWorld's); a purpose-built blind economy (`law_of_value.py`) closes a third of the gap, then stalls on idle producers and a collapsing capitalist arm |
+| [149](docs/149-the-law-of-value-second-design.md)–[150](docs/150-the-law-of-value-second-results.md) | With re-entry and an input buffer, unanchored prices settle on labour values (dispersion 0.084, ρ 0.988), beat a permuted-technique null fivefold, and follow a technical change; the capitalist arm survives but cannot separate prices of production from values |
 
 ### Running it
 

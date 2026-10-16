@@ -180,7 +180,9 @@ def run_simple(seed: int, days: int = DAYS, shock_day: int = None,
                     money = prices[j] * need
                     wants.append((j, money))
                     total += money
-            scale = 1.0 if total <= cash[a] else cash[a] / total
+            # total > 0 here unless rounding left the cash a hair below
+            # zero with nothing to order (docs/150 §1).
+            scale = 1.0 if total <= cash[a] or total <= 0.0 else cash[a] / total
             for j, money in wants:
                 input_orders[j].append((a, money * scale))
                 demand[j] += money * scale
