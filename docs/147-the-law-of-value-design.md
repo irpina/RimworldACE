@@ -155,7 +155,9 @@ gives to price and value totals.
   (total revenue over total outlay, less one): `p = (1 + r̂)(A p + l)`,
   solved in depth order with the wage as numéraire.
 - **Composition** `k_i = (A v)_i / l_i`, dead labour over living, per
-  unit.
+  unit. Depth-0 goods have `k = 0`, so the statistic uses
+  `log(1 + k_i) = log(v_i / l_i)`. (Amended before any run: the first
+  draft wrote `log k`, which is undefined at depth 0.)
 
 ## 4. Predictions
 
@@ -191,7 +193,7 @@ Medians over the twenty seeds unless stated.
     `Δ(PoP)` at most **0.10**, and `Δ(PoP) < Δ(v)` on at least 16 of 20
     seeds.
 11. **CAP deviates from values as the transformation says**: the
-    correlation across goods of `log(p̄/v)` with `log k` is at least
+    correlation across goods of `log(p̄/v)` with `log(1 + k)` is at least
     **0.5**. Goods with more dead labour per unit of living labour sell
     above their value.
 12. **The laboratory's default behaviour is unchanged**:
